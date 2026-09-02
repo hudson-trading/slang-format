@@ -153,14 +153,14 @@ configure_file(include/format/Version.h.in
 
 add_library(
   slang_format_lib STATIC
-  src/format/Formatter.cpp
-  src/format/FormatConfig.cpp
-  src/format/NormalizedFormat.cpp
-  src/format/FormatDocument.cpp
-  src/format/Layout.cpp
-  src/format/CstValidation.cpp
-  src/format/FormatStyle.cpp
-  src/format/FormatValidation.cpp)
+  src/Formatter.cpp
+  src/FormatConfig.cpp
+  src/NormalizedFormat.cpp
+  src/FormatDocument.cpp
+  src/Layout.cpp
+  src/CstValidation.cpp
+  src/FormatStyle.cpp
+  src/FormatValidation.cpp)
 add_library(slang::format ALIAS slang_format_lib)
 target_include_directories(
   slang_format_lib
@@ -188,7 +188,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 if(SLANG_FORMAT_BUILD_CLI OR SLANG_FORMAT_INCLUDE_TESTS)
-  add_executable(slang_format src/format/formatter_main.cpp)
+  add_executable(slang_format src/formatter_main.cpp)
   target_include_directories(slang_format PRIVATE external)
   target_link_libraries(slang_format PRIVATE slang_format_lib)
   set_target_properties(slang_format PROPERTIES OUTPUT_NAME "slang-format")
@@ -199,7 +199,7 @@ if(SLANG_FORMAT_BUILD_CLI OR SLANG_FORMAT_INCLUDE_TESTS)
 endif()
 
 if(PROJECT_IS_TOP_LEVEL)
-  add_executable(gen_format_config_schema src/format/gen_config_main.cpp)
+  add_executable(gen_format_config_schema src/gen_config_main.cpp)
   target_include_directories(gen_format_config_schema PRIVATE include)
   target_link_libraries(gen_format_config_schema PRIVATE reflectcpp::reflectcpp)
 endif()

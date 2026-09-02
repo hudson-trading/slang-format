@@ -21,7 +21,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SYNTAX_TXT = os.path.join(
     SCRIPT_DIR, "..", "external", "slang", "scripts", "syntax.txt"
 )
-OUTPUT_FILE = os.path.join(SCRIPT_DIR, "..", "src", "format", "FormatStyleGen.inc")
+OUTPUT_FILE = os.path.join(SCRIPT_DIR, "..", "src", "FormatStyleGen.inc")
 
 # Body list configuration: always vertical, even when the list is empty.
 # These are undelimited member/item lists (module bodies, class bodies, etc.)

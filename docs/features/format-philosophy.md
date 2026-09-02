@@ -128,7 +128,8 @@ Member kinds the formatter currently understands:
 | **CaseItem** (`expr: stmt`) | labels \| `: clause` |
 | **StructPattern** (`key: expr`) | key \| `: expr` |
 
-New kinds can be added by writing a `produceForX` helper in `src/format/Formatter_align.cpp` that maps the syntax to a sequence of `AlignCell`s.
+New kinds can be added by lowering alignment anchors in `src/Layout.cpp`.
+`src/FormatDocument.cpp` groups compatible anchors and computes their padding.
 
 ### Group Breaking
 

@@ -2,6 +2,9 @@
 
 Issues and pull requests are welcome.
 
+See [DEVELOPING.md](DEVELOPING.md) for the source architecture, test workflow,
+generated files, and embedding instructions.
+
 Before submitting a change:
 
 1. Add or update a focused formatter test in `tests/format/`.
