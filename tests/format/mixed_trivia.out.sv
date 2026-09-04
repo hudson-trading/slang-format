@@ -7,8 +7,8 @@
     );
         // Comment before ifdef inside module
         `ifdef DEBUG
-    // Nested comment in ifdef
-    logic debug_sig;
+            // Nested comment in ifdef
+            logic debug_sig;
         `else
             /* Block comment in else branch */
             logic prod_sig;
@@ -20,8 +20,7 @@
         always_ff @(posedge clk) begin
             // Line comment in procedural block
             `ifdef DEBUG
-        debug_sig <= 1'b0;
-        // inline comment in ifdef
+                debug_sig <= 1'b0; // inline comment in ifdef
             `endif
         end
     endmodule

@@ -11,12 +11,12 @@
 #include "format/FormatConstants.h"
 #include "format/FormatStyle.h"
 #include <algorithm>
-#include <cctype>
 #include <optional>
 
 #include "slang/parsing/TokenKind.h"
 #include "slang/syntax/AllSyntax.h"
 #include "slang/syntax/SyntaxFacts.h"
+#include "slang/text/CharInfo.h"
 
 using namespace slang::parsing;
 using namespace slang::syntax;
@@ -74,8 +74,7 @@ bool tokenNeedsSeparation(Token left, Token right) {
         return true;
     if (a.empty() || b.empty())
         return false;
-    auto word = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
-    return word(a.back()) && word(b.front());
+    return slang::isValidCIdChar(a.back()) && slang::isValidCIdChar(b.front());
 }
 
 class Lowerer {
@@ -173,8 +172,7 @@ private:
         size_t baseline = SIZE_MAX;
         for (size_t i = 1; i < lines.size(); i++) {
             size_t indent = 0;
-            while (indent < lines[i].size() &&
-                   (lines[i][indent] == ' ' || lines[i][indent] == '\t')) {
+            while (indent < lines[i].size() && slang::isTabOrSpace(lines[i][indent])) {
                 indent++;
             }
             if (indent < lines[i].size())
@@ -187,8 +185,7 @@ private:
         for (size_t i = 1; i < lines.size(); i++) {
             continuation.push_back(builder.hardLine());
             size_t indent = 0;
-            while (indent < lines[i].size() &&
-                   (lines[i][indent] == ' ' || lines[i][indent] == '\t')) {
+            while (indent < lines[i].size() && slang::isTabOrSpace(lines[i][indent])) {
                 indent++;
             }
             size_t relative = indent >= baseline ? indent - baseline : indent;
@@ -199,20 +196,101 @@ private:
                               builder.concat(std::move(continuation))));
     }
 
-    void emitConditionalVerbatim(std::string_view text) {
-        if (lineStart) {
+    void emitConditionalVerbatim(std::string_view text, bool memberOwned = false,
+                                 int conditionalDepthChange = 0) {
+        if (lineStart && memberOwned) {
+            while (!text.empty() && slang::isWhitespace(text.front()))
+                text.remove_prefix(1);
+        }
+        else if (lineStart) {
             if (text.starts_with("\r\n"))
                 text.remove_prefix(2);
             else if (text.starts_with('\n'))
                 text.remove_prefix(1);
         }
-        while (!text.empty() && (text.back() == ' ' || text.back() == '\t' || text.back() == '\r' ||
-                                 text.back() == '\n')) {
+        while (!text.empty() && slang::isWhitespace(text.back())) {
             text.remove_suffix(1);
         }
-        append(builder.absoluteText(text));
-        lineStart = text.ends_with('\n');
+
+        size_t baseline = 0;
+        size_t lineStartOffset = 0;
+        while (lineStartOffset < text.size()) {
+            size_t lineEnd = text.find('\n', lineStartOffset);
+            if (lineEnd == std::string_view::npos)
+                lineEnd = text.size();
+            size_t indent = 0;
+            while (lineStartOffset + indent < lineEnd &&
+                   slang::isTabOrSpace(text[lineStartOffset + indent])) {
+                indent++;
+            }
+            if (lineStartOffset + indent < lineEnd) {
+                baseline = indent;
+                break;
+            }
+            lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
+        }
+
+        std::vector<size_t> nestedConditionalIndents;
+        size_t listIndent = !memberOwned && conditionalDepth > itemFinalConditionalDepth &&
+                                    !dedentListConditionalDirective
+                                ? config.indentWidth.get()
+                                : 0;
+        lineStartOffset = 0;
+        bool firstLine = true;
+        while (lineStartOffset < text.size()) {
+            size_t lineEnd = text.find('\n', lineStartOffset);
+            if (lineEnd == std::string_view::npos)
+                lineEnd = text.size();
+            size_t indent = 0;
+            while (lineStartOffset + indent < lineEnd &&
+                   slang::isTabOrSpace(text[lineStartOffset + indent])) {
+                indent++;
+            }
+            auto line = text.substr(lineStartOffset + indent, lineEnd - lineStartOffset - indent);
+            bool closesNested = line.starts_with("`else") || line.starts_with("`elsif") ||
+                                line.starts_with("`endif");
+            if (closesNested && !nestedConditionalIndents.empty())
+                nestedConditionalIndents.pop_back();
+            size_t relativeIndent = memberOwned          ? 0
+                                    : indent >= baseline ? indent - baseline
+                                                         : indent;
+            if (!nestedConditionalIndents.empty())
+                relativeIndent = std::max(relativeIndent, nestedConditionalIndents.back());
+            relativeIndent += listIndent;
+            if (firstLine) {
+                append(memberOwned ? builder.memberVerbatim(line, static_cast<int>(relativeIndent))
+                                   : builder.verbatim(std::string(relativeIndent, ' ') +
+                                                      std::string(line)));
+                firstLine = false;
+            }
+            else if (line.empty()) {
+                append(builder.indent(static_cast<int>(relativeIndent), builder.hardLine(2)));
+            }
+            else {
+                auto content = memberOwned
+                                   ? builder.memberVerbatim(line, static_cast<int>(relativeIndent))
+                                   : builder.verbatim(line);
+                append(memberOwned ? builder.concat({builder.hardLine(), content})
+                                   : builder.indent(static_cast<int>(relativeIndent),
+                                                    builder.concat({builder.hardLine(), content})));
+            }
+            if (line.starts_with("`ifdef") || line.starts_with("`ifndef") ||
+                line.starts_with("`else") || line.starts_with("`elsif")) {
+                nestedConditionalIndents.push_back(relativeIndent - listIndent +
+                                                   config.indentWidth.get());
+            }
+            lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
+        }
+        lineStart = false;
         spacingProvided = false;
+        lastWasMacro = false;
+        if (conditionalDepthChange < 0) {
+            conditionalDepth -= std::min(conditionalDepth,
+                                         static_cast<size_t>(-conditionalDepthChange));
+        }
+        else {
+            conditionalDepth += static_cast<size_t>(conditionalDepthChange);
+        }
     }
 
     void emitRecoveredAssignment(std::string_view text) {
@@ -223,7 +301,7 @@ private:
         append(builder.indent(static_cast<int>(config.indentWidth.get()),
                               builder.softLine(assignmentPriority, " ", 0, true)));
 
-        while (rhs.starts_with(' ') || rhs.starts_with('\t'))
+        while (!rhs.empty() && slang::isWhitespace(rhs.front()))
             rhs.remove_prefix(1);
 
         if (size_t logicalAnd = rhs.find(" && "); logicalAnd != std::string_view::npos) {
@@ -238,7 +316,10 @@ private:
             append(builder.verbatim(rhs.substr(0, openParen + 1)));
             append(builder.indent(static_cast<int>(config.indentWidth.get() * 2),
                                   builder.softLine(2, "", 0, true)));
-            append(builder.verbatim(rhs.substr(openParen + 1)));
+            auto arguments = rhs.substr(openParen + 1);
+            while (!arguments.empty() && slang::isWhitespace(arguments.front()))
+                arguments.remove_prefix(1);
+            append(builder.verbatim(arguments));
         }
         else {
             append(builder.verbatim(rhs));
@@ -248,10 +329,10 @@ private:
         lastWasMacro = false;
     }
 
-    void emitTrivia(const NormalizedTrivia& trivia, bool trailing) {
+    void emitTrivia(const NormalizedTrivia& trivia, bool trailing, bool memberOwned = false) {
         switch (trivia.kind) {
             case NormalizedTriviaKind::BlankLine:
-                hardLine(2);
+                hardLine(static_cast<int>(trivia.lineBreakCount));
                 break;
             case NormalizedTriviaKind::Comment: {
                 if (trivia.placement == TriviaPlacement::Inline && !trivia.lineComment)
@@ -267,7 +348,9 @@ private:
                     append(builder.verbatim(trivia.text));
                     std::string_view flat =
                         lastToken && lastToken->token.kind != TokenKind::OpenParenthesis ? " " : "";
-                    append(builder.softLine(20, flat, currentDynamicGroup));
+                    append(trivia.endsLine || (inDynamicList && dynamicListLikelyVertical)
+                               ? builder.hardLine(1, true)
+                               : builder.softLine(20, flat, currentDynamicGroup));
                     spacingProvided = true;
                     break;
                 }
@@ -300,24 +383,29 @@ private:
                                         : 1;
                     append(builder.text(std::string(spaces, ' ')));
                 }
-                else if (!lineStart && !inDynamicList) {
+                else if (!lineStart &&
+                         (!inDynamicList || trivia.placement == TriviaPlacement::Standalone)) {
                     hardLine();
                 }
                 append(builder.verbatim(trivia.text));
-                if (trivia.placement == TriviaPlacement::Trailing &&
-                    (trivia.lineComment || trivia.text.starts_with("//"))) {
-                    hardLine(1, !emittingAssignmentOperator || assignmentOperatorCommentUseAnchor);
+                if (trivia.lineComment) {
+                    hardLine(1, !trailing || !emittingAssignmentOperator ||
+                                    assignmentOperatorCommentUseAnchor);
                 }
                 else if (!trailing) {
                     hardLine(1, true);
                 }
                 break;
             }
-            case NormalizedTriviaKind::MacroUsage:
+            case NormalizedTriviaKind::MacroUsage: {
                 if (lastWasMacro)
                     hardLine();
-                if (!trailing && trivia.placement == TriviaPlacement::Standalone && !lineStart)
+                bool listContinuation = inDynamicList && lastToken &&
+                                        lastToken->token.kind == TokenKind::Comma;
+                if (!trailing && trivia.placement == TriviaPlacement::Standalone && !lineStart &&
+                    !listContinuation) {
                     hardLine();
+                }
                 if (trailing && inDynamicList && dynamicListLikelyVertical && lastToken &&
                     lastToken->token.kind == TokenKind::Comma && !lineStart) {
                     hardLine(1, true);
@@ -340,6 +428,7 @@ private:
                 if (!trivia.joinsFollowingToken && !currentItemMacroOnly)
                     hardLine();
                 break;
+            }
             case NormalizedTriviaKind::Directive:
                 lastWasMacro = false;
                 {
@@ -422,9 +511,24 @@ private:
                 emitConditionalVerbatim(trivia.text);
                 break;
             case NormalizedTriviaKind::Verbatim:
+                if (trivia.placement == TriviaPlacement::Standalone && lastWasMacro &&
+                    trivia.text.find_first_of("\r\n") != std::string::npos) {
+                    auto text = std::string_view(trivia.text);
+                    while (!text.empty() && slang::isWhitespace(text.front()))
+                        text.remove_prefix(1);
+                    if (text.starts_with('=')) {
+                        append(builder.text(" "));
+                        append(builder.memberVerbatim(text));
+                        lineStart = text.ends_with('\n');
+                        spacingProvided = !lineStart;
+                        lastWasMacro = false;
+                        break;
+                    }
+                }
                 lastWasMacro = false;
                 if (conditionalDepth > 0 && trivia.text.find('\n') != std::string::npos) {
-                    emitConditionalVerbatim(trivia.text);
+                    emitConditionalVerbatim(trivia.text, memberOwned,
+                                            trivia.conditionalDepthChange);
                     break;
                 }
                 if (trivia.placement == TriviaPlacement::Inline &&
@@ -440,14 +544,23 @@ private:
                     if (lineStart && text.starts_with('\n'))
                         text.remove_prefix(1);
                     if (lineStart) {
-                        while (text.starts_with(' ') || text.starts_with('\t'))
+                        while (!text.empty() && slang::isTabOrSpace(text.front()))
                             text.remove_prefix(1);
                     }
-                    append(builder.verbatim(text));
-                    lineStart = text.ends_with('\n');
-                    spacingProvided = trivia.placement == TriviaPlacement::Inline &&
-                                      !text.ends_with('=') &&
-                                      (!text.ends_with(':') || text.ends_with("::"));
+                    append(memberOwned ? builder.memberVerbatim(text) : builder.verbatim(text));
+                    if (trivia.endsLine && !text.ends_with('\n'))
+                        hardLine();
+                    else {
+                        if (trivia.preserveSingleSpace && !text.empty() &&
+                            !slang::isTabOrSpace(text.back())) {
+                            append(builder.text(" "));
+                        }
+                        lineStart = text.ends_with('\n');
+                    }
+                    spacingProvided = trivia.preserveSingleSpace ||
+                                      (trivia.placement == TriviaPlacement::Inline &&
+                                       !trivia.endsLine && !text.ends_with('=') &&
+                                       (!text.ends_with(':') || text.ends_with("::")));
                     if (trivia.placement == TriviaPlacement::Inline && text.ends_with('=')) {
                         pendingAssignmentBreak = true;
                         pendingRecoveredAssignmentBreak = true;
@@ -591,10 +704,15 @@ private:
             if (hardBreakCurrentBinary ||
                 (operatorHasLineComment &&
                  normalizedToken.parentKind == SyntaxKind::LogicalOrExpression)) {
-                append(builder.hardLine(1, true));
+                auto line = builder.hardLine(1, true);
+                append(binaryContinuationIndent ? builder.indent(binaryContinuationIndent, line)
+                                                : line);
             }
-            else
-                append(builder.softLine(breakPriority(normalizedToken.parentKind)));
+            else {
+                auto line = builder.softLine(breakPriority(normalizedToken.parentKind));
+                append(binaryContinuationIndent ? builder.indent(binaryContinuationIndent, line)
+                                                : line);
+            }
             spacingProvided = true;
         }
 
@@ -614,6 +732,10 @@ private:
             else if (macroVariableDimension && token.kind == TokenKind::Colon) {
                 append(builder.text(" "));
             }
+            else if (noNameInstantiation && !noNameCallStyle &&
+                     token.kind == TokenKind::OpenParenthesis) {
+                append(builder.text(" "));
+            }
             else if (lastWasMacro) {
                 if (!compact &&
                     shouldInsertWhitespace(TokenKind::Identifier, token.kind, SyntaxKind::Unknown,
@@ -628,7 +750,8 @@ private:
                                               lastToken->parentKind, normalizedToken.parentKind,
                                               tokenInDataType) &&
                        !(noNameCallStyle && token.kind == TokenKind::OpenParenthesis &&
-                         normalizedToken.parentKind == SyntaxKind::HierarchicalInstance)))) {
+                         (normalizedToken.parentKind == SyntaxKind::HierarchicalInstance ||
+                          lastToken->parentKind == SyntaxKind::HierarchyInstantiation))))) {
                 append(builder.text(" "));
             }
         }
@@ -650,19 +773,30 @@ private:
                 append(builder.alignmentAnchor(0, alignmentRowKind(), currentAlignmentGroup));
                 portDirectionAnchorEmitted = true;
             }
-            if (token.kind == TokenKind::OpenParenthesis &&
-                (normalizedToken.parentKind == SyntaxKind::NamedPortConnection ||
-                 normalizedToken.parentKind == SyntaxKind::NamedParamAssignment ||
-                 normalizedToken.parentKind == SyntaxKind::NamedArgument) &&
-                !suppressEscapedAlignment) {
+            auto rowKind = alignmentRowKind();
+            if (token.kind == TokenKind::OpenBracket && normalizedToken.inDataType &&
+                (rowKind == SyntaxKind::DataDeclaration ||
+                 rowKind == SyntaxKind::ImplicitAnsiPort) &&
+                !packedDimensionAnchorEmitted) {
+                uint32_t column = rowKind == SyntaxKind::ImplicitAnsiPort ? 1 : 0;
+                append(builder.alignmentAnchor(column, rowKind, currentAlignmentGroup));
+                packedDimensionAnchorEmitted = true;
+            }
+            else if (token.kind == TokenKind::OpenParenthesis &&
+                     (normalizedToken.parentKind == SyntaxKind::NamedPortConnection ||
+                      normalizedToken.parentKind == SyntaxKind::NamedParamAssignment ||
+                      normalizedToken.parentKind == SyntaxKind::NamedArgument) &&
+                     !suppressEscapedAlignment) {
                 append(builder.alignmentAnchor(1, alignmentRowKind(), currentAlignmentGroup, 1));
             }
             else if (token.kind == TokenKind::Identifier &&
                      normalizedToken.parentKind == SyntaxKind::Declarator &&
                      currentDeclaratorAlignmentColumn && !inlineBlockCommentOnLine &&
                      !(subroutineDepth && *currentDeclaratorAlignmentColumn > 1)) {
-                append(builder.alignmentAnchor(*currentDeclaratorAlignmentColumn,
-                                               alignmentRowKind(), currentAlignmentGroup));
+                uint32_t column = *currentDeclaratorAlignmentColumn;
+                if (rowKind == SyntaxKind::ImplicitAnsiPort)
+                    column++;
+                append(builder.alignmentAnchor(column, rowKind, currentAlignmentGroup));
             }
             else if (parameterPortDepth && token.kind == TokenKind::Identifier &&
                      normalizedToken.parentKind == SyntaxKind::TypeAssignment) {
@@ -690,10 +824,11 @@ private:
 
         append(builder.text(token.rawText(), normalizedToken.parentKind));
         if (currentMemberKind != SyntaxKind::Unknown && !suppressAlignment) {
-            bool parameterKeyword = normalizedToken.parentKind ==
-                                        SyntaxKind::ParameterDeclaration &&
-                                    (token.kind == TokenKind::ParameterKeyword ||
-                                     token.kind == TokenKind::LocalParamKeyword);
+            bool parameterKeyword =
+                (normalizedToken.parentKind == SyntaxKind::ParameterDeclaration ||
+                 normalizedToken.parentKind == SyntaxKind::TypeParameterDeclaration) &&
+                (token.kind == TokenKind::ParameterKeyword ||
+                 token.kind == TokenKind::LocalParamKeyword);
             if (portDirection || parameterKeyword) {
                 append(builder.alignmentAnchor(0, alignmentRowKind(), currentAlignmentGroup));
                 portDirectionAnchorEmitted = portDirection;
@@ -733,8 +868,7 @@ private:
         else if (token.kind == TokenKind::CloseBracket && bracketDepth)
             bracketDepth--;
 
-        if (isAssignmentKind(normalizedToken.parentKind) &&
-            (token.kind == TokenKind::Equals || token.kind == TokenKind::LessThanEquals)) {
+        if (isAssignmentKind(normalizedToken.parentKind)) {
             pendingAssignmentBreak = true;
             pendingRecoveredAssignmentBreak = false;
         }
@@ -846,7 +980,8 @@ private:
             auto forces = [](const auto& trivia) {
                 return std::ranges::any_of(trivia, [](const NormalizedTrivia& item) {
                     return item.kind == NormalizedTriviaKind::Comment &&
-                           (item.lineComment || item.placement != TriviaPlacement::Inline);
+                           (item.lineComment || item.endsLine ||
+                            item.placement != TriviaPlacement::Inline);
                 });
             };
             return forces(normalizedToken.leading) || forces(normalizedToken.trailing);
@@ -1142,15 +1277,6 @@ private:
                  singleFitsValueColumn));
     }
 
-    bool ternaryNeedsIndent(const NormalizedNode& node) const {
-        auto parts = ternaryParts(node);
-        if (!parts.predicate || !parts.left || !parts.right)
-            return true;
-        size_t threshold = config.columnLimit.get() ? config.columnLimit.get() * 7 / 10 : SIZE_MAX;
-        return formattedFlatWidth(*parts.predicate) <= threshold ||
-               formattedFlatWidth(*parts.left) + formattedFlatWidth(*parts.right) >= threshold / 2;
-    }
-
     std::optional<size_t> firstTokenIndex(const NormalizedChild& child) const {
         if (auto token = std::get_if<size_t>(&child.value))
             return *token;
@@ -1282,6 +1408,36 @@ private:
             return true;
         }
 
+        bool hasComment = std::ranges::any_of(node.children, [&](const NormalizedChild& child) {
+            return childHasForcingComment(child);
+        });
+        if (segments.size() == 1 && !hasComment) {
+            bool savedManualBreaks = manualExpressionBreaks;
+            const NormalizedNode* savedTrueBranch = ternaryTrueBranch;
+            const NormalizedNode* savedFalseBranch = ternaryFalseBranch;
+            manualExpressionBreaks = true;
+            ternaryTrueBranch = first.left;
+            ternaryFalseBranch = first.right;
+            GroupId group = builder.createConsistentGroup();
+            size_t ternaryBegin = mark();
+            lowerChildren(node, 0, first.question);
+            append(builder.indent(static_cast<int>(config.indentWidth.get()),
+                                  builder.softLine(ternaryBreakPriority, " ", group)));
+            spacingProvided = true;
+            lowerChild(node.children[first.question], node.kind);
+            lowerChildren(node, first.question + 1, first.colon);
+            append(builder.indent(static_cast<int>(config.indentWidth.get()),
+                                  builder.softLine(ternaryBreakPriority, " ", group)));
+            spacingProvided = true;
+            lowerChild(node.children[first.colon], node.kind);
+            lowerChildren(node, first.colon + 1, node.children.size());
+            append(builder.relativeAnchor(0, capture(ternaryBegin)));
+            ternaryTrueBranch = savedTrueBranch;
+            ternaryFalseBranch = savedFalseBranch;
+            manualExpressionBreaks = savedManualBreaks;
+            return true;
+        }
+
         size_t maxPredicate = 0;
         for (const auto& [segment, segmentParts] : segments)
             maxPredicate = std::max(maxPredicate, formattedFlatWidth(*segmentParts.predicate));
@@ -1389,28 +1545,36 @@ private:
     }
 
     size_t conditionalDepthAfter(const NormalizedChild& child, size_t depth) const {
+        auto applyTrivia = [&](const auto& triviaList) {
+            for (const auto& trivia : triviaList) {
+                if (trivia.placement == TriviaPlacement::Inline)
+                    continue;
+                if (trivia.conditionalDepthChange < 0) {
+                    depth -= std::min(depth, static_cast<size_t>(-trivia.conditionalDepthChange));
+                }
+                else {
+                    depth += static_cast<size_t>(trivia.conditionalDepthChange);
+                }
+                if (trivia.kind != NormalizedTriviaKind::ConditionalDirective || !trivia.syntax) {
+                    continue;
+                }
+                auto kind = trivia.syntax->kind;
+                if (kind == SyntaxKind::IfDefDirective || kind == SyntaxKind::IfNDefDirective) {
+                    depth++;
+                }
+                else if (kind == SyntaxKind::EndIfDirective && depth > 0) {
+                    depth--;
+                }
+            }
+        };
         if (auto token = std::get_if<size_t>(&child.value)) {
             const auto& normalizedToken = normalized.tokens().at(*token);
-            auto apply = [&](const auto& triviaList) {
-                for (const auto& trivia : triviaList) {
-                    if (trivia.kind != NormalizedTriviaKind::ConditionalDirective ||
-                        trivia.placement == TriviaPlacement::Inline || !trivia.syntax) {
-                        continue;
-                    }
-                    auto kind = trivia.syntax->kind;
-                    if (kind == SyntaxKind::IfDefDirective || kind == SyntaxKind::IfNDefDirective) {
-                        depth++;
-                    }
-                    else if (kind == SyntaxKind::EndIfDirective && depth > 0) {
-                        depth--;
-                    }
-                }
-            };
-            apply(normalizedToken.leading);
-            apply(normalizedToken.trailing);
+            applyTrivia(normalizedToken.leading);
+            applyTrivia(normalizedToken.trailing);
             return depth;
         }
         if (auto node = childNode(child)) {
+            applyTrivia(node->leading);
             for (const auto& nested : node->children)
                 depth = conditionalDepthAfter(nested, depth);
             return depth;
@@ -1427,14 +1591,16 @@ private:
         auto visit = [&](const auto& self, const NormalizedChild& nested) -> void {
             if (auto token = std::get_if<size_t>(&nested.value)) {
                 const auto& normalizedToken = normalized.tokens().at(*token);
-                auto findMacro = [&](const auto& triviaList) {
-                    hasMacro = hasMacro ||
-                               std::ranges::any_of(triviaList, [](const NormalizedTrivia& trivia) {
-                                   return trivia.kind == NormalizedTriviaKind::MacroUsage;
-                               });
+                auto classifyTrivia = [&](const auto& triviaList) {
+                    for (const auto& trivia : triviaList) {
+                        hasMacro = hasMacro || trivia.kind == NormalizedTriviaKind::MacroUsage;
+                        hasRealToken = hasRealToken ||
+                                       (trivia.kind == NormalizedTriviaKind::Verbatim &&
+                                        !trivia.text.empty());
+                    }
                 };
-                findMacro(normalizedToken.leading);
-                findMacro(normalizedToken.trailing);
+                classifyTrivia(normalizedToken.leading);
+                classifyTrivia(normalizedToken.trailing);
                 auto parsed = normalizedToken.token;
                 if (parsed && !parsed.isMissing() && !normalizedToken.fromMacroExpansion &&
                     !parsed.rawText().empty()) {
@@ -1510,6 +1676,10 @@ private:
                                 hasMacro(normalizedToken.trailing);
             if (!carriesMacro)
                 return false;
+            if (!normalizedToken.token || normalizedToken.token.isMissing() ||
+                normalizedToken.token.rawText().empty()) {
+                return !normalizedToken.fromMacroExpansion;
+            }
             auto kind = normalizedToken.token.kind;
             bool expandedOperand = kind == TokenKind::Identifier ||
                                    kind == TokenKind::SystemIdentifier ||
@@ -1627,6 +1797,7 @@ private:
         bool sawStatement = false;
         bool statementWasBlock = false;
         bool wrapBlock = false;
+        bool macroJoinsStatement = false;
         for (const auto& child : node.children) {
             auto nested = childNode(child);
             if (!nested || StatementSyntax::isKind(nested->kind))
@@ -1640,6 +1811,7 @@ private:
             auto nested = childNode(child);
             if (!nested) {
                 lowerChild(child);
+                macroJoinsStatement = childMacroJoinsFollowing(child);
                 continue;
             }
 
@@ -1656,11 +1828,15 @@ private:
                 }
                 else if (statementWasBlock)
                     lowerChild(child);
+                else if (macroJoinsStatement)
+                    lowerChild(child);
                 else
                     lowerIndentedChild(child);
+                macroJoinsStatement = false;
                 continue;
             }
             lowerChild(child);
+            macroJoinsStatement = childMacroJoinsFollowing(child);
         }
     }
 
@@ -1921,31 +2097,19 @@ private:
 
             size_t rhsBegin = mark();
             const NormalizedNode* savedAssignmentRhs = assignmentRhsRoot;
-            DocId savedAssignmentBreakLine = assignmentBreakLine;
-            bool savedAssignmentBreakHard = assignmentBreakHard;
             bool savedBinaryContinuationScope = binaryContinuationScope;
             assignmentRhsRoot = rhsNode;
-            assignmentBreakLine = hardAssignmentLine || keepMulticoncatHeader ||
-                                          assignmentAlreadyBroken
-                                      ? 0
-                                      : assignmentLine;
-            assignmentBreakHard = hardAssignmentLine || keepMulticoncatHeader ||
-                                  assignmentAlreadyBroken;
             binaryContinuationScope = false;
             lowerChild(child);
             assignmentRhsRoot = savedAssignmentRhs;
-            assignmentBreakLine = savedAssignmentBreakLine;
-            assignmentBreakHard = savedAssignmentBreakHard;
             binaryContinuationScope = savedBinaryContinuationScope;
             auto rhs = capture(rhsBegin);
-            if (rhsNode && rhsNode->kind != SyntaxKind::ParenthesizedExpression &&
-                !isListHandledExpression(rhsNode->kind) &&
-                (!isBinaryKind(rhsNode->kind) || childHasForcingComment(child) ||
-                 containsKind(*rhsNode, SyntaxKind::ArgumentList))) {
-                rhs = builder.relativeAnchor(0, rhs);
-            }
-            else if (rhsNode && isBinaryKind(rhsNode->kind)) {
+            if (rhsNode && isBinaryKind(rhsNode->kind)) {
                 rhs = builder.relativeAnchor(static_cast<int>(config.indentWidth.get()), rhs);
+            }
+            else if (rhsNode && rhsNode->kind != SyntaxKind::ParenthesizedExpression &&
+                     !isListHandledExpression(rhsNode->kind)) {
+                rhs = builder.relativeAnchor(0, rhs);
             }
             if (parameterAssignment && rhsNode &&
                 rhsNode->kind == SyntaxKind::MultipleConcatenationExpression) {
@@ -1974,23 +2138,50 @@ private:
     }
 
     void lowerHierarchyInstantiation(const NormalizedNode& node) {
-        if (!containsRealKind(node, SyntaxKind::InstanceName)) {
+        std::vector<const NormalizedToken*> hierarchyTokens;
+        for (const auto& child : node.children)
+            collectTokens(child, hierarchyTokens);
+        bool macroProvidesType = false;
+        for (const auto& child : node.children) {
+            if (!std::holds_alternative<size_t>(child.value))
+                continue;
+            macroProvidesType = childContainsMacro(child);
+            break;
+        }
+        if (macroProvidesType || !containsRealKind(node, SyntaxKind::InstanceName)) {
             bool savedNoNameInstantiation = noNameInstantiation;
             bool savedNoNameCallStyle = noNameCallStyle;
-            std::vector<const NormalizedToken*> tokens;
-            for (const auto& child : node.children)
-                collectTokens(child, tokens);
-            auto firstReal = std::ranges::find_if(tokens, [](const auto* token) {
+            auto firstReal = std::ranges::find_if(hierarchyTokens, [](const auto* token) {
                 return token->token && !token->token.isMissing() && !token->fromMacroExpansion &&
                        !token->token.rawText().empty();
             });
-            bool startsWithRecoveredComma =
-                firstReal != tokens.end() &&
-                std::ranges::any_of((*firstReal)->leading, [](const NormalizedTrivia& trivia) {
-                    return trivia.kind == NormalizedTriviaKind::Verbatim &&
-                           trivia.placement == TriviaPlacement::Inline &&
-                           trivia.text.find(',') != std::string::npos;
+            auto containsRecoveredComma = [](const auto& triviaList) {
+                return std::ranges::any_of(triviaList, [](const NormalizedTrivia& trivia) {
+                    if (trivia.kind != NormalizedTriviaKind::Verbatim)
+                        return false;
+                    auto text = std::string_view(trivia.text);
+                    while (!text.empty()) {
+                        auto lineEnd = text.find_first_of("\r\n");
+                        auto line = text.substr(0, lineEnd);
+                        while (!line.empty() && slang::isTabOrSpace(line.front()))
+                            line.remove_prefix(1);
+                        if (line.starts_with(','))
+                            return true;
+                        if (lineEnd == std::string_view::npos)
+                            break;
+                        size_t nextLine = lineEnd + 1;
+                        if (text[lineEnd] == '\r' && nextLine < text.size() &&
+                            text[nextLine] == '\n') {
+                            nextLine++;
+                        }
+                        text.remove_prefix(nextLine);
+                    }
+                    return false;
                 });
+            };
+            bool startsWithRecoveredComma = containsRecoveredComma(node.leading) ||
+                                            (firstReal != hierarchyTokens.end() &&
+                                             containsRecoveredComma((*firstReal)->leading));
             noNameInstantiation = true;
             noNameCallStyle = node.syntax &&
                               node.syntax->getFirstToken().kind == TokenKind::Identifier &&
@@ -2008,6 +2199,7 @@ private:
         bool parameterHasComment = false;
         bool connectionsVertical = false;
         size_t maxConnectionCount = 0;
+        bool allConnectionsShorthand = true;
         bool allInstancesEmpty = true;
         size_t maxInstanceNameWidth = 0;
         size_t hierarchyInstanceCount = 0;
@@ -2045,7 +2237,7 @@ private:
                         if (auto name = childNode(instanceChild);
                             name && name->kind == SyntaxKind::InstanceName) {
                             maxInstanceNameWidth = std::max(maxInstanceNameWidth,
-                                                            flatWidth(instanceChild));
+                                                            formattedFlatWidth(*name));
                         }
                         auto connections = std::get_if<std::unique_ptr<NormalizedList>>(
                             &instanceChild.value);
@@ -2054,6 +2246,18 @@ private:
                         size_t count = listItemCount(**connections);
                         maxConnectionCount = std::max(maxConnectionCount, count);
                         allInstancesEmpty = allInstancesEmpty && count == 0;
+                        for (const auto& connection : (*connections)->children) {
+                            auto connectionNode = childNode(connection);
+                            if (!connectionNode)
+                                continue;
+                            bool implicitNamed =
+                                connectionNode->kind == SyntaxKind::NamedPortConnection &&
+                                !containsTokenKind(*connectionNode, TokenKind::OpenParenthesis);
+                            if (!implicitNamed &&
+                                connectionNode->kind != SyntaxKind::WildcardPortConnection) {
+                                allConnectionsShorthand = false;
+                            }
+                        }
                         connectionsVertical = connectionsVertical ||
                                               count > constants::maxInlineInstanceConnections ||
                                               childHasForcingComment(instanceChild) ||
@@ -2067,10 +2271,10 @@ private:
         size_t typeWidth = node.syntax ? node.syntax->getFirstToken().rawText().size() : 0;
         bool hierarchyWide = config.columnLimit.get() && hierarchyInstanceCount == 1 &&
                              hasParameters && typeWidth >= 10;
-        bool connectionShapeVertical = maxConnectionCount >
-                                           constants::maxInlineInstanceConnections ||
-                                       (hierarchyWide && maxConnectionCount > 1) ||
-                                       (parameterCount > 1 && maxConnectionCount > 1);
+        bool connectionShapeVertical =
+            maxConnectionCount > constants::maxInlineInstanceConnections ||
+            (hierarchyWide && maxConnectionCount > 1) ||
+            (parameterCount > 1 && maxConnectionCount > 1 && !allConnectionsShorthand);
         connectionsVertical = connectionsVertical || connectionShapeVertical;
         bool parametersVertical = parameterCount > 1 || parameterHasComment ||
                                   connectionShapeVertical ||
@@ -2109,7 +2313,7 @@ private:
                     for (const auto& instanceChild : instanceNode->children) {
                         if (auto name = childNode(instanceChild);
                             name && name->kind == SyntaxKind::InstanceName) {
-                            instanceNameWidth = flatWidth(instanceChild);
+                            instanceNameWidth = formattedFlatWidth(*name);
                             break;
                         }
                     }
@@ -2333,7 +2537,6 @@ private:
         bool previousMacroRecovery = false;
         bool dedentAfterAssignmentConditional = false;
         bool previousItemSkipped = false;
-        std::optional<TokenKind> previousParameterKeyword;
         while (i < list.children.size()) {
             size_t finalConditionalDepth = conditionalDepthAfter(list.children[i],
                                                                  conditionalDepth);
@@ -2368,19 +2571,6 @@ private:
                                   (itemNode->kind == SyntaxKind::ImplicitAnsiPort ||
                                    itemNode->kind == SyntaxKind::ExplicitAnsiPort) &&
                                   containsKind(*itemNode, SyntaxKind::AttributeInstance);
-            if (list.parentKind == SyntaxKind::ParameterPortList && itemNode &&
-                (itemNode->kind == SyntaxKind::ParameterDeclaration ||
-                 itemNode->kind == SyntaxKind::TypeParameterDeclaration)) {
-                std::optional<TokenKind> keyword;
-                if (containsTokenKind(*itemNode, TokenKind::ParameterKeyword))
-                    keyword = TokenKind::ParameterKeyword;
-                else if (containsTokenKind(*itemNode, TokenKind::LocalParamKeyword))
-                    keyword = TokenKind::LocalParamKeyword;
-                if (keyword && previousParameterKeyword && keyword != previousParameterKeyword)
-                    currentAlignmentGroup = builder.createAlignmentGroup();
-                if (keyword)
-                    previousParameterKeyword = keyword;
-            }
             bool incompatibleAlignment = attributedPort || groupedMacro ||
                                          childStartsWithMacroUsage(list.children[i]) ||
                                          childStartsWithInlineVerbatim(list.children[i]) ||
@@ -2409,6 +2599,7 @@ private:
             bool savedSuppressAlignment = suppressAlignment;
             bool savedSuppressEscapedAlignment = suppressEscapedAlignment;
             bool savedPortDirectionAnchorEmitted = portDirectionAnchorEmitted;
+            bool savedPackedDimensionAnchorEmitted = packedDimensionAnchorEmitted;
             uint32_t savedNextDeclaratorAlignmentColumn = nextDeclaratorAlignmentColumn;
             nextDeclaratorAlignmentColumn = 1;
             itemFinalConditionalDepth = dedentAfterAssignmentConditional ? listConditionalDepth
@@ -2419,7 +2610,9 @@ private:
             suppressAlignment = savedSuppressAlignment || groupedPort || incompatibleAlignment;
             suppressEscapedAlignment = childHasEscapedIdentifier(list.children[i]);
             portDirectionAnchorEmitted = false;
+            packedDimensionAnchorEmitted = false;
             lowerChild(list.children[i]);
+            packedDimensionAnchorEmitted = savedPackedDimensionAnchorEmitted;
             portDirectionAnchorEmitted = savedPortDirectionAnchorEmitted;
             suppressEscapedAlignment = savedSuppressEscapedAlignment;
             suppressAlignment = savedSuppressAlignment;
@@ -2568,6 +2761,7 @@ private:
                                     (config.columnLimit.get() &&
                                      listWidth > config.columnLimit.get() * 3 / 5);
         bool emittedListContent = false;
+        bool previousSeparatorCarriedMacro = false;
         for (const auto& child : list.children) {
             bool commaWithMacro = false;
             if (auto tokenIndex = std::get_if<size_t>(&child.value)) {
@@ -2576,19 +2770,28 @@ private:
                                  childContainsMacro(child);
             }
             if (forceVertical && emittedListContent && childContainsMacro(child) &&
-                !commaWithMacro) {
+                !commaWithMacro && !previousSeparatorCarriedMacro) {
                 append(builder.hardLine(1, true));
             }
+            previousSeparatorCarriedMacro = false;
             lowerChild(child);
             emittedListContent = true;
             if (auto tokenIndex = std::get_if<size_t>(&child.value)) {
                 auto token = normalized.tokens().at(*tokenIndex).token;
                 if (token && token.kind == TokenKind::Comma) {
-                    if (forceVertical)
-                        append(builder.hardLine(1, true));
-                    else
-                        append(builder.softLine(listPriority, " ", group));
-                    spacingProvided = true;
+                    bool carriesFollowingMacro = std::ranges::any_of(
+                        normalized.tokens().at(*tokenIndex).trailing,
+                        [](const NormalizedTrivia& trivia) {
+                            return trivia.kind == NormalizedTriviaKind::MacroUsage;
+                        });
+                    previousSeparatorCarriedMacro = carriesFollowingMacro;
+                    if (!carriesFollowingMacro) {
+                        if (forceVertical)
+                            append(builder.hardLine(1, true));
+                        else
+                            append(builder.softLine(listPriority, " ", group));
+                        spacingProvided = true;
+                    }
                 }
             }
         }
@@ -2669,6 +2872,8 @@ private:
     }
 
     void lowerNode(const NormalizedNode& node, SyntaxKind parentExpressionKind, bool isRoot) {
+        for (const auto& trivia : node.leading)
+            emitTrivia(trivia, false, true);
         if (node.verbatim) {
             size_t begin = mark();
             if (auto token = firstTokenIndex(node, 0, node.children.size())) {
@@ -2717,6 +2922,7 @@ private:
         bool savedHardBreakCurrentBinary = hardBreakCurrentBinary;
         int savedExpressionBreakPriority = expressionBreakPriority;
         bool savedBinaryContinuationScope = binaryContinuationScope;
+        int savedBinaryContinuationIndent = binaryContinuationIndent;
         bool savedMultipleConcatenation = inMultipleConcatenation;
         bool savedForceTernaryBranches = forceTernaryBranches;
         bool commentedPatternConditional =
@@ -2725,10 +2931,8 @@ private:
             std::ranges::any_of(node.children, [&](const NormalizedChild& child) {
                 return childHasForcingComment(child);
             });
-        if (commentedPatternConditional) {
-            pendingTokenIndent += config.indentWidth.get();
+        if (commentedPatternConditional)
             forceTernaryBranches = true;
-        }
         if (node.kind == SyntaxKind::VariableDimension) {
             bool containsMacro = std::ranges::any_of(node.children,
                                                      [&](const NormalizedChild& child) {
@@ -2753,8 +2957,10 @@ private:
         }
         size_t begin = mark();
         bool ternaryTable = false;
-        bool indentTernary = true;
+        bool castWithOperandBreak = false;
         bool addBinaryContinuationIndent = false;
+        bool anchorBinaryContinuation = false;
+        int binaryContinuationAnchorOffset = static_cast<int>(config.indentWidth.get());
         if (isBinaryKind(node.kind) && !assignment) {
             bool sameChain = isBinaryKind(parentExpressionKind) &&
                              SyntaxFacts::getPrecedence(node.kind) > 0 &&
@@ -2767,25 +2973,69 @@ private:
                 if (assignmentRhsRoot->kind == SyntaxKind::ConditionalExpression) {
                     bool branchRoot = ternaryTrueBranch == &node || ternaryFalseBranch == &node;
                     addBinaryContinuationIndent = branchRoot && !binaryContinuationScope;
-                    if (addBinaryContinuationIndent)
+                    if (addBinaryContinuationIndent) {
+                        anchorBinaryContinuation = true;
                         binaryContinuationScope = true;
+                    }
                 }
                 else if (isBinaryKind(assignmentRhsRoot->kind)) {
                     addBinaryContinuationIndent = assignmentRhsRoot != &node && !rootChain;
+                    if (addBinaryContinuationIndent && !isBinaryKind(parentExpressionKind)) {
+                        anchorBinaryContinuation = true;
+                        binaryContinuationScope = true;
+                    }
                 }
                 else if (!binaryContinuationScope) {
                     addBinaryContinuationIndent = assignmentRhsRoot != &node;
-                    if (addBinaryContinuationIndent)
+                    if (addBinaryContinuationIndent) {
+                        anchorBinaryContinuation = true;
                         binaryContinuationScope = true;
+                    }
+                }
+                else if (!sameChain) {
+                    addBinaryContinuationIndent = true;
+                    anchorBinaryContinuation = !isBinaryKind(parentExpressionKind);
                 }
             }
             else if (!binaryContinuationScope) {
                 addBinaryContinuationIndent = !sameChain;
-                if (addBinaryContinuationIndent)
+                if (addBinaryContinuationIndent) {
+                    anchorBinaryContinuation = true;
                     binaryContinuationScope = true;
+                }
+            }
+            else if (!sameChain) {
+                addBinaryContinuationIndent = isBinaryKind(parentExpressionKind);
             }
             if (!node.children.empty() && childContainsMacro(node.children.front()))
                 addBinaryContinuationIndent = false;
+            if (anchorBinaryContinuation &&
+                parentExpressionKind == SyntaxKind::ParenthesizedExpression) {
+                int precedence = SyntaxFacts::getPrecedence(node.kind);
+                auto containsNestedPrecedenceGroup = [&](auto&& self,
+                                                         const NormalizedNode& current) -> bool {
+                    for (const auto& child : current.children) {
+                        auto nested = childNode(child);
+                        if (!nested || !isBinaryKind(nested->kind))
+                            continue;
+                        int nestedPrecedence = SyntaxFacts::getPrecedence(nested->kind);
+                        if (nestedPrecedence != precedence) {
+                            if (!isComparisonKind(nested->kind))
+                                return true;
+                            continue;
+                        }
+                        if (self(self, *nested))
+                            return true;
+                    }
+                    return false;
+                };
+                if (containsNestedPrecedenceGroup(containsNestedPrecedenceGroup, node))
+                    binaryContinuationAnchorOffset = 0;
+            }
+            if (addBinaryContinuationIndent && !anchorBinaryContinuation &&
+                !PropertyExprSyntax::isKind(node.kind) && !SequenceExprSyntax::isKind(node.kind)) {
+                binaryContinuationIndent += static_cast<int>(config.indentWidth.get());
+            }
             allowComparisonBreak = !isComparisonKind(node.kind);
             allowCurrentBinaryBreak = true;
             const NormalizedNode* left = nullptr;
@@ -2838,9 +3088,28 @@ private:
             lowerParameterValueAssignment(node);
         else if (assignment)
             lowerAssignment(node);
-        else if (node.kind == SyntaxKind::ConditionalExpression) {
-            indentTernary = ternaryNeedsIndent(node);
+        else if (node.kind == SyntaxKind::ConditionalExpression)
             ternaryTable = lowerTernary(node);
+        else if (node.kind == SyntaxKind::CastExpression &&
+                 (currentMemberKind == SyntaxKind::NamedPortConnection ||
+                  currentMemberKind == SyntaxKind::NamedParamAssignment ||
+                  currentMemberKind == SyntaxKind::NamedArgument)) {
+            for (const auto& child : node.children) {
+                auto nested = childNode(child);
+                if (!nested || nested->kind != SyntaxKind::ParenthesizedExpression) {
+                    lowerChild(child, node.kind);
+                    continue;
+                }
+
+                castWithOperandBreak = true;
+                for (size_t i = 0; i < nested->children.size(); i++) {
+                    lowerChild(nested->children[i], nested->kind);
+                    if (i == 0) {
+                        append(builder.softLine(0, ""));
+                        spacingProvided = true;
+                    }
+                }
+            }
         }
         else if (node.kind == SyntaxKind::ImplicationPropertyExpr && config.columnLimit.get() &&
                  formattedFlatWidth(node) > config.columnLimit.get())
@@ -2854,26 +3123,20 @@ private:
             contents = builder.relativeAnchor(breakMacroDimensionAfterPlus ? 2 : -2, contents);
         }
 
+        if (castWithOperandBreak)
+            contents = builder.relativeAnchor(static_cast<int>(config.indentWidth.get()), contents);
+
         if (isBinaryKind(node.kind) && !assignment) {
             if (addBinaryContinuationIndent && !inTernaryTableValue) {
                 int width = static_cast<int>(config.indentWidth.get());
-                if (assignmentRhsRoot) {
-                    if (!isBinaryKind(assignmentRhsRoot->kind) &&
-                        assignmentRhsRoot->kind != SyntaxKind::ParenthesizedExpression) {
-                        contents = builder.indent(width, contents);
-                    }
-                    else if (assignmentBreakHard)
-                        contents = builder.indent(width, contents);
-                    else if (assignmentBreakLine)
-                        contents = builder.indentIfBreak(assignmentBreakLine, width, contents);
-                }
-                else {
+                if (PropertyExprSyntax::isKind(node.kind) || SequenceExprSyntax::isKind(node.kind))
                     contents = builder.indent(width, contents);
-                }
+                else if (anchorBinaryContinuation)
+                    contents = builder.relativeAnchor(binaryContinuationAnchorOffset, contents);
             }
         }
-        else if (node.kind == SyntaxKind::ConditionalExpression && !ternaryTable && indentTernary) {
-            contents = builder.indent(static_cast<int>(config.indentWidth.get()), contents);
+        else if (node.kind == SyntaxKind::ConditionalExpression && !ternaryTable) {
+            contents = builder.relativeAnchor(static_cast<int>(config.indentWidth.get()), contents);
         }
 
         if (!isRoot && (MemberSyntax::isKind(node.kind) || StatementSyntax::isKind(node.kind)))
@@ -2888,6 +3151,7 @@ private:
         hardBreakCurrentBinary = savedHardBreakCurrentBinary;
         expressionBreakPriority = savedExpressionBreakPriority;
         binaryContinuationScope = savedBinaryContinuationScope;
+        binaryContinuationIndent = savedBinaryContinuationIndent;
         inMultipleConcatenation = savedMultipleConcatenation;
         forceTernaryBranches = savedForceTernaryBranches;
         currentDeclaratorAlignmentColumn = savedCurrentDeclaratorAlignmentColumn;
@@ -2932,6 +3196,7 @@ private:
     bool suppressAlignment = false;
     bool suppressEscapedAlignment = false;
     bool portDirectionAnchorEmitted = false;
+    bool packedDimensionAnchorEmitted = false;
     bool suppressTypedefAlignment = false;
     bool lastWasMacro = false;
     bool inlineBlockCommentOnLine = false;
@@ -2949,9 +3214,8 @@ private:
     bool noNameCallStyle = false;
     size_t instanceOpenParenPadding = 0;
     const NormalizedNode* assignmentRhsRoot = nullptr;
-    DocId assignmentBreakLine = 0;
-    bool assignmentBreakHard = false;
     bool binaryContinuationScope = false;
+    int binaryContinuationIndent = 0;
     bool inMultipleConcatenation = false;
     bool allowComparisonBreak = true;
     bool allowCurrentBinaryBreak = true;

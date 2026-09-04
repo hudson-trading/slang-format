@@ -32,6 +32,7 @@ enum class DocKind {
     Empty,
     Text,
     Verbatim,
+    MemberVerbatim,
     AbsoluteText,
     SoftLine,
     HardLine,
@@ -70,6 +71,7 @@ public:
     DocId text(std::string_view value,
                slang::syntax::SyntaxKind kind = slang::syntax::SyntaxKind::Unknown);
     DocId verbatim(std::string_view value);
+    DocId memberVerbatim(std::string_view value, int indent = 0);
     DocId absoluteText(std::string_view value);
     DocId softLine(int priority, std::string_view flatText = " ", GroupId group = 0,
                    bool global = false);

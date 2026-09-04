@@ -53,6 +53,9 @@ struct NormalizedTrivia {
     bool lineComment = false;
     bool joinsFollowingToken = false;
     bool preserveSingleSpace = false;
+    bool endsLine = false;
+    int conditionalDepthChange = 0;
+    size_t lineBreakCount = 2;
 };
 
 struct NormalizedToken {
@@ -93,6 +96,7 @@ struct NormalizedNode {
     size_t depth = 0;
     bool verbatim = false;
     std::string verbatimText;
+    std::vector<NormalizedTrivia> leading;
     std::vector<NormalizedChild> children;
 };
 

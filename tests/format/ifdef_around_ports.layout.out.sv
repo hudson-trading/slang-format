@@ -12,6 +12,6 @@ module ifdef_ports (
     assign data_out = data_in;
 
     `ifdef HAS_SIDEBAND
-    assign sideband_out = sideband_in;
+        assign sideband_out = sideband_in;
     `endif
 endmodule

@@ -11,8 +11,8 @@ module top;
     parameter int token_offset_width = $clog2(max_struct_size);
     parameter int token_size_width   = $clog2(token_size) + 1;
 
-    // Mixed localparam/parameter in one group: keyword column pads the
-    // shorter `parameter` (9) to match `localparam` (10).
+    // Mixed localparam/parameter rows align both the keyword/type boundary
+    // and the declaration names.
     localparam int a = 1;
     parameter  int b = 2;
 

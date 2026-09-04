@@ -8,8 +8,8 @@ module wrap_with_comments;
 
     // Comment between operands in a wrapping binary chain
     wire bar = (very_long_signal_name_a && very_long_signal_name_b)
-               ||  // comment between operands
-               (very_long_signal_name_c && very_long_signal_name_d);
+                   ||  // comment between operands
+                   (very_long_signal_name_c && very_long_signal_name_d);
 
     // Wrap without comments (baseline)
     wire baz = (very_long_signal_name_a && very_long_signal_name_b)
@@ -17,7 +17,7 @@ module wrap_with_comments;
 
     wire foo =  // trailing comment after equals
                // trailing comment line
-               (a && b && c) || (d && e && f)  // trailing comment expr
+                   (a && b && c) || (d && e && f)  // trailing comment expr
     ;  // trailing comment semicolon
 
     always_ff @(posedge clk) aaaaaaaaa <=  // comment0
@@ -27,11 +27,11 @@ module wrap_with_comments;
             ddddddddddddddddddddddddddddddddddddddddddd;  // comment4
 
     // Inline-fitting expression with trailing comments after each operand:
-    // continuation lines must align to the expression start (after '='),
-    // not to the member's block indent.
+    // continuation lines start one indent past the expression start,
+    // not at the member's block indent.
     localparam int total_count = 11 * 2  // group a
-                                 + 13  // group b
-                                 + 2  // group c
-                                 + 1;  // group d
+                                     + 13  // group b
+                                     + 2  // group c
+                                     + 1;  // group d
 
 endmodule

@@ -32,8 +32,8 @@ module parameter_port_multi_decl #(
 ) ();
 endmodule
 
-// An uninitialized value parameter does not pad its name to align with a
-// separate run of initialized local type parameters.
+// Parameter and localparam declarations remain in one table even when the
+// first row has no initializer.
 module parameter_port_mixed_local #(
   parameter int word_width,
   localparam type index_t = logic [$clog2(word_width)-1:0],

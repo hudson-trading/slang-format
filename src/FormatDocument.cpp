@@ -16,6 +16,8 @@
 #include <optional>
 #include <tuple>
 
+#include "slang/text/CharInfo.h"
+
 namespace format {
 namespace {
 
@@ -23,6 +25,7 @@ struct FlatAtom {
     enum class Kind {
         Text,
         Verbatim,
+        MemberVerbatim,
         AbsoluteText,
         SoftLine,
         HardLine,
@@ -52,6 +55,8 @@ struct FlatAtom {
 
 struct FlattenContext {
     int indent = 0;
+    int memberIndent = 0;
+    slang::syntax::SyntaxKind memberKind = slang::syntax::SyntaxKind::Unknown;
     int anchorIndent = 0;
     size_t anchorDepth = 0;
     GroupId group = 0;
@@ -73,6 +78,11 @@ void flatten(const FormatDocument& document, DocId id, FlattenContext context,
         case DocKind::Verbatim:
             result.push_back({FlatAtom::Kind::Verbatim, node.text, 0, 0, 0, 1, context.indent, 0, 0,
                               0, node.syntaxKind, context.member});
+            break;
+        case DocKind::MemberVerbatim:
+            result.push_back({FlatAtom::Kind::MemberVerbatim, node.text, 0, 0, 0, 1,
+                              context.memberIndent + node.value, 0, 0, 0, node.syntaxKind,
+                              context.member});
             break;
         case DocKind::AbsoluteText:
             result.push_back({FlatAtom::Kind::AbsoluteText, node.text, 0, 0, 0, 1, context.indent,
@@ -171,7 +181,10 @@ void flatten(const FormatDocument& document, DocId id, FlattenContext context,
             result.back().alignmentGroup = node.alignmentGroup;
             break;
         case DocKind::Member:
+            if (context.memberKind != node.syntaxKind)
+                context.memberIndent = context.indent;
             context.member = node.id;
+            context.memberKind = node.syntaxKind;
             flatten(document, node.children.front(), context, result);
             break;
     }
@@ -202,6 +215,38 @@ struct RenderResult {
     std::unordered_map<MemberId, Cost> memberCosts;
 };
 
+struct Delimiter {
+    char close;
+    size_t column;
+    size_t contentIndent;
+    bool aligned;
+};
+
+struct RenderCursor {
+    size_t column = 0;
+    size_t pendingIndent = 0;
+    bool atLineStart = true;
+    size_t consecutiveLineBreaks = 1;
+    std::unordered_map<AnchorId, size_t> anchors;
+    std::vector<std::pair<AnchorId, std::optional<size_t>>> anchorStack;
+    std::vector<Delimiter> delimiters;
+    bool pendingAlignedDelimiter = false;
+};
+
+struct RenderMetadata {
+    std::unordered_set<GroupId> forcedGroups;
+    std::unordered_map<BreakId, GroupId> breakGroups;
+};
+
+struct RenderSlice {
+    size_t begin = 0;
+    size_t end = std::numeric_limits<size_t>::max();
+    const RenderCursor* initialCursor = nullptr;
+    const std::unordered_map<size_t, std::vector<MemberId>>* capturePoints = nullptr;
+    std::unordered_map<MemberId, RenderCursor>* capturedCursors = nullptr;
+    bool finish = true;
+};
+
 void finishLine(Cost& cost, size_t column, uint32_t limit) {
     if (limit && column > limit) {
         size_t overflow = column - limit;
@@ -215,201 +260,199 @@ void finishLine(Cost& cost, size_t column, uint32_t limit) {
     }
 }
 
-RenderResult renderAtoms(const std::vector<FlatAtom>& atoms, const Config& config,
-                         const RenderOptions& options, bool collectText) {
-    RenderResult result;
-    auto& rendered = result.rendered;
-    size_t column = 0;
-    size_t line = 0;
-    size_t pendingIndent = 0;
-    bool atLineStart = true;
-    std::unordered_set<MemberId> lineMembers;
-    MemberId registeredLineMember = 0;
-    MemberId activeMember = 0;
-    std::unordered_map<AnchorId, size_t> anchors;
-    std::vector<std::pair<AnchorId, std::optional<size_t>>> anchorStack;
-    std::unordered_set<GroupId> forcedGroups;
-    struct Delimiter {
-        char close;
-        size_t column;
-        size_t contentIndent;
-        bool aligned;
-    };
-    std::vector<Delimiter> delimiters;
-    bool pendingAlignedDelimiter = false;
-    std::unordered_map<MemberId, size_t> memberContinuationIndents;
-    std::unordered_set<GroupId> brokenGroups;
+RenderMetadata collectRenderMetadata(const std::vector<FlatAtom>& atoms) {
+    RenderMetadata metadata;
     for (const auto& atom : atoms) {
         if (atom.kind == FlatAtom::Kind::HardLine && atom.groupId)
-            forcedGroups.insert(atom.groupId);
-        else if (atom.kind == FlatAtom::Kind::SoftLine && atom.groupId &&
-                 options.breaks.contains(atom.breakId)) {
-            brokenGroups.insert(atom.groupId);
-        }
+            metadata.forcedGroups.insert(atom.groupId);
+        else if (atom.kind == FlatAtom::Kind::SoftLine && atom.groupId)
+            metadata.breakGroups.emplace(atom.breakId, atom.groupId);
+    }
+    return metadata;
+}
+
+struct RenderRun {
+    const Config& config;
+    const RenderOptions& options;
+    bool collectText;
+    RenderCursor cursor;
+    RenderResult result;
+    size_t line = 0;
+    std::unordered_set<MemberId> lineMembers;
+    MemberId registeredLineMember = 0;
+    std::unordered_map<MemberId, size_t> memberContinuationIndents;
+
+    RenderRun(const Config& config, const RenderOptions& options, bool collectText,
+              RenderCursor cursor) :
+        config(config), options(options), collectText(collectText), cursor(std::move(cursor)) {}
+
+    void applyIndent() {
+        if (!cursor.atLineStart)
+            return;
+        if (collectText && cursor.pendingIndent)
+            result.rendered.text.append(cursor.pendingIndent, ' ');
+        cursor.column = cursor.pendingIndent;
+        cursor.pendingIndent = 0;
+        cursor.atLineStart = false;
     }
 
-    auto applyIndent = [&]() {
-        if (!atLineStart)
-            return;
-        if (collectText && pendingIndent)
-            rendered.text.append(pendingIndent, ' ');
-        column = pendingIndent;
-        pendingIndent = 0;
-        atLineStart = false;
-    };
+    void endLine() {
+        finishLine(result.cost, cursor.column, config.columnLimit.get());
+        for (auto member : lineMembers)
+            finishLine(result.memberCosts[member], cursor.column, config.columnLimit.get());
+        if (collectText)
+            result.rendered.text.push_back('\n');
+        line++;
+        cursor.column = 0;
+        cursor.pendingIndent = 0;
+        cursor.atLineStart = true;
+        cursor.consecutiveLineBreaks++;
+        lineMembers.clear();
+        registeredLineMember = 0;
+    }
 
-    auto append = [&](std::string_view text) {
+    void append(std::string_view text, MemberId member) {
         if (text.empty())
             return;
         if (text.front() != '\n')
             applyIndent();
         for (char c : text) {
             if (c == '\n') {
-                finishLine(result.cost, column, config.columnLimit.get());
-                for (auto member : lineMembers)
-                    finishLine(result.memberCosts[member], column, config.columnLimit.get());
-                if (collectText)
-                    rendered.text.push_back('\n');
-                line++;
-                column = 0;
-                pendingIndent = 0;
-                atLineStart = true;
-                lineMembers.clear();
-                registeredLineMember = 0;
+                endLine();
+                continue;
+            }
+            if (cursor.atLineStart)
+                applyIndent();
+            if (member && member != registeredLineMember) {
+                lineMembers.insert(member);
+                registeredLineMember = member;
+            }
+            if (collectText)
+                result.rendered.text.push_back(c);
+            cursor.column++;
+            cursor.consecutiveLineBreaks = 0;
+        }
+    }
+
+    void newline(int count, size_t indent) {
+        while ((!cursor.atLineStart ? 0 : cursor.consecutiveLineBreaks) <
+               static_cast<size_t>(count)) {
+            endLine();
+        }
+        cursor.pendingIndent = indent;
+    }
+
+    size_t breakIndent(const FlatAtom& atom) const {
+        size_t indent = std::max(atom.indent, 0);
+        bool hasRelativeAnchor = false;
+        if (atom.anchorIndent >= 0 && !cursor.anchorStack.empty()) {
+            auto found = cursor.anchors.find(cursor.anchorStack.back().first);
+            if (found != cursor.anchors.end()) {
+                indent = std::max(indent, found->second +
+                                              static_cast<size_t>(std::max(atom.anchorIndent, 0)));
+                hasRelativeAnchor = true;
             }
             else {
-                if (atLineStart)
-                    applyIndent();
-                if (activeMember && activeMember != registeredLineMember) {
-                    lineMembers.insert(activeMember);
-                    registeredLineMember = activeMember;
-                }
-                if (collectText)
-                    rendered.text.push_back(c);
-                column++;
+                indent += static_cast<size_t>(std::max(atom.anchorIndent, 0));
             }
         }
-    };
-
-    auto newline = [&](int count, size_t indent) {
-        for (int i = 0; i < count; i++) {
-            if (!atLineStart || i > 0) {
-                finishLine(result.cost, column, config.columnLimit.get());
-                for (auto member : lineMembers)
-                    finishLine(result.memberCosts[member], column, config.columnLimit.get());
-                if (collectText)
-                    rendered.text.push_back('\n');
-                line++;
-                column = 0;
-                atLineStart = true;
-                lineMembers.clear();
-                registeredLineMember = 0;
-            }
+        if (atom.conditionalIndentBreak && options.breaks.contains(atom.conditionalIndentBreak))
+            indent += static_cast<size_t>(std::max(atom.conditionalIndent, 0));
+        if (!hasRelativeAnchor && !cursor.delimiters.empty() && cursor.delimiters.back().aligned)
+            indent = std::max(indent, cursor.delimiters.back().contentIndent);
+        if (auto it = memberContinuationIndents.find(atom.memberId);
+            it != memberContinuationIndents.end()) {
+            indent = std::max(indent, it->second);
         }
-        pendingIndent = indent;
-    };
+        return indent;
+    }
 
-    for (const auto& atom : atoms) {
-        activeMember = atom.memberId;
-        auto breakIndent = [&]() {
-            size_t indent = std::max(atom.indent, 0);
-            if (atom.anchorIndent >= 0 && !anchorStack.empty()) {
-                auto found = anchors.find(anchorStack.back().first);
-                if (found != anchors.end())
-                    indent = std::max(indent, found->second + static_cast<size_t>(
-                                                                  std::max(atom.anchorIndent, 0)));
-                else
-                    indent += static_cast<size_t>(std::max(atom.anchorIndent, 0));
-            }
-            if (atom.conditionalIndentBreak &&
-                options.breaks.contains(atom.conditionalIndentBreak)) {
-                indent += static_cast<size_t>(std::max(atom.conditionalIndent, 0));
-            }
-            if (!delimiters.empty() && delimiters.back().aligned)
-                indent = std::max(indent, delimiters.back().contentIndent);
-            if (auto it = memberContinuationIndents.find(atom.memberId);
-                it != memberContinuationIndents.end()) {
-                indent = std::max(indent, it->second);
-            }
-            return indent;
-        };
+    void render(const FlatAtom& atom, const RenderMetadata& metadata,
+                const std::unordered_set<GroupId>& brokenGroups) {
         switch (atom.kind) {
             case FlatAtom::Kind::Text: {
-                bool closingDelimiter = atom.text.size() == 1 && !delimiters.empty() &&
-                                        atom.text.front() == delimiters.back().close;
-                if (closingDelimiter && atLineStart && delimiters.back().aligned)
-                    pendingIndent = delimiters.back().column;
+                bool closingDelimiter = atom.text.size() == 1 && !cursor.delimiters.empty() &&
+                                        atom.text.front() == cursor.delimiters.back().close;
+                if (closingDelimiter && cursor.atLineStart && cursor.delimiters.back().aligned)
+                    cursor.pendingIndent = cursor.delimiters.back().column;
                 applyIndent();
-                size_t tokenColumn = column;
-                append(atom.text);
+                size_t tokenColumn = cursor.column;
+                append(atom.text, atom.memberId);
                 if (closingDelimiter) {
-                    delimiters.pop_back();
+                    cursor.delimiters.pop_back();
                 }
                 else if (atom.text == "(" || atom.text == "{" || atom.text == "[") {
-                    bool aligned = pendingAlignedDelimiter ||
-                                   (!delimiters.empty() && delimiters.back().aligned);
+                    bool aligned = cursor.pendingAlignedDelimiter ||
+                                   (!cursor.delimiters.empty() && cursor.delimiters.back().aligned);
                     size_t extra = atom.text == "(" ? 5 : 4;
-                    delimiters.push_back({atom.text == "("   ? ')'
-                                          : atom.text == "{" ? '}'
-                                                             : ']',
-                                          tokenColumn, tokenColumn + extra, aligned});
+                    cursor.delimiters.push_back({atom.text == "("   ? ')'
+                                                 : atom.text == "{" ? '}'
+                                                                    : ']',
+                                                 tokenColumn, tokenColumn + extra, aligned});
                 }
-                pendingAlignedDelimiter = false;
+                cursor.pendingAlignedDelimiter = false;
                 break;
             }
             case FlatAtom::Kind::Verbatim:
-                append(atom.text);
+                append(atom.text, atom.memberId);
+                break;
+            case FlatAtom::Kind::MemberVerbatim:
+                if (cursor.atLineStart)
+                    cursor.pendingIndent = static_cast<size_t>(std::max(atom.indent, 0));
+                append(atom.text, atom.memberId);
                 break;
             case FlatAtom::Kind::AbsoluteText:
-                pendingIndent = 0;
-                column = 0;
-                atLineStart = false;
-                append(atom.text);
+                cursor.pendingIndent = 0;
+                cursor.column = 0;
+                cursor.atLineStart = false;
+                append(atom.text, atom.memberId);
                 break;
             case FlatAtom::Kind::SoftLine: {
                 bool split = options.breaks.contains(atom.breakId);
-                if (!split && atom.groupId)
-                    split = forcedGroups.contains(atom.groupId) ||
+                if (!split && atom.groupId) {
+                    split = metadata.forcedGroups.contains(atom.groupId) ||
                             brokenGroups.contains(atom.groupId);
+                }
                 if (split) {
-                    newline(1, breakIndent());
-                    rendered.breaks.insert(atom.breakId);
-                    rendered.renderedBreaks.push_back(
-                        {atom.breakId, collectText ? rendered.text.size() : 0});
+                    newline(1, breakIndent(atom));
+                    result.rendered.breaks.insert(atom.breakId);
+                    result.rendered.renderedBreaks.push_back(
+                        {atom.breakId, collectText ? result.rendered.text.size() : 0});
                     result.cost.breaks++;
                     if (atom.memberId)
                         result.memberCosts[atom.memberId].breaks++;
                 }
                 else {
-                    append(atom.text);
+                    append(atom.text, atom.memberId);
                 }
                 break;
             }
             case FlatAtom::Kind::HardLine:
-                newline(atom.hardLineCount, breakIndent());
+                newline(atom.hardLineCount, breakIndent(atom));
                 break;
             case FlatAtom::Kind::AnchorStart: {
                 applyIndent();
-                auto it = anchors.find(atom.anchorId);
-                anchorStack.emplace_back(atom.anchorId, it == anchors.end()
-                                                            ? std::optional<size_t>{}
-                                                            : std::optional<size_t>{it->second});
-                auto target = static_cast<int64_t>(column) + atom.priority;
+                auto it = cursor.anchors.find(atom.anchorId);
+                cursor.anchorStack.emplace_back(atom.anchorId,
+                                                it == cursor.anchors.end()
+                                                    ? std::optional<size_t>{}
+                                                    : std::optional<size_t>{it->second});
+                auto target = static_cast<int64_t>(cursor.column) + atom.priority;
                 bool fits = target >= 0 && (!atom.anchorFitWidth || !config.columnLimit.get() ||
                                             static_cast<size_t>(target) + atom.anchorFitWidth <=
                                                 config.columnLimit.get());
                 if (fits)
-                    anchors[atom.anchorId] = static_cast<size_t>(target);
+                    cursor.anchors[atom.anchorId] = static_cast<size_t>(target);
                 break;
             }
             case FlatAtom::Kind::AnchorEnd: {
-                if (!anchorStack.empty()) {
-                    auto [id, old] = anchorStack.back();
-                    anchorStack.pop_back();
+                if (!cursor.anchorStack.empty()) {
+                    auto [id, old] = cursor.anchorStack.back();
+                    cursor.anchorStack.pop_back();
                     if (old)
-                        anchors[id] = *old;
+                        cursor.anchors[id] = *old;
                     else
-                        anchors.erase(id);
+                        cursor.anchors.erase(id);
                 }
                 break;
             }
@@ -418,36 +461,77 @@ RenderResult renderAtoms(const std::vector<FlatAtom>& atoms, const Config& confi
                 auto it = options.padding.find(atom.alignmentId);
                 if (it != options.padding.end() && it->second) {
                     if (collectText)
-                        rendered.text.append(it->second, ' ');
-                    column += it->second;
+                        result.rendered.text.append(it->second, ' ');
+                    cursor.column += it->second;
                 }
                 if (options.alignedContinuations.contains(atom.alignmentId)) {
                     if (atom.syntaxKind == slang::syntax::SyntaxKind::AssignmentPatternItem &&
                         atom.memberId) {
-                        memberContinuationIndents[atom.memberId] = column + 2;
+                        memberContinuationIndents[atom.memberId] = cursor.column + 2;
                     }
                     else {
-                        pendingAlignedDelimiter = true;
+                        cursor.pendingAlignedDelimiter = true;
                     }
                 }
-                rendered.alignmentAnchors.push_back(
+                result.rendered.alignmentAnchors.push_back(
                     {atom.alignmentId, atom.alignmentColumn, atom.syntaxKind, atom.alignmentGroup,
-                     atom.memberId, line, column, collectText ? rendered.text.size() : 0,
-                     atom.minimumPadding});
+                     atom.memberId, line, cursor.column,
+                     collectText ? result.rendered.text.size() : 0, atom.minimumPadding});
                 break;
             }
         }
     }
-    finishLine(result.cost, column, config.columnLimit.get());
-    for (auto member : lineMembers)
-        finishLine(result.memberCosts[member], column, config.columnLimit.get());
-    return result;
+
+    void finish() {
+        finishLine(result.cost, cursor.column, config.columnLimit.get());
+        for (auto member : lineMembers)
+            finishLine(result.memberCosts[member], cursor.column, config.columnLimit.get());
+    }
+};
+
+RenderResult renderAtoms(const std::vector<FlatAtom>& atoms, const Config& config,
+                         const RenderOptions& options, bool collectText,
+                         const RenderMetadata* suppliedMetadata = nullptr,
+                         const RenderSlice& slice = {}) {
+    RenderMetadata localMetadata;
+    if (!suppliedMetadata) {
+        localMetadata = collectRenderMetadata(atoms);
+        suppliedMetadata = &localMetadata;
+    }
+    std::unordered_set<GroupId> brokenGroups;
+    for (auto breakId : options.breaks) {
+        if (auto it = suppliedMetadata->breakGroups.find(breakId);
+            it != suppliedMetadata->breakGroups.end()) {
+            brokenGroups.insert(it->second);
+        }
+    }
+
+    RenderRun run{config, options, collectText,
+                  slice.initialCursor ? *slice.initialCursor : RenderCursor{}};
+    size_t end = std::min(slice.end, atoms.size());
+    for (size_t atomIndex = std::min(slice.begin, end); atomIndex < end; atomIndex++) {
+        if (slice.capturePoints && slice.capturedCursors) {
+            if (auto it = slice.capturePoints->find(atomIndex); it != slice.capturePoints->end()) {
+                for (auto member : it->second)
+                    slice.capturedCursors->insert_or_assign(member, run.cursor);
+            }
+        }
+        run.render(atoms[atomIndex], *suppliedMetadata, brokenGroups);
+    }
+    if (slice.finish)
+        run.finish();
+    return std::move(run.result);
 }
 
 struct Action {
     MemberId member = 0;
     int priority = 0;
     std::vector<BreakId> breaks;
+};
+
+struct MemberRange {
+    size_t begin = std::numeric_limits<size_t>::max();
+    size_t end = 0;
 };
 
 std::vector<Action> collectActions(const std::vector<FlatAtom>& atoms,
@@ -484,6 +568,44 @@ std::vector<Action> collectActions(const std::vector<FlatAtom>& atoms,
     return actions;
 }
 
+std::unordered_map<MemberId, MemberRange> collectMemberRanges(const std::vector<FlatAtom>& atoms,
+                                                              const std::vector<Action>& actions) {
+    std::unordered_map<MemberId, MemberRange> ranges;
+    std::unordered_map<BreakId, MemberId> breakMembers;
+    for (const auto& action : actions) {
+        ranges.try_emplace(action.member);
+        for (auto breakId : action.breaks)
+            breakMembers.emplace(breakId, action.member);
+    }
+
+    auto include = [&](MemberId member, size_t atomIndex) {
+        auto& range = ranges.at(member);
+        range.begin = std::min(range.begin, atomIndex);
+        range.end = std::max(range.end, atomIndex + 1);
+    };
+    for (size_t atomIndex = 0; atomIndex < atoms.size(); atomIndex++) {
+        const auto& atom = atoms[atomIndex];
+        if (ranges.contains(atom.memberId))
+            include(atom.memberId, atomIndex);
+        if (atom.kind == FlatAtom::Kind::SoftLine) {
+            if (auto it = breakMembers.find(atom.breakId); it != breakMembers.end())
+                include(it->second, atomIndex);
+        }
+    }
+
+    for (auto& [member, range] : ranges) {
+        if (range.begin == std::numeric_limits<size_t>::max())
+            continue;
+        if (range.end && atoms[range.end - 1].kind == FlatAtom::Kind::HardLine)
+            continue;
+        while (range.end < atoms.size()) {
+            if (atoms[range.end++].kind == FlatAtom::Kind::HardLine)
+                break;
+        }
+    }
+    return ranges;
+}
+
 Cost memberCost(const RenderResult& result, MemberId member) {
     if (!member)
         return result.cost;
@@ -500,6 +622,18 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
     if (actions.empty())
         return base;
 
+    auto metadata = collectRenderMetadata(atoms);
+    auto memberRanges = collectMemberRanges(atoms, actions);
+    std::unordered_map<size_t, std::vector<MemberId>> capturePoints;
+    for (const auto& [member, range] : memberRanges) {
+        if (range.begin != std::numeric_limits<size_t>::max())
+            capturePoints[range.begin].push_back(member);
+    }
+    std::unordered_map<MemberId, RenderCursor> memberCursors;
+    RenderSlice baselineSlice;
+    baselineSlice.capturePoints = &capturePoints;
+    baselineSlice.capturedCursors = &memberCursors;
+    auto baselineRender = renderAtoms(atoms, config, base, false, &metadata, baselineSlice);
     size_t memberBegin = 0;
     while (memberBegin < actions.size()) {
         MemberId member = actions[memberBegin].member;
@@ -507,17 +641,45 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
         while (memberEnd < actions.size() && actions[memberEnd].member == member)
             memberEnd++;
 
-        auto baseline = memberCost(renderAtoms(atoms, config, base, false), member);
+        auto baseline = memberCost(baselineRender, member);
         if (baseline.worstOverflow == 0) {
             memberBegin = memberEnd;
             continue;
         }
+
+        auto range = memberRanges.find(member);
+        auto initialCursor = memberCursors.find(member);
+        bool renderLocally = member && range != memberRanges.end() &&
+                             initialCursor != memberCursors.end() &&
+                             range->second.begin != std::numeric_limits<size_t>::max();
+        size_t renderAtomCount = atoms.size();
+        if (renderLocally)
+            renderAtomCount = range->second.end - range->second.begin;
+        auto renderCost = [&](const RenderOptions& options) {
+            if (!renderLocally)
+                return memberCost(renderAtoms(atoms, config, options, false, &metadata), member);
+
+            RenderSlice memberSlice;
+            memberSlice.begin = range->second.begin;
+            memberSlice.end = range->second.end;
+            memberSlice.initialCursor = &initialCursor->second;
+            memberSlice.finish = memberSlice.end == atoms.size();
+            return memberCost(renderAtoms(atoms, config, options, false, &metadata, memberSlice),
+                              member);
+        };
 
         struct State {
             RenderOptions options;
             Cost cost;
         };
         std::vector<State> states{{base, baseline}};
+        constexpr size_t maxCandidateRenders = 4096;
+        constexpr size_t maxCandidateAtomVisits = 4 * 1024 * 1024;
+        size_t candidateBudget = std::min(
+            maxCandidateRenders,
+            std::max<size_t>(1, maxCandidateAtomVisits / std::max<size_t>(renderAtomCount, 1)));
+        size_t candidateRenders = 0;
+        bool greedyTiers = false;
         size_t tierBegin = memberBegin;
         while (tierBegin < memberEnd) {
             size_t tierEnd = tierBegin + 1;
@@ -526,23 +688,52 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
                 tierEnd++;
             }
 
-            for (size_t actionIndex = tierBegin; actionIndex < tierEnd; actionIndex++) {
-                size_t oldSize = states.size();
-                for (size_t stateIndex = 0; stateIndex < oldSize; stateIndex++) {
-                    if (states[stateIndex].cost.worstOverflow == 0)
-                        continue;
-                    auto candidate = states[stateIndex].options;
+            if (greedyTiers) {
+                auto candidate = std::move(states.front().options);
+                for (size_t actionIndex = tierBegin; actionIndex < tierEnd; actionIndex++) {
                     candidate.breaks.insert(actions[actionIndex].breaks.begin(),
                                             actions[actionIndex].breaks.end());
-                    auto rendered = renderAtoms(atoms, config, candidate, false);
-                    states.push_back({candidate, memberCost(rendered, member)});
                 }
-                std::ranges::sort(states, [](const State& left, const State& right) {
-                    return left.cost < right.cost;
-                });
-                constexpr size_t beamWidth = 512;
-                if (states.size() > beamWidth)
-                    states.resize(beamWidth);
+                states = {{std::move(candidate), {}}};
+                states.front().cost = renderCost(states.front().options);
+            }
+            else {
+                bool budgetExhausted = false;
+                size_t actionIndex = tierBegin;
+                for (; actionIndex < tierEnd && !budgetExhausted; actionIndex++) {
+                    size_t oldSize = states.size();
+                    for (size_t stateIndex = 0; stateIndex < oldSize; stateIndex++) {
+                        if (states[stateIndex].cost.worstOverflow == 0)
+                            continue;
+                        if (candidateRenders == candidateBudget) {
+                            budgetExhausted = true;
+                            break;
+                        }
+                        auto candidate = states[stateIndex].options;
+                        candidate.breaks.insert(actions[actionIndex].breaks.begin(),
+                                                actions[actionIndex].breaks.end());
+                        states.push_back({candidate, renderCost(candidate)});
+                        candidateRenders++;
+                    }
+                    std::ranges::sort(states, [](const State& left, const State& right) {
+                        return left.cost < right.cost;
+                    });
+                    constexpr size_t beamWidth = 512;
+                    if (states.size() > beamWidth)
+                        states.resize(beamWidth);
+                    if (budgetExhausted)
+                        break;
+                }
+                if (budgetExhausted) {
+                    auto candidate = std::move(states.front().options);
+                    for (size_t remaining = actionIndex; remaining < tierEnd; remaining++) {
+                        candidate.breaks.insert(actions[remaining].breaks.begin(),
+                                                actions[remaining].breaks.end());
+                    }
+                    states = {{std::move(candidate), {}}};
+                    states.front().cost = renderCost(states.front().options);
+                    greedyTiers = true;
+                }
             }
             if (states.front().cost.worstOverflow == 0)
                 break;
@@ -550,6 +741,8 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
         }
 
         base = std::move(states.front().options);
+        memberCursors.clear();
+        baselineRender = renderAtoms(atoms, config, base, false, &metadata, baselineSlice);
         memberBegin = memberEnd;
     }
     return base;
@@ -701,6 +894,41 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 }
                 groupEnd++;
             }
+            if (key.kind == slang::syntax::SyntaxKind::ImplicitAnsiPort && key.column == 1) {
+                auto found = groups.find({key.kind, 2, key.group});
+                if (found != groups.end()) {
+                    auto declarators = found->second;
+                    std::ranges::sort(declarators, {},
+                                      [](const auto* anchor) { return anchor->line; });
+                    auto pivot = std::ranges::find_if(declarators, [&](const auto* anchor) {
+                        return anchor->member == rows[groupBegin]->member;
+                    });
+                    if (pivot != declarators.end()) {
+                        size_t begin = static_cast<size_t>(pivot - declarators.begin());
+                        size_t end = begin + 1;
+                        while (begin > 0 &&
+                               separatorCount(declarators[begin - 1]->line,
+                                              declarators[begin]->line, threshold) < threshold) {
+                            begin--;
+                        }
+                        while (end < declarators.size() &&
+                               separatorCount(declarators[end - 1]->line, declarators[end]->line,
+                                              threshold) < threshold) {
+                            end++;
+                        }
+                        std::unordered_set<MemberId> dimensionMembers;
+                        std::unordered_set<MemberId> declaratorMembers;
+                        for (size_t i = groupBegin; i < groupEnd; i++)
+                            dimensionMembers.insert(rows[i]->member);
+                        for (size_t i = begin; i < end; i++)
+                            declaratorMembers.insert(declarators[i]->member);
+                        if (dimensionMembers != declaratorMembers) {
+                            groupBegin = groupEnd;
+                            continue;
+                        }
+                    }
+                }
+            }
             bool enumValueColumn = key.kind == slang::syntax::SyntaxKind::Declarator &&
                                    key.column == 2;
             bool parameterValueColumn = key.kind ==
@@ -843,8 +1071,17 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 const auto& maxSpaces = config.alignment.get().maxSpaces.get();
                 if (!maxSpaces || padding < static_cast<size_t>(*maxSpaces)) {
                     result.padding[rows[i]->id] = padding;
-                    if (key.column == 1)
-                        result.continuations.insert(rows[i]->id);
+                    if (key.column == 1) {
+                        auto suffix = lineSuffix(*rows[i]);
+                        while (!suffix.empty() && slang::isTabOrSpace(suffix.front())) {
+                            suffix.remove_prefix(1);
+                        }
+                        bool listValue = key.kind ==
+                                             slang::syntax::SyntaxKind::AssignmentPatternItem &&
+                                         (suffix.starts_with("'{") || suffix.starts_with('{'));
+                        if (!listValue)
+                            result.continuations.insert(rows[i]->id);
+                    }
                     rowShifts[line] += padding;
                 }
             }
@@ -854,22 +1091,41 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
     return result;
 }
 
-void normalizeRenderedText(std::string& text) {
+void normalizeRenderedDocument(RenderedDocument& rendered) {
+    struct OffsetRef {
+        size_t original;
+        size_t* normalized;
+    };
+    std::vector<OffsetRef> offsets;
+    offsets.reserve(rendered.renderedBreaks.size() + rendered.alignmentAnchors.size());
+    for (auto& lineBreak : rendered.renderedBreaks)
+        offsets.push_back({lineBreak.outputOffset, &lineBreak.outputOffset});
+    for (auto& anchor : rendered.alignmentAnchors)
+        offsets.push_back({anchor.outputOffset, &anchor.outputOffset});
+    std::ranges::sort(offsets, {}, &OffsetRef::original);
+
     std::string normalized;
-    normalized.reserve(text.size());
+    normalized.reserve(rendered.text.size());
     size_t pos = 0;
-    while (pos < text.size()) {
-        size_t end = text.find('\n', pos);
+    size_t offsetIndex = 0;
+    while (pos < rendered.text.size()) {
+        size_t end = rendered.text.find('\n', pos);
         if (end == std::string::npos)
-            end = text.size();
+            end = rendered.text.size();
         size_t contentEnd = end;
-        while (contentEnd > pos && (text[contentEnd - 1] == ' ' || text[contentEnd - 1] == '\t'))
+        while (contentEnd > pos && slang::isTabOrSpace(rendered.text[contentEnd - 1]))
             contentEnd--;
-        normalized.append(text, pos, contentEnd - pos);
+        size_t normalizedLineStart = normalized.size();
+        while (offsetIndex < offsets.size() && offsets[offsetIndex].original <= end) {
+            size_t sourceOffset = std::clamp(offsets[offsetIndex].original, pos, contentEnd);
+            *offsets[offsetIndex].normalized = normalizedLineStart + sourceOffset - pos;
+            offsetIndex++;
+        }
+        normalized.append(rendered.text, pos, contentEnd - pos);
         normalized.push_back('\n');
-        pos = end == text.size() ? end : end + 1;
+        pos = end == rendered.text.size() ? end : end + 1;
     }
-    text = std::move(normalized);
+    rendered.text = std::move(normalized);
 }
 
 } // namespace
@@ -903,6 +1159,16 @@ DocId DocumentBuilder::verbatim(std::string_view value) {
     DocNode node;
     node.kind = DocKind::Verbatim;
     node.text = value;
+    return add(std::move(node));
+}
+
+DocId DocumentBuilder::memberVerbatim(std::string_view value, int indent) {
+    if (value.empty())
+        return empty();
+    DocNode node;
+    node.kind = DocKind::MemberVerbatim;
+    node.text = value;
+    node.value = indent;
     return add(std::move(node));
 }
 
@@ -1031,7 +1297,7 @@ RenderedDocument DocumentRenderer::renderLayout(const FormatDocument& document) 
     flatten(document, document.root, {}, atoms);
     auto options = solve(atoms, config_, {});
     auto result = renderAtoms(atoms, config_, options, true).rendered;
-    normalizeRenderedText(result.text);
+    normalizeRenderedDocument(result);
     if (result.text.empty() || result.text.back() != '\n')
         result.text.push_back('\n');
     return result;
@@ -1048,7 +1314,7 @@ RenderedDocument DocumentRenderer::renderAligned(const FormatDocument& document,
     options.alignedContinuations = std::move(alignment.continuations);
     options = solve(atoms, config_, std::move(options));
     auto result = renderAtoms(atoms, config_, options, true).rendered;
-    normalizeRenderedText(result.text);
+    normalizeRenderedDocument(result);
     if (result.text.empty() || result.text.back() != '\n')
         result.text.push_back('\n');
     return result;

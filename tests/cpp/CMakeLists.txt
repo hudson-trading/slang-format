@@ -15,8 +15,8 @@ if(NOT TARGET Catch2::Catch2WithMain)
 endif()
 
 add_executable(
-  formatter_unittests FormatConfigTests.cpp FormatValidationTests.cpp
-                      NormalizedFormatTests.cpp)
+  formatter_unittests FormatConfigTests.cpp FormatDocumentTests.cpp
+                      FormatValidationTests.cpp NormalizedFormatTests.cpp)
 target_link_libraries(formatter_unittests PRIVATE slang_format_lib
                                                   Catch2::Catch2WithMain)
 add_test(NAME formatter_unittests COMMAND formatter_unittests)

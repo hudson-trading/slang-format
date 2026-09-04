@@ -8,8 +8,8 @@ module line_wrapping;
 
     // ---- Edge case 1: Parenthesized expressions ----
     // Parens stay intact; inner expression wraps independently
-    assign result = (alpha_long_signal + beta_long_signal
-        + gamma_long_signal + delta_long_signal + epsilon_long_signal);
+    assign result = (alpha_long_signal + beta_long_signal + gamma_long_signal
+                         + delta_long_signal + epsilon_long_signal);
 
     // ---- Edge case 2: Concatenation ----
     // Handled by Dynamic list verticalization, NOT expression wrapping
@@ -97,8 +97,8 @@ module line_wrapping;
     // Blocking assignment with ternary RHS
     always_comb begin
         result =
-            condition_long_flag ? alpha_long_signal + beta_long_signal + gamma_long_signal :
-                                  delta_long_signal + epsilon_long_signal;
+            condition_long_flag ? alpha_long_signal + beta_long_signal
+                                     + gamma_long_signal : delta_long_signal + epsilon_long_signal;
     end
 
     // ---- Assignment with concatenation RHS (should NOT wrap at =) ----
@@ -131,16 +131,15 @@ module line_wrapping;
                 : epsilon_long_signal + zeta_long_signal
             : alpha_long_signal + epsilon_long_signal;
 
-    // ---- Outermost chain no-bump: || chain with parenthesized && operands ----
-    // The outer || stays at the same indent as the first operand.
-    // The && inside each || operand bumps one level deeper.
+    // ---- Nested expression-relative indentation ----
+    // Each wrapped operator chain continues one indent past its expression start.
     logic [7:0]  status_flags;
     logic [31:0] mode_select, active_bitmap;
     logic [31:0] field_a, field_b, field_c;
     logic        info_valid;
     always_comb begin
         status_flags[0] = ((mode_select == 32'h01 || mode_select == 32'h02)
-                              && info_valid && ((active_bitmap & (1 << field_a)) == 0))
+                               && info_valid && ((active_bitmap & (1 << field_a)) == 0))
                               || (mode_select == 32'h03 && ((active_bitmap & (1 << field_b)) == 0))
                               || (mode_select == 32'h04 && ((active_bitmap & (1 << field_c)) == 0));
     end
@@ -160,11 +159,11 @@ module line_wrapping;
     parameter int num_stages = 4;
     always_ff @(posedge clk) begin
         valid_result <= stage_valid && (((category_field_alpha == alpha_long_signal)
-                            && (check_result_alpha != '0))
-                            || ((category_field_beta == beta_long_signal)
-                            && (check_result_beta != '0))
-                            || ((category_field_gamma == gamma_long_signal)
-                            && (check_result_gamma != '0)));
+                                             && (check_result_alpha != '0))
+                                            || ((category_field_beta == beta_long_signal)
+                                                    && (check_result_beta != '0))
+                                            || ((category_field_gamma == gamma_long_signal)
+                                                    && (check_result_gamma != '0)));
     end
 
     // ---- Nothing fits: first operand already exceeds column limit ----
@@ -223,14 +222,14 @@ module line_wrapping;
     // Compound assignment
     always_comb begin
         result += alpha_long_signal + beta_long_signal + gamma_long_signal
-            + delta_long_signal + epsilon_long_signal;
+                      + delta_long_signal + epsilon_long_signal;
     end
 
     // ---- Structure 3: ConditionalExpression (ternary) ----
     // Simple ternary
     assign result =
-        condition_long_flag ? alpha_long_signal + beta_long_signal + gamma_long_signal :
-                              delta_long_signal + epsilon_long_signal;
+        condition_long_flag ? alpha_long_signal + beta_long_signal
+                                 + gamma_long_signal : delta_long_signal + epsilon_long_signal;
 
     // Nested ternary
     assign result =

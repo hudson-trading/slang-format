@@ -21,6 +21,6 @@ package test_pkg;
     // broken when the outer ternary or && already provides a break.
     function automatic logic check_size();
         return ((sample.extended.count == 0)
-            || (sample.extended.count > previous_state.count)) ? clamped_a : clamped_b;
+                    || (sample.extended.count > previous_state.count)) ? clamped_a : clamped_b;
     endfunction
 endpackage

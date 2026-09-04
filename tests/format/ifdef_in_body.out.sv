@@ -10,7 +10,7 @@ module ifdef_body (
             val <= 8'd0;
         end else begin
             `ifdef USE_FAST_PATH
-            val <= val + 8'd4;
+                val <= val + 8'd4;
             `else
                 val <= val + 8'd1;
             `endif
@@ -18,9 +18,9 @@ module ifdef_body (
     end
 
     `ifdef HAS_DEBUG
-    // Debug probe
-    logic [7:0] debug_val;
-    assign debug_val = val;
+        // Debug probe
+        logic [7:0] debug_val;
+        assign debug_val = val;
     `endif
 
     assign out = val;

@@ -85,9 +85,8 @@ module line_wrapping;
     // ---- Triple nested ternary (all three wrap) ----
     assign result = first_condition_variable ? second_condition_variable ? third_condition_variable ? alpha_long_signal + beta_long_signal : gamma_long_signal + delta_long_signal : epsilon_long_signal + zeta_long_signal : alpha_long_signal + epsilon_long_signal;
 
-    // ---- Outermost chain no-bump: || chain with parenthesized && operands ----
-    // The outer || stays at the same indent as the first operand.
-    // The && inside each || operand bumps one level deeper.
+    // ---- Nested expression-relative indentation ----
+    // Each wrapped operator chain continues one indent past its expression start.
     logic [7:0] status_flags;
     logic [31:0] mode_select, active_bitmap;
     logic [31:0] field_a, field_b, field_c;

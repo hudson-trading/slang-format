@@ -14,8 +14,10 @@
 #include <string_view>
 
 #include "slang/syntax/AllSyntax.h"
+#include "slang/syntax/SyntaxFacts.h"
 #include "slang/syntax/SyntaxListInfo.h"
 #include "slang/syntax/SyntaxNode.h"
+#include "slang/text/CharInfo.h"
 #include "slang/text/SourceManager.h"
 #include "slang/util/SmallVector.h"
 
@@ -123,6 +125,81 @@ std::string skippedText(const Trivia& trivia, const SourceManager* sourceManager
     return result;
 }
 
+std::optional<std::string> canonicalSkippedAssignment(const Trivia& trivia) {
+    auto tokens = trivia.getSkippedTokens();
+    if (tokens.empty() || tokens.front().kind != TokenKind::Equals)
+        return std::nullopt;
+
+    std::string result;
+    bool pendingSpace = false;
+    for (auto token : tokens) {
+        for (const auto& nested : token.trivia()) {
+            if (nested.kind != TriviaKind::Whitespace && nested.kind != TriviaKind::EndOfLine)
+                return std::nullopt;
+            pendingSpace = pendingSpace || !nested.getRawText().empty();
+        }
+        if (pendingSpace && (result.empty() || !isWhitespace(result.back())))
+            result.push_back(' ');
+        result.append(token.rawText());
+        pendingSpace = false;
+    }
+    return result;
+}
+
+bool hasForeignTemplateDirective(std::string_view text) {
+    while (!text.empty()) {
+        size_t lineEnd = text.find('\n');
+        auto line = text.substr(0, lineEnd);
+        while (!line.empty() && isTabOrSpace(line.front()))
+            line.remove_prefix(1);
+        if (line.starts_with('%')) {
+            line.remove_prefix(1);
+            while (!line.empty() && isTabOrSpace(line.front()))
+                line.remove_prefix(1);
+            auto startsWithWord = [&](std::string_view word) {
+                return line.starts_with(word) &&
+                       (line.size() == word.size() || !isValidCIdChar(line[word.size()]));
+            };
+            if (startsWithWord("if") || startsWithWord("elif") || startsWithWord("else") ||
+                startsWithWord("endif") || startsWithWord("for") || startsWithWord("endfor")) {
+                return true;
+            }
+        }
+        if (lineEnd == std::string_view::npos)
+            break;
+        text.remove_prefix(lineEnd + 1);
+    }
+    return false;
+}
+
+int recoveredConditionalDepthChange(std::string_view text) {
+    auto startsDirective = [](std::string_view line, std::string_view directive) {
+        if (!line.starts_with(directive))
+            return false;
+        return line.size() == directive.size() || !isValidCIdChar(line[directive.size()]);
+    };
+
+    int result = 0;
+    while (!text.empty()) {
+        size_t lineEnd = text.find_first_of("\r\n");
+        auto line = text.substr(0, lineEnd);
+        while (!line.empty() && isTabOrSpace(line.front()))
+            line.remove_prefix(1);
+        if (startsDirective(line, "`ifdef") || startsDirective(line, "`ifndef"))
+            result++;
+        else if (startsDirective(line, "`endif"))
+            result--;
+
+        if (lineEnd == std::string_view::npos)
+            break;
+        size_t nextLine = lineEnd + 1;
+        if (text[lineEnd] == '\r' && nextLine < text.size() && text[nextLine] == '\n')
+            nextLine++;
+        text.remove_prefix(nextLine);
+    }
+    return result;
+}
+
 } // namespace
 
 class NormalizedDocumentBuilder {
@@ -134,7 +211,21 @@ public:
         NormalizedFormatDocument result;
         result.root_ = buildNode(root, 0, false);
         classifyTrivia();
-        markVerbatimNodes(*result.root_);
+        hoistStandaloneRecovery(*result.root_);
+        bool foreignTemplate = false;
+        if (sourceManager) {
+            auto location = root.getFirstToken().location();
+            if (location)
+                foreignTemplate = hasForeignTemplateDirective(
+                    sourceManager->getSourceText(location.buffer()));
+        }
+        if (foreignTemplate) {
+            result.root_->verbatim = true;
+            result.root_->verbatimText = syntaxText(root, sourceManager);
+        }
+        else {
+            markVerbatimNodes(*result.root_);
+        }
         classifyTokenLines();
         classifyMacroContinuations();
         buildConditionals();
@@ -153,6 +244,78 @@ private:
             return trailing ? token->trailing.at(index) : token->leading.at(index);
         }
     };
+
+    std::optional<size_t> firstRealToken(const NormalizedChild& child) const {
+        if (auto token = std::get_if<size_t>(&child.value)) {
+            const auto& parsed = tokens.at(*token);
+            if (parsed.token && !parsed.token.isMissing() && !parsed.fromMacroExpansion &&
+                !parsed.token.rawText().empty()) {
+                return *token;
+            }
+            return std::nullopt;
+        }
+        if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&child.value)) {
+            for (const auto& nestedChild : (*nested)->children) {
+                if (auto result = firstRealToken(nestedChild))
+                    return result;
+            }
+            return std::nullopt;
+        }
+        const auto& list = **std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
+        for (const auto& item : list.children) {
+            if (auto result = firstRealToken(item))
+                return result;
+        }
+        return std::nullopt;
+    }
+
+    void hoistStandaloneRecovery(NormalizedNode& node) {
+        if (node.syntax &&
+            (MemberSyntax::isKind(node.kind) || StatementSyntax::isKind(node.kind))) {
+            std::optional<size_t> first;
+            for (const auto& child : node.children) {
+                if ((first = firstRealToken(child)))
+                    break;
+            }
+            if (first) {
+                auto& leading = tokens.at(*first).leading;
+                size_t prefixEnd = 0;
+                bool hasRecovery = false;
+                while (prefixEnd < leading.size()) {
+                    const auto& trivia = leading[prefixEnd];
+                    if (trivia.kind == NormalizedTriviaKind::BlankLine) {
+                        prefixEnd++;
+                        continue;
+                    }
+                    if (trivia.kind == NormalizedTriviaKind::Verbatim &&
+                        trivia.placement == TriviaPlacement::Standalone) {
+                        hasRecovery = true;
+                        prefixEnd++;
+                        continue;
+                    }
+                    break;
+                }
+                if (hasRecovery) {
+                    for (size_t i = 0; i < prefixEnd; i++)
+                        node.leading.push_back(std::move(leading[i]));
+                    leading.erase(leading.begin(),
+                                  leading.begin() + static_cast<ptrdiff_t>(prefixEnd));
+                }
+            }
+        }
+
+        for (auto& child : node.children) {
+            if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&child.value)) {
+                hoistStandaloneRecovery(**nested);
+            }
+            else if (auto list = std::get_if<std::unique_ptr<NormalizedList>>(&child.value)) {
+                for (auto& item : (*list)->children) {
+                    if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&item.value))
+                        hoistStandaloneRecovery(**nested);
+                }
+            }
+        }
+    }
 
     void markVerbatimNodes(NormalizedNode& node) {
         auto firstToken = [&](const auto& self,
@@ -325,12 +488,16 @@ private:
         return false;
     }
 
-    void appendBlankLines(NormalizedToken& token, size_t lineBreaks) {
+    void appendBlankLines(NormalizedToken& token, size_t lineBreaks, bool atDocumentStart) {
+        if (atDocumentStart && token.leading.empty())
+            return;
         if (!token.preservesBlankBefore && !token.followsPreservedList)
             return;
-        for (size_t i = 1; i < lineBreaks; i++) {
-            token.leading.push_back(
-                {NormalizedTriviaKind::BlankLine, TriviaPlacement::Standalone, "", nullptr, false});
+        if (lineBreaks > 1) {
+            NormalizedTrivia blank{NormalizedTriviaKind::BlankLine, TriviaPlacement::Standalone, "",
+                                   nullptr, false};
+            blank.lineBreakCount = lineBreaks;
+            token.leading.push_back(std::move(blank));
         }
     }
 
@@ -339,27 +506,43 @@ private:
                                     const std::optional<TriviaOwner>& previousMacro,
                                     std::vector<NormalizedTrivia>* previousDirectiveOwner,
                                     size_t previousDirectiveIndex,
-                                    const SyntaxNode* previousDirectiveSyntax) {
+                                    const SyntaxNode* previousDirectiveSyntax,
+                                    bool disabledTextAlreadyCaptured) {
         auto triviaView = syntax.getFirstToken().trivia();
         bool hadLineBreak = false;
+        std::string pendingDisabledText;
+        auto flushDisabledText = [&] {
+            if (pendingDisabledText.empty())
+                return;
+            bool hasContent = std::ranges::any_of(pendingDisabledText,
+                                                  [](char c) { return !isWhitespace(c); });
+            if (hasContent) {
+                if (!disabledTextAlreadyCaptured) {
+                    current.leading.push_back({NormalizedTriviaKind::ConditionalBranch,
+                                               TriviaPlacement::Standalone,
+                                               std::move(pendingDisabledText), nullptr, false});
+                }
+                lineBreaks = 0;
+            }
+            else {
+                lineBreaks += std::ranges::count(pendingDisabledText, '\n');
+            }
+            pendingDisabledText.clear();
+        };
         for (size_t triviaIndex = 0; triviaIndex < triviaView.size(); triviaIndex++) {
             const auto& trivia = triviaView[triviaIndex];
-            if (syntax.kind == SyntaxKind::EndIfDirective &&
-                trivia.kind == TriviaKind::DisabledText) {
-                if (trivia.getRawText().find('\n') != std::string_view::npos) {
-                    lineBreaks = std::max<size_t>(lineBreaks, 1);
-                    hadLineBreak = true;
-                }
+            if (trivia.kind == TriviaKind::DisabledText) {
+                pendingDisabledText.append(trivia.getRawText());
+                hadLineBreak = hadLineBreak ||
+                               trivia.getRawText().find('\n') != std::string_view::npos;
                 continue;
             }
-            if (trivia.kind == TriviaKind::EndOfLine ||
-                (trivia.kind == TriviaKind::DisabledText && trivia.getRawText() == "\n")) {
+            flushDisabledText();
+            if (trivia.kind == TriviaKind::EndOfLine) {
                 lineBreaks++;
                 hadLineBreak = true;
                 continue;
             }
-            if (trivia.kind == TriviaKind::DisabledText)
-                continue;
             if (!isCommentTrivia(trivia))
                 continue;
 
@@ -368,7 +551,8 @@ private:
                                   isLineCommentTrivia(trivia)};
             item.preserveSingleSpace = true;
             bool trailsPreviousDirective = false;
-            if (sourceManager && previousDirectiveOwner && previousDirectiveSyntax) {
+            if (lineBreaks == 0 && sourceManager && previousDirectiveOwner &&
+                previousDirectiveSyntax) {
                 auto previousRange = previousDirectiveSyntax->sourceRange();
                 auto currentRange = syntax.sourceRange();
                 if (previousRange.end() && currentRange.start() &&
@@ -402,11 +586,12 @@ private:
                 previous->trailing.push_back(std::move(item));
             }
             else {
-                appendBlankLines(current, lineBreaks);
+                appendBlankLines(current, lineBreaks, !previous);
                 current.leading.push_back(std::move(item));
             }
             lineBreaks = 0;
         }
+        flushDisabledText();
         return hadLineBreak;
     }
 
@@ -463,19 +648,24 @@ private:
                             break;
                         }
                     }
-                    bool prefixBlockComment = lineBreaks == 0 && !endsLine && previous &&
+                    item.endsLine = endsLine;
+                    bool prefixBlockComment = !item.lineComment && previous &&
                                               previous->token.kind == TokenKind::OpenParenthesis &&
                                               current.startsListItem;
                     bool inlineBeforeElse = !item.lineComment && previous &&
                                             previous->token.kind == TokenKind::EndKeyword &&
                                             current.token.kind == TokenKind::ElseKeyword;
                     if (lineBreaks == 0 && previous && !prefixBlockComment) {
-                        item.placement = endsLine && !inlineBeforeElse ? TriviaPlacement::Trailing
-                                                                       : TriviaPlacement::Inline;
+                        bool blockBeforeBinary = !item.lineComment &&
+                                                 SyntaxFacts::getBinaryExpression(
+                                                     current.token.kind) != SyntaxKind::Unknown;
+                        item.placement = endsLine && !inlineBeforeElse && !blockBeforeBinary
+                                             ? TriviaPlacement::Trailing
+                                             : TriviaPlacement::Inline;
                         previous->trailing.push_back(std::move(item));
                     }
                     else {
-                        appendBlankLines(current, lineBreaks);
+                        appendBlankLines(current, lineBreaks, !previous);
                         if (prefixBlockComment)
                             item.placement = TriviaPlacement::Inline;
                         current.leading.push_back(std::move(item));
@@ -494,65 +684,22 @@ private:
                         current.leading.back().kind == NormalizedTriviaKind::ConditionalBranch) {
                         std::string suffix;
                         for (const auto& directiveTrivia : syntax.getFirstToken().trivia()) {
-                            if (directiveTrivia.kind == TriviaKind::DisabledText &&
-                                directiveTrivia.getRawText() != "\n") {
+                            if (directiveTrivia.kind == TriviaKind::DisabledText)
                                 suffix.append(directiveTrivia.getRawText());
-                            }
-                            else if (!suffix.empty() &&
-                                     directiveTrivia.kind == TriviaKind::DisabledText) {
-                                suffix.append(directiveTrivia.getRawText());
-                            }
                         }
                         if (suffix.find_first_not_of(" \t\r\n") != std::string::npos) {
                             absorbedConditionalSuffix = true;
-                            size_t comment = suffix.find("//");
-                            bool lineComment = comment != std::string::npos &&
-                                               suffix.find_first_not_of(" \t\r\n", 0) == comment;
-                            if (lineComment) {
-                                auto& branch = current.leading.back().text;
-                                while (!branch.empty() &&
-                                       (branch.back() == ' ' || branch.back() == '\t' ||
-                                        branch.back() == '\r' || branch.back() == '\n')) {
-                                    branch.pop_back();
-                                }
-                                size_t indent = 0;
-                                size_t suffixLine = suffix.rfind('\n', comment);
-                                if (suffixLine != std::string::npos) {
-                                    suffixLine++;
-                                    while (suffixLine + indent < comment &&
-                                           (suffix[suffixLine + indent] == ' ' ||
-                                            suffix[suffixLine + indent] == '\t')) {
-                                        indent++;
-                                    }
-                                }
-                                else {
-                                    size_t branchLine = branch.rfind('\n');
-                                    branchLine = branchLine == std::string::npos ? 0
-                                                                                 : branchLine + 1;
-                                    while (branchLine + indent < branch.size() &&
-                                           (branch[branchLine + indent] == ' ' ||
-                                            branch[branchLine + indent] == '\t')) {
-                                        indent++;
-                                    }
-                                }
-                                if (!branch.ends_with('\n'))
-                                    branch.push_back('\n');
-                                branch.append(indent, ' ');
-                                size_t commentEnd = suffix.find_first_of("\r\n", comment);
-                                branch.append(suffix, comment, commentEnd - comment);
-                            }
-                            else {
-                                current.leading.back().text.append(suffix);
-                            }
+                            current.leading.back().text.append(suffix);
                         }
                     }
                     bool hadLineBreak = classifyDirectiveSubTrivia(
                         syntax, current, lineBreaks, previous, previousMacro,
-                        previousDirectiveOwner, previousDirectiveIndex, previousDirectiveSyntax);
+                        previousDirectiveOwner, previousDirectiveIndex, previousDirectiveSyntax,
+                        absorbedConditionalSuffix);
                     if (absorbedConditionalSuffix)
                         lineBreaks = 0;
                     size_t directiveLineBreaks = lineBreaks;
-                    appendBlankLines(current, lineBreaks);
+                    appendBlankLines(current, lineBreaks, !previous);
 
                     NormalizedTriviaKind kind = NormalizedTriviaKind::Directive;
                     if (syntax.kind == SyntaxKind::MacroUsage)
@@ -574,6 +721,13 @@ private:
                                                     : TriviaPlacement::Standalone;
                     NormalizedTrivia item{kind, placement, syntaxText(syntax, sourceManager),
                                           &syntax, false};
+                    if (kind == NormalizedTriviaKind::MacroUsage &&
+                        placement == TriviaPlacement::Standalone) {
+                        size_t content = 0;
+                        while (content < item.text.size() && isTabOrSpace(item.text[content]))
+                            content++;
+                        item.text.erase(0, content);
+                    }
                     if (placement == TriviaPlacement::Inline && previous &&
                         kind == NormalizedTriviaKind::MacroUsage && !previousMacro &&
                         current.token.rawText().empty()) {
@@ -626,11 +780,119 @@ private:
                     continue;
                 }
 
-                std::string text = trivia.kind == TriviaKind::SkippedTokens
+                auto assignment = trivia.kind == TriviaKind::SkippedTokens
+                                      ? canonicalSkippedAssignment(trivia)
+                                      : std::nullopt;
+                std::string text = assignment ? std::move(*assignment)
+                                   : trivia.kind == TriviaKind::SkippedTokens
                                        ? skippedText(trivia, sourceManager)
                                        : std::string(trivia.getRawText());
                 if (!text.empty()) {
-                    appendBlankLines(current, lineBreaks);
+                    if (trivia.kind == TriviaKind::SkippedTokens) {
+                        if (lineBreaks == 0 && previous) {
+                            size_t lineEnd = text.find_first_of("\r\n");
+                            auto firstLine = std::string_view(text).substr(0, lineEnd);
+                            while (!firstLine.empty() && isTabOrSpace(firstLine.front()))
+                                firstLine.remove_prefix(1);
+                            bool trailingComment = firstLine.starts_with("//") ||
+                                                   firstLine.starts_with("/*");
+                            if (lineEnd != std::string::npos && trailingComment) {
+                                NormalizedTrivia prefix{NormalizedTriviaKind::Verbatim,
+                                                        TriviaPlacement::Inline,
+                                                        std::string(text).substr(0, lineEnd),
+                                                        nullptr, false};
+                                prefix.endsLine = true;
+                                previous->trailing.push_back(std::move(prefix));
+
+                                size_t nextLine = lineEnd + 1;
+                                if (text[lineEnd] == '\r' && nextLine < text.size() &&
+                                    text[nextLine] == '\n') {
+                                    nextLine++;
+                                }
+                                text.erase(0, nextLine);
+                                lineBreaks++;
+                            }
+                        }
+
+                        size_t content = 0;
+                        size_t leadingLineBreaks = 0;
+                        while (content < text.size() && isWhitespace(text[content])) {
+                            if (text[content] == '\n' ||
+                                (text[content] == '\r' &&
+                                 (content + 1 == text.size() || text[content + 1] != '\n'))) {
+                                leadingLineBreaks++;
+                            }
+                            content++;
+                        }
+                        if (leadingLineBreaks) {
+                            lineBreaks += leadingLineBreaks;
+                            text.erase(0, content);
+                        }
+
+                        bool followedByLineBreak = false;
+                        size_t following = triviaIndex + 1;
+                        std::string_view separatingWhitespace;
+                        if (following < triviaView.size() &&
+                            triviaView[following].kind == TriviaKind::Whitespace) {
+                            separatingWhitespace = triviaView[following].getRawText();
+                            following++;
+                        }
+                        if (following < triviaView.size() &&
+                            isCommentTrivia(triviaView[following])) {
+                            text.append(separatingWhitespace);
+                            text.append(triviaView[following].getRawText());
+                            triviaIndex = following;
+                            if (isLineCommentTrivia(triviaView[following]) &&
+                                following + 1 < triviaView.size() &&
+                                triviaView[following + 1].kind == TriviaKind::EndOfLine) {
+                                text.append(triviaView[following + 1].getRawText());
+                                triviaIndex++;
+                                followedByLineBreak = true;
+                            }
+                        }
+                        else {
+                            for (; following < triviaView.size(); following++) {
+                                if (triviaView[following].kind == TriviaKind::EndOfLine) {
+                                    followedByLineBreak = true;
+                                    break;
+                                }
+                                if (triviaView[following].kind != TriviaKind::Whitespace)
+                                    break;
+                            }
+                        }
+                        appendBlankLines(current, lineBreaks, !previous);
+                        bool multiline = text.find('\n') != std::string::npos ||
+                                         text.find('\r') != std::string::npos;
+                        bool recoveredContinuation =
+                            previous && (current.parentKind == SyntaxKind::CoverCross ||
+                                         current.parentKind == SyntaxKind::Coverpoint);
+                        bool recoveredMemberAfterEnd =
+                            previous && previous->token.kind == TokenKind::EndFunctionKeyword &&
+                            current.parentKind == SyntaxKind::ClassMethodDeclaration;
+                        NormalizedTrivia item{NormalizedTriviaKind::Verbatim,
+                                              !recoveredMemberAfterEnd &&
+                                                      (lineBreaks == 0 || recoveredContinuation) &&
+                                                      !multiline
+                                                  ? TriviaPlacement::Inline
+                                                  : TriviaPlacement::Standalone,
+                                              std::move(text), nullptr, false};
+                        item.endsLine = followedByLineBreak;
+                        item.conditionalDepthChange = recoveredConditionalDepthChange(item.text);
+                        size_t boundary = triviaIndex + 1;
+                        bool hasHorizontalSeparator = false;
+                        while (boundary < triviaView.size() &&
+                               triviaView[boundary].kind == TriviaKind::Whitespace) {
+                            hasHorizontalSeparator = hasHorizontalSeparator ||
+                                                     !triviaView[boundary].getRawText().empty();
+                            boundary++;
+                        }
+                        item.preserveSingleSpace = !item.endsLine && hasHorizontalSeparator &&
+                                                   boundary == triviaView.size();
+                        current.leading.push_back(std::move(item));
+                        lineBreaks = 0;
+                        continue;
+                    }
+                    appendBlankLines(current, lineBreaks, !previous);
                     current.leading.push_back(
                         {NormalizedTriviaKind::Verbatim,
                          lineBreaks == 0 ? TriviaPlacement::Inline : TriviaPlacement::Standalone,
@@ -639,7 +901,7 @@ private:
                 }
             }
             current.lineBreakBefore = lineBreaks > 0;
-            appendBlankLines(current, lineBreaks);
+            appendBlankLines(current, lineBreaks, !previous);
             if (current.token && !current.token.isMissing() &&
                 current.token.kind != TokenKind::EndOfFile && !current.fromMacroExpansion &&
                 !current.token.rawText().empty()) {
@@ -653,26 +915,54 @@ private:
         if (!sourceManager)
             return;
         for (size_t tokenIndex = 0; tokenIndex < tokens.size(); tokenIndex++) {
-            auto classify = [&](auto& triviaList) {
+            auto classify = [&](auto& triviaList, bool leading) {
                 for (size_t triviaIndex = 0; triviaIndex < triviaList.size(); triviaIndex++) {
                     auto& trivia = triviaList[triviaIndex];
                     if (trivia.kind != NormalizedTriviaKind::MacroUsage || !trivia.syntax)
                         continue;
-                    bool ownsRecoveredAssignment = std::ranges::any_of(
+                    bool ownsRecoveredContinuation = std::ranges::any_of(
                         triviaList.begin() + static_cast<ptrdiff_t>(triviaIndex + 1),
                         triviaList.end(), [](const NormalizedTrivia& following) {
-                            return following.kind == NormalizedTriviaKind::Verbatim &&
-                                   following.placement == TriviaPlacement::Inline &&
-                                   following.text.find('=') != std::string::npos;
+                            if (following.kind != NormalizedTriviaKind::Verbatim) {
+                                return false;
+                            }
+                            auto text = std::string_view(following.text);
+                            while (!text.empty() && isTabOrSpace(text.front()))
+                                text.remove_prefix(1);
+                            return text.starts_with(',') || text.find('=') != std::string::npos;
                         });
-                    if (ownsRecoveredAssignment)
+                    if (ownsRecoveredContinuation)
                         trivia.joinsFollowingToken = true;
+                    if (leading && tokens[tokenIndex].token &&
+                        tokens[tokenIndex].token.kind == TokenKind::Comma) {
+                        trivia.joinsFollowingToken = true;
+                    }
+                    auto end = trivia.syntax->sourceRange().end();
+                    if (end) {
+                        auto source = sourceManager->getSourceText(end.buffer());
+                        if (end.offset() <= source.size()) {
+                            auto restOfLine = source.substr(end.offset());
+                            auto following = restOfLine;
+                            while (!following.empty() && isWhitespace(following.front()))
+                                following.remove_prefix(1);
+                            if (following.starts_with(','))
+                                trivia.joinsFollowingToken = true;
+                            size_t lineEnd = restOfLine.find_first_of("\r\n");
+                            if (lineEnd != std::string_view::npos)
+                                restOfLine = restOfLine.substr(0, lineEnd);
+                            trivia.joinsFollowingToken =
+                                trivia.joinsFollowingToken ||
+                                std::ranges::any_of(restOfLine,
+                                                    [](char c) { return !isTabOrSpace(c); });
+                        }
+                    }
+                    if (trivia.joinsFollowingToken)
+                        continue;
                     const NormalizedToken* next = nullptr;
                     for (size_t i = tokenIndex; i < tokens.size(); i++) {
                         auto parsed = tokens[i].token;
                         if (parsed && !parsed.isMissing() && !tokens[i].fromMacroExpansion &&
                             !parsed.rawText().empty() && parsed.kind != TokenKind::EndOfFile) {
-                            auto end = trivia.syntax->sourceRange().end();
                             auto location = parsed.location();
                             if (end && location && end.buffer() == location.buffer() &&
                                 end.offset() <= location.offset()) {
@@ -683,7 +973,15 @@ private:
                     }
                     if (!next)
                         continue;
-                    auto end = trivia.syntax->sourceRange().end();
+                    bool binaryOperator =
+                        SyntaxFacts::getBinaryExpression(next->token.kind) != SyntaxKind::Unknown ||
+                        SyntaxFacts::getBinarySequenceExpr(next->token.kind) !=
+                            SyntaxKind::Unknown ||
+                        SyntaxFacts::getBinaryPropertyExpr(next->token.kind) != SyntaxKind::Unknown;
+                    if (binaryOperator || next->token.kind == TokenKind::Dot) {
+                        trivia.joinsFollowingToken = true;
+                        continue;
+                    }
                     auto start = next->token.location();
                     if (!end || !start || end.buffer() != start.buffer() ||
                         end.offset() > start.offset()) {
@@ -696,8 +994,8 @@ private:
                                                      std::string_view::npos;
                 }
             };
-            classify(tokens[tokenIndex].leading);
-            classify(tokens[tokenIndex].trailing);
+            classify(tokens[tokenIndex].leading, true);
+            classify(tokens[tokenIndex].trailing, false);
         }
     }
 

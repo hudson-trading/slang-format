@@ -157,7 +157,8 @@ bool shouldInsertWhitespace(TokenKind left, TokenKind right, SyntaxKind leftPare
     if (right == TokenKind::OpenParenthesis) {
         if (rightParent == SyntaxKind::AnsiPortList || rightParent == SyntaxKind::NonAnsiPortList ||
             rightParent == SyntaxKind::WildcardPortList ||
-            rightParent == SyntaxKind::HierarchicalInstance) {
+            rightParent == SyntaxKind::HierarchicalInstance ||
+            leftParent == SyntaxKind::HierarchyInstantiation) {
             return true;
         }
         // No space after identifiers in all other contexts (function calls,

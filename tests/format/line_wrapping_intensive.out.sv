@@ -3,16 +3,16 @@ module line_wrapping_intensive;
     // Long lines with nested expressions
     always_comb aaaaaaaaaaa[BBBBBBBBBBBBBBBBBBBBBB] =
         ((aaaaaaaaa::BBBBBBBB(ccccccccccccccccc[1]) || aaaaaaaaa::CCCCCCCC(ccccccccccccccccc[1]))
-            && dddddddddddddddddd && ((eeeeeeeeeeeeee & (1 << ffffffffffff.gggg.hhhhhh)) == 0))
-        || (aaaaaaaaa::DDDDDDD(ccccccccccccccccc[1])
-            && ((eeeeeeeeeeeeee & (1 << ccccccccccccccccc[1].iiii.jjjjjj.kkkk)) == 0))
-        || (aaaaaaaaa::isDDDDDDD(ccccccccccccccccc[1])
-            && ((eeeeeeeeeeeeee & (1 << ccccccccccccccccc[1].lllllll.mmmmmmmmm)) == 0));
+             && dddddddddddddddddd && ((eeeeeeeeeeeeee & (1 << ffffffffffff.gggg.hhhhhh)) == 0))
+            || (aaaaaaaaa::DDDDDDD(ccccccccccccccccc[1])
+                    && ((eeeeeeeeeeeeee & (1 << ccccccccccccccccc[1].iiii.jjjjjj.kkkk)) == 0))
+            || (aaaaaaaaa::isDDDDDDD(ccccccccccccccccc[1])
+                    && ((eeeeeeeeeeeeee & (1 << ccccccccccccccccc[1].lllllll.mmmmmmmmm)) == 0));
 
     // Module port wrap with ternary
     SomeModule #(
         .aaaaaaaa (bbbbbbbbbbbbbbbbbbbbbb && cccccccccccccccccccc
-            && dddddddddddddddddddddddddddddddddddd == eeee ? 2'(ffffffffffff) : '0)
+                       && dddddddddddddddddddddddddddddddddddd == eeee ? 2'(ffffffffffff) : '0)
     ) i_SomeModule (
         .a    (),
         .port (bbbbbbbbbbbbbbbbbbbbbb && cccccccccccccccccccc
@@ -24,8 +24,8 @@ module line_wrapping_intensive;
         if (rst) begin end else begin
             if (a) begin
                 if (b) begin end else if (aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-                    || (bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb == cccccccccccccccccccccccc)
-                    || dddddddddddddddddddddddddddddd)
+                                              || (bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb == cccccccccccccccccccccccc)
+                                              || dddddddddddddddddddddddddddddd)
                 begin end
             end
         end
@@ -43,12 +43,12 @@ module line_wrapping_intensive;
     always_ff @(posedge clk) begin
         aaaaaaaaaaaaaa <=
             bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-            && (((cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc == ddddddddddddddddddddddddd)
-                    && (eeeeeeeeeeeeeeeeee(fffffffffffffffffffffffffffffffff)))
-                || ((gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg == hhhhhhhhhhhhhhhhhhhhhhhhh)
-                    && (iiiiiiiiiiiiiiiiii(jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj)))
-                || ((kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk == llllllllllllllllllllllllllllllllllllllll)
-                    && (mmmmmmmmmmmmmmmmmm(nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn))));
+                && (((cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc == ddddddddddddddddddddddddd)
+                         && (eeeeeeeeeeeeeeeeee(fffffffffffffffffffffffffffffffff)))
+                        || ((gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg == hhhhhhhhhhhhhhhhhhhhhhhhh)
+                                && (iiiiiiiiiiiiiiiiii(jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj)))
+                        || ((kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk == llllllllllllllllllllllllllllllllllllllll)
+                                && (mmmmmmmmmmmmmmmmmm(nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn))));
     end
 
     // 100 character variable name
@@ -64,9 +64,9 @@ module line_wrapping_intensive;
         bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
             + bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
             ? cccccccccccccccccccccccccccccccccccc
-                + ddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+                 + ddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
             : eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-                + fffffffffffffffffffffffffffffffffffffffffffffffffff;
+                 + fffffffffffffffffffffffffffffffffffffffffffffffffff;
 
     // Line wrapping within ElementSelect
     always_ff @(posedge clk) begin
@@ -79,8 +79,8 @@ module line_wrapping_intensive;
                                 if (g) begin
                                     if (h) begin
                                         if (((aaaaaaaaaaaaa
-                                            >> bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
-                                            + (ccccccccccccc[$clog2(dddddddddddddddddddddddddddddddddd)-1:0] != '0)))
+                                                 >> bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
+                                                 + (ccccccccccccc[$clog2(dddddddddddddddddddddddddddddddddd)-1:0] != '0)))
                                         begin end
                                     end
                                 end

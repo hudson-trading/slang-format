@@ -47,6 +47,10 @@ Other important files are:
 - `src/formatter_main.cpp` for the command-line interface and directory walk.
 - `include/format/` for the embeddable public API.
 
+For character classification, prefer the helpers in
+`external/slang/include/slang/text/CharInfo.h` over hand-written character
+tests or the locale-sensitive `<cctype>` functions.
+
 The formatter intentionally does not expand macros. Macro invocations and
 preprocessor directives are preserved from CST trivia and emitted from their
 original source text.

@@ -28,8 +28,8 @@ module wrap_with_comments;
     ddddddddddddddddddddddddddddddddddddddddddd; // comment4
 
     // Inline-fitting expression with trailing comments after each operand:
-    // continuation lines must align to the expression start (after '='),
-    // not to the member's block indent.
+    // continuation lines start one indent past the expression start,
+    // not at the member's block indent.
     localparam int total_count = 11 * 2  // group a
         + 13  // group b
         + 2  // group c

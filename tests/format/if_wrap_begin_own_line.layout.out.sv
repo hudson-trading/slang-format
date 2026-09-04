@@ -12,7 +12,7 @@ module test;
 
         // Multi-line predicate: `begin` goes on its own line.
         if (some_long_condition_alpha || some_long_condition_beta
-            || some_long_condition_gamma || some_long_condition_delta)
+                || some_long_condition_gamma || some_long_condition_delta)
         begin
             x = y;
         end
@@ -21,7 +21,7 @@ module test;
         if (a) begin
             x = 1;
         end else if (another_long_condition_aaaa || another_long_condition_bbbb
-            || another_long_condition_cccc || another_long_condition_dddd)
+                         || another_long_condition_cccc || another_long_condition_dddd)
         begin
             x = 2;
         end

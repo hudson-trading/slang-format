@@ -222,6 +222,113 @@ endmodule
     CHECK(format::isCommentEquivalentTo(tree1->root(), tree2->root()));
 }
 
+TEST_CASE("comment equivalence ignores formatter-owned horizontal whitespace") {
+    auto tree1 = parse("module m;\n"
+                       "    // heading   \n"
+                       "    //   \n"
+                       "    /* first line  \n"
+                       "     * second line\t\n"
+                       "     */\n"
+                       "endmodule\n");
+    auto tree2 = parse("module m;\n"
+                       "    // heading\n"
+                       "    //\n"
+                       "    /* first line\n"
+                       "         * second line\n"
+                       "         */\n"
+                       "endmodule\n");
+
+    CHECK(format::isCommentEquivalentTo(tree1->root(), tree2->root()));
+    CHECK(format::isTokenEquivalentTo(tree1->root(), tree2->root()));
+}
+
+TEST_CASE("comment equivalence preserves non-layout comment content") {
+    auto tree1 = parse(R"(
+module m;
+    // heading A
+    /* body A */
+endmodule
+)");
+    auto tree2 = parse(R"(
+module m;
+    // heading B
+    /* body B */
+endmodule
+)");
+
+    CHECK(!format::isCommentEquivalentTo(tree1->root(), tree2->root()));
+    CHECK(!format::isTokenEquivalentTo(tree1->root(), tree2->root()));
+}
+
+TEST_CASE("token equivalence ignores disabled branch indentation") {
+    auto tree1 = parse(R"(
+module m;
+`ifdef FEATURE
+logic selected;
+`else
+        logic fallback;
+`endif
+endmodule
+)");
+    auto tree2 = parse(R"(
+module m;
+`ifdef FEATURE
+    logic selected;
+`else
+    logic fallback;
+`endif
+endmodule
+)");
+
+    CHECK(format::isTokenEquivalentTo(tree1->root(), tree2->root()));
+}
+
+TEST_CASE("token equivalence detects disabled branch content changes") {
+    auto tree1 = parse(R"(
+module m;
+`ifdef FEATURE
+    logic selected;
+`else
+    logic fallback_a;
+`endif
+endmodule
+)");
+    auto tree2 = parse(R"(
+module m;
+`ifdef FEATURE
+    logic selected;
+`else
+    logic fallback_b;
+`endif
+endmodule
+)");
+
+    CHECK(!format::isTokenEquivalentTo(tree1->root(), tree2->root()));
+}
+
+TEST_CASE("token equivalence preserves comment order around recovered macro items") {
+    auto tree1 = parse(R"(
+package p;
+    typedef enum {
+        first,
+        `INCLUDE_ITEMS("items.svh")
+        last // final item
+    } item_t;
+endpackage
+)");
+    auto tree2 = parse(R"(
+package p;
+    typedef enum {
+        first,
+        `INCLUDE_ITEMS("items.svh") // final item
+        last
+    } item_t;
+endpackage
+)");
+
+    CHECK(!format::isTokenEquivalentTo(tree1->root(), tree2->root()));
+}
+
 TEST_CASE("isCommentEquivalentTo also checks preprocessor directives") {
     auto tree1 = parse(R"(
 `define FOO

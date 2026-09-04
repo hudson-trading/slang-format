@@ -15,11 +15,11 @@ module dut;
             set: resv[tid_token][port].meta.unit_opcode == OP_SET,
             emit: resv[tid_token][port].meta.unit_opcode == OP_EMIT,
             // Multi-member: goes vertical when it doesn't fit.
-                accum_half_sel: resv[tid_token][port].meta.unit_opcode inside {OP_SET, OP_EMIT}
+            accum_half_sel: resv[tid_token][port].meta.unit_opcode inside {OP_SET, OP_EMIT}
                 ? resv[tid_token][port].meta.accum_half_sel
                 : pkg::half_select_t'(0),
             // Single member: stays inline even when overall expression wraps.
-                fused_leakyrelu: resv[tid_token][port].meta.unit_opcode inside {OP_EMIT}
+            fused_leakyrelu: resv[tid_token][port].meta.unit_opcode inside {OP_EMIT}
                 ? resv[tid_token][port].meta.fused_relu_select
                 : pkg::fused_leakyrelu_t'(0)
         };

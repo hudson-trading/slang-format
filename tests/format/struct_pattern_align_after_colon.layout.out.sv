@@ -1,7 +1,6 @@
 // Regression: in struct-assignment patterns,
 // when a value expression wraps onto continuation lines, those lines
-// should align to the column immediately after the `:`, matching the
-// equal-aligned RHS continuation style used for `<=` assignments.
+// should start one indent past the aligned value expression.
 
 package test_pkg;
     typedef struct packed {
@@ -18,7 +17,7 @@ package test_pkg;
             sequence_number: record_metadata.token.sequence_number,
             tag: record_metadata.token.tag,
             is_last: record_output.data.is_last
-                && record_pkg::isFinalPhase(record_output.data.phase),
+                        && record_pkg::isFinalPhase(record_output.data.phase),
             item_id: record_metadata.common.item_id
         };
     end

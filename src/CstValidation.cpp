@@ -47,6 +47,33 @@ bool isRelevantTrivia(const Trivia& t) {
 template<bool CheckComments>
 bool isTriviaEqual(const Trivia& a, const Trivia& b);
 
+std::string canonicalizeComment(std::string_view text, bool blockComment) {
+    std::string result;
+    result.reserve(text.size());
+    size_t lineStart = 0;
+    while (lineStart < text.size()) {
+        size_t lineEnd = text.find_first_of("\r\n", lineStart);
+        if (lineEnd == std::string_view::npos)
+            lineEnd = text.size();
+        size_t contentStart = lineStart;
+        if (blockComment && lineStart > 0) {
+            while (contentStart < lineEnd && isTabOrSpace(text[contentStart]))
+                contentStart++;
+        }
+        size_t contentEnd = lineEnd;
+        while (contentEnd > contentStart && isTabOrSpace(text[contentEnd - 1]))
+            contentEnd--;
+        result.append(text.substr(contentStart, contentEnd - contentStart));
+        if (lineEnd == text.size())
+            break;
+        result.push_back('\n');
+        lineStart = lineEnd + 1;
+        if (text[lineEnd] == '\r' && lineStart < text.size() && text[lineStart] == '\n')
+            lineStart++;
+    }
+    return result;
+}
+
 template<bool CheckComments>
 bool areTokensEquivalent(const Token& lt, const Token& rt) {
     if (lt.kind != rt.kind || lt.valueText() != rt.valueText())
@@ -63,8 +90,12 @@ bool isTriviaEqual(const Trivia& a, const Trivia& b) {
         return false;
 
     if constexpr (CheckComments) {
-        if (a.kind == TriviaKind::LineComment || a.kind == TriviaKind::BlockComment ||
-            a.kind == TriviaKind::DisabledText)
+        if (a.kind == TriviaKind::LineComment || a.kind == TriviaKind::BlockComment) {
+            bool blockComment = a.kind == TriviaKind::BlockComment;
+            return canonicalizeComment(a.getRawText(), blockComment) ==
+                   canonicalizeComment(b.getRawText(), blockComment);
+        }
+        if (a.kind == TriviaKind::DisabledText)
             return a.getRawText() == b.getRawText();
     }
 
@@ -261,48 +292,62 @@ void forEachRealToken(const SyntaxNode& node, F&& f) {
 } // namespace
 
 bool isTokenEquivalentTo(const SyntaxNode& a, const SyntaxNode& b) {
-    // Collect the flat sequence of relevant trivia across the whole subtree,
-    // including trivia on empty placeholder tokens. Empty placeholders (e.g.
-    // `Identifier ""` produced by the macro-recovery path) are where slang
-    // attaches macro Directive trivia and any preceding comments — comparing
-    // trivia only on real-token pairs misses them, and the formatter could
-    // silently drop a comment with the validator reporting success.
-    auto flattenRelevantTrivia = [](const SyntaxNode& root) {
-        std::vector<Trivia> out;
-        for (auto it = root.tokens_begin(); it != root.tokens_end(); ++it) {
-            Token t = *it;
-            if (!t)
-                continue;
-            for (const auto& tr : t.trivia()) {
-                if (isRelevantTrivia<true>(tr))
-                    out.push_back(tr);
-            }
-        }
-        return out;
-    };
-    auto aTrivia = flattenRelevantTrivia(a);
-    auto bTrivia = flattenRelevantTrivia(b);
-    if (!std::ranges::equal(aTrivia, bTrivia, isTriviaEqual<true>))
-        return false;
+    enum class ItemKind { Token, LineComment, BlockComment, DisabledText };
+    struct Item {
+        ItemKind kind;
+        TokenKind tokenKind = TokenKind::Unknown;
+        std::string text;
 
-    // Then compare the real-token sequence (kind + valueText). Trivia is
-    // already validated above, so we don't repeat the per-token trivia check.
-    auto aIt = a.tokens_begin(), aEnd = a.tokens_end();
-    auto bIt = b.tokens_begin(), bEnd = b.tokens_end();
-    while (true) {
-        while (aIt != aEnd && !isRealToken(*aIt))
-            ++aIt;
-        while (bIt != bEnd && !isRealToken(*bIt))
-            ++bIt;
-        bool aDone = aIt == aEnd;
-        bool bDone = bIt == bEnd;
-        if (aDone || bDone)
-            return aDone == bDone;
-        if ((*aIt).kind != (*bIt).kind || (*aIt).valueText() != (*bIt).valueText())
-            return false;
-        ++aIt;
-        ++bIt;
-    }
+        bool operator==(const Item&) const = default;
+    };
+
+    auto flatten = [](const SyntaxNode& root) {
+        std::vector<Item> result;
+        auto appendNode = [&](const auto& self, const SyntaxNode& node) -> void {
+            auto appendToken = [&](const auto& tokenSelf, const Token& token) -> void {
+                if (!token)
+                    return;
+                for (const auto& trivia : token.trivia()) {
+                    switch (trivia.kind) {
+                        case TriviaKind::LineComment:
+                            result.push_back({ItemKind::LineComment, TokenKind::Unknown,
+                                              canonicalizeComment(trivia.getRawText(), false)});
+                            break;
+                        case TriviaKind::BlockComment:
+                            result.push_back({ItemKind::BlockComment, TokenKind::Unknown,
+                                              canonicalizeComment(trivia.getRawText(), true)});
+                            break;
+                        case TriviaKind::DisabledText:
+                            if (!std::ranges::all_of(trivia.getRawText(), isWhitespace)) {
+                                result.push_back({ItemKind::DisabledText, TokenKind::Unknown,
+                                                  std::string(trivia.getRawText())});
+                            }
+                            break;
+                        case TriviaKind::Directive:
+                        case TriviaKind::SkippedSyntax:
+                            self(self, *trivia.syntax());
+                            break;
+                        case TriviaKind::SkippedTokens:
+                            for (const auto& skipped : trivia.getSkippedTokens())
+                                tokenSelf(tokenSelf, skipped);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+                if (isRealToken(token)) {
+                    result.push_back({ItemKind::Token, token.kind, std::string(token.valueText())});
+                }
+            };
+
+            for (auto it = node.tokens_begin(); it != node.tokens_end(); ++it)
+                appendToken(appendToken, *it);
+        };
+        appendNode(appendNode, root);
+        return result;
+    };
+
+    return flatten(a) == flatten(b);
 }
 
 // Short single-line summary of a trivia item for the side-by-side view.

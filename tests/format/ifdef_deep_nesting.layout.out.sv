@@ -5,20 +5,20 @@ module deep_ifdef (
     `ifdef PLATFORM_A
         `ifdef VARIANT_X
             `ifdef FEATURE_1
-    assign out = 8'hAA;
+                assign out = 8'hAA;
             `else
-    assign out = 8'hBB;
+                assign out = 8'hBB;
             `endif
         `elsif VARIANT_Y
-    assign out = 8'hCC;
+            assign out = 8'hCC;
         `else
-    assign out = 8'hDD;
+            assign out = 8'hDD;
         `endif
     `elsif PLATFORM_B
         `ifdef VARIANT_X
-    assign out = 8'hEE;
+            assign out = 8'hEE;
         `else
-    assign out = 8'hFF;
+            assign out = 8'hFF;
         `endif
     `else
         assign out = 8'h00;

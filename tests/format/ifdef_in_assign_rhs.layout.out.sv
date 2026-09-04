@@ -5,7 +5,7 @@ interface test_if;
     // Pattern 1: ifdef wrapping full assign
     wire [7:0] csrng_state;
     `ifdef GATE_LEVEL
-  assign csrng_state = 0;
+        assign csrng_state = 0;
     `else
         assign csrng_state = `CSRNG_HIER.state_q;
     `endif
@@ -15,7 +15,7 @@ interface test_if;
     wire [5:0] aes_state;
     assign aes_state =
     `ifdef GATE_LEVEL
-                             0;
+        0;
     `else
         `AES_HIER.aes_ctrl_cs;
 `endif
@@ -25,10 +25,10 @@ interface test_if;
 // Pattern 3: ifdef with multiline expression
 wire [2:0] hmac_state;
 `ifdef GATE_LEVEL
-  assign hmac_state = {`HMAC_HIER.st_q_reg_2_.Q
-                      ,`HMAC_HIER.st_q_reg_1_.Q
-                      ,`HMAC_HIER.st_q_reg_0_.Q
-                      };
+    assign hmac_state = {`HMAC_HIER.st_q_reg_2_.Q
+                        ,`HMAC_HIER.st_q_reg_1_.Q
+                        ,`HMAC_HIER.st_q_reg_0_.Q
+                        };
 `else
     assign hmac_state = `HMAC_HIER.st_q;
 `endif

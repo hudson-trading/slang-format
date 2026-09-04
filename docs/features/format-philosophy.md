@@ -64,6 +64,8 @@ Long binary, property, and sequence-expression chains are lowered to hierarchica
 3. Within a tier, minimize worst overflow, total overflow, number of breaks, and raggedness, in that order.
 4. If no layout can fit because an atomic token is itself too wide, minimize worst overflow and still split around that token rather than leaving one giant line.
 
+Candidate evaluation is bounded by the number of atoms in the member. If a pathological member exhausts that work budget, the solver deterministically takes the remaining breaks in the current priority tier before considering deeper tiers.
+
 Dynamic lists are represented as consistent soft-line groups, so all comma boundaries split together; the solver never bin-packs only part of a list. Lists and specialized ternary layouts continue through their syntax-specific renderers while their alignment anchors are migrated to the shared IR.
 
 ### Examples

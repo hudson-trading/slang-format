@@ -25,5 +25,5 @@ package test_pkg;
     localparam int big_choice = (very_long_signal_name_alpha == very_long_signal_name_beta)
                                     ? some_longish_value_alpha + some_longish_value_beta
                                     : some_other_longish_value_gamma
-                                        + some_other_longish_value_delta;
+                                         + some_other_longish_value_delta;
 endpackage

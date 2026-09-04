@@ -1,6 +1,6 @@
 module port_list #(
-    parameter int WIDTH = 8,
-    parameter int DEPTH = 4,
+    parameter  int WIDTH  = 8,
+    parameter  int DEPTH  = 4,
     localparam int ADDR_W = $clog2(DEPTH)
 ) (
     input  logic              clk,

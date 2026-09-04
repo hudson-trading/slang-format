@@ -44,12 +44,12 @@ module test;
                                                   (amount_remaining - adjustment);
     end
 
-    // Single ternary (right is not another ConditionalExpression) -- also
-    // uses chain layout when the value column fits and neither value is
-    // itself a ternary. Short predicate + branches that don't fit inline.
+    // A long single ternary uses a consistent branch group: either it stays
+    // inline or both `?` and `:` start expression-relative continuation lines.
     always_comb begin
         metric_is_within_limit <=
-            direction ? (new_sample.metric <= accumulated.average) :
-                        (new_sample.metric >= accumulated.average);
+            direction
+                ? (new_sample.metric <= accumulated.average)
+                : (new_sample.metric >= accumulated.average);
     end
 endmodule
