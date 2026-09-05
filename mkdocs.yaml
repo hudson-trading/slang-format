@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+
+site_name: "slang-format"
+site_url: https://hudson-trading.github.io/slang-format/
+site_author: Hudson River Trading
+site_description: An opinionated SystemVerilog formatter based on slang
+site_dir: site
+
+theme:
+    name: "material"
+    palette:
+        - media: "(prefers-color-scheme)"
+          toggle:
+              icon: material/brightness-5
+              name: "Switch to light mode"
+        - media: "(prefers-color-scheme: light)"
+          scheme: default
+          primary: hrt
+          accent: hrt
+          toggle:
+              icon: material/brightness-2
+              name: "Switch to dark mode"
+        - media: "(prefers-color-scheme: dark)"
+          scheme: slate
+          primary: hrt
+          accent: hrt
+          toggle:
+              icon: material/brightness-6
+              name: "Switch to system preference"
+    features:
+        - content.code.copy
+        - navigation.instant
+        - navigation.top
+        - search.suggest
+        - toc.follow
+
+repo_name: hudson-trading/slang-format
+repo_url: https://github.com/hudson-trading/slang-format
+edit_uri: edit/main/docs/
+
+validation:
+    omitted_files: warn
+    links:
+        absolute_links: relative_to_docs
+        anchors: warn
+        unrecognized_links: warn
+
+nav:
+    - index.md
+    - Getting Started:
+          - start/installing.md
+          - start/building.md
+    - Formatter:
+          - features/format-philosophy.md
+          - features/format-args.md
+          - features/format-config.md
+
+markdown_extensions:
+    - tables
+    - def_list
+    - toc:
+          permalink: true
+          title: Page contents
+    - admonition
+    - pymdownx.details
+    - pymdownx.superfences
+    - pymdownx.highlight:
+          pygments_lang_class: true
+    - pymdownx.extra
+
+plugins:
+    - search
+    - meta
+    - htmlproofer:
+          raise_error_after_finish: true
+          raise_error_excludes:
+              403: ["*"]
+              429: ["*"]
+              502: ["*"]
+              504: ["*"]
+          ignore_urls:
+              - localhost:8080/*
+              - mailto:*
+              - "data:image/*"
+              - "#*"

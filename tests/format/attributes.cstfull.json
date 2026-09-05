@@ -1,0 +1,1480 @@
+{
+  "syntaxTrees": [
+    {
+      "kind": "SyntaxTree",
+      "root": {
+        "kind": "CompilationUnit",
+        "members": [
+          {
+            "kind": "ModuleDeclaration",
+            "attributes": [
+              {
+                "kind": "AttributeInstance",
+                "openParen": {
+                  "kind": "OpenParenthesis",
+                  "text": "("
+                },
+                "openStar": {
+                  "kind": "Star",
+                  "text": "*"
+                },
+                "specs": [
+                  {
+                    "kind": "AttributeSpec",
+                    "name": {
+                      "kind": "Identifier",
+                      "text": "synthesis",
+                      "trivia": [
+                        {
+                          "kind": "Whitespace",
+                          "text": " "
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "closeStar": {
+                  "kind": "Star",
+                  "text": "*",
+                  "trivia": [
+                    {
+                      "kind": "Whitespace",
+                      "text": " "
+                    }
+                  ]
+                },
+                "closeParen": {
+                  "kind": "CloseParenthesis",
+                  "text": ")"
+                }
+              }
+            ],
+            "header": {
+              "kind": "ModuleHeader",
+              "moduleKeyword": {
+                "kind": "ModuleKeyword",
+                "text": "module",
+                "trivia": [
+                  {
+                    "kind": "EndOfLine",
+                    "text": "\n"
+                  }
+                ]
+              },
+              "name": {
+                "kind": "Identifier",
+                "text": "attr_test",
+                "trivia": [
+                  {
+                    "kind": "Whitespace",
+                    "text": " "
+                  }
+                ]
+              },
+              "ports": {
+                "kind": "AnsiPortList",
+                "openParen": {
+                  "kind": "OpenParenthesis",
+                  "text": "(",
+                  "trivia": [
+                    {
+                      "kind": "Whitespace",
+                      "text": " "
+                    }
+                  ]
+                },
+                "ports": [
+                  {
+                    "kind": "ImplicitAnsiPort",
+                    "attributes": [
+                      {
+                        "kind": "AttributeInstance",
+                        "openParen": {
+                          "kind": "OpenParenthesis",
+                          "text": "(",
+                          "trivia": [
+                            {
+                              "kind": "EndOfLine",
+                              "text": "\n"
+                            },
+                            {
+                              "kind": "Whitespace",
+                              "text": "    "
+                            }
+                          ]
+                        },
+                        "openStar": {
+                          "kind": "Star",
+                          "text": "*"
+                        },
+                        "specs": [
+                          {
+                            "kind": "AttributeSpec",
+                            "name": {
+                              "kind": "Identifier",
+                              "text": "mark_debug",
+                              "trivia": [
+                                {
+                                  "kind": "Whitespace",
+                                  "text": " "
+                                }
+                              ]
+                            },
+                            "value": {
+                              "kind": "EqualsValueClause",
+                              "equals": {
+                                "kind": "Equals",
+                                "text": "=",
+                                "trivia": [
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": " "
+                                  }
+                                ]
+                              },
+                              "expr": {
+                                "kind": "StringLiteralExpression",
+                                "literal": {
+                                  "kind": "StringLiteral",
+                                  "text": "\"true\"",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "closeStar": {
+                          "kind": "Star",
+                          "text": "*",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": " "
+                            }
+                          ]
+                        },
+                        "closeParen": {
+                          "kind": "CloseParenthesis",
+                          "text": ")"
+                        }
+                      }
+                    ],
+                    "header": {
+                      "kind": "VariablePortHeader",
+                      "direction": {
+                        "kind": "InputKeyword",
+                        "text": "input",
+                        "trivia": [
+                          {
+                            "kind": "Whitespace",
+                            "text": " "
+                          }
+                        ]
+                      },
+                      "dataType": {
+                        "kind": "LogicType",
+                        "keyword": {
+                          "kind": "LogicKeyword",
+                          "text": "logic",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": "  "
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "declarator": {
+                      "kind": "Declarator",
+                      "name": {
+                        "kind": "Identifier",
+                        "text": "clk",
+                        "trivia": [
+                          {
+                            "kind": "Whitespace",
+                            "text": " "
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "kind": "Comma",
+                    "text": ","
+                  },
+                  {
+                    "kind": "ImplicitAnsiPort",
+                    "attributes": [
+                      {
+                        "kind": "AttributeInstance",
+                        "openParen": {
+                          "kind": "OpenParenthesis",
+                          "text": "(",
+                          "trivia": [
+                            {
+                              "kind": "EndOfLine",
+                              "text": "\n"
+                            },
+                            {
+                              "kind": "Whitespace",
+                              "text": "    "
+                            }
+                          ]
+                        },
+                        "openStar": {
+                          "kind": "Star",
+                          "text": "*"
+                        },
+                        "specs": [
+                          {
+                            "kind": "AttributeSpec",
+                            "name": {
+                              "kind": "Identifier",
+                              "text": "mark_debug",
+                              "trivia": [
+                                {
+                                  "kind": "Whitespace",
+                                  "text": " "
+                                }
+                              ]
+                            },
+                            "value": {
+                              "kind": "EqualsValueClause",
+                              "equals": {
+                                "kind": "Equals",
+                                "text": "=",
+                                "trivia": [
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": " "
+                                  }
+                                ]
+                              },
+                              "expr": {
+                                "kind": "StringLiteralExpression",
+                                "literal": {
+                                  "kind": "StringLiteral",
+                                  "text": "\"true\"",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        "closeStar": {
+                          "kind": "Star",
+                          "text": "*",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": " "
+                            }
+                          ]
+                        },
+                        "closeParen": {
+                          "kind": "CloseParenthesis",
+                          "text": ")"
+                        }
+                      }
+                    ],
+                    "header": {
+                      "kind": "VariablePortHeader",
+                      "direction": {
+                        "kind": "InputKeyword",
+                        "text": "input",
+                        "trivia": [
+                          {
+                            "kind": "Whitespace",
+                            "text": " "
+                          }
+                        ]
+                      },
+                      "dataType": {
+                        "kind": "LogicType",
+                        "keyword": {
+                          "kind": "LogicKeyword",
+                          "text": "logic",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": "  "
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "declarator": {
+                      "kind": "Declarator",
+                      "name": {
+                        "kind": "Identifier",
+                        "text": "rst_n",
+                        "trivia": [
+                          {
+                            "kind": "Whitespace",
+                            "text": " "
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "kind": "Comma",
+                    "text": ","
+                  },
+                  {
+                    "kind": "ImplicitAnsiPort",
+                    "header": {
+                      "kind": "VariablePortHeader",
+                      "direction": {
+                        "kind": "OutputKeyword",
+                        "text": "output",
+                        "trivia": [
+                          {
+                            "kind": "EndOfLine",
+                            "text": "\n"
+                          },
+                          {
+                            "kind": "Whitespace",
+                            "text": "    "
+                          }
+                        ]
+                      },
+                      "dataType": {
+                        "kind": "LogicType",
+                        "keyword": {
+                          "kind": "LogicKeyword",
+                          "text": "logic",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": " "
+                            }
+                          ]
+                        },
+                        "dimensions": [
+                          {
+                            "kind": "VariableDimension",
+                            "openBracket": {
+                              "kind": "OpenBracket",
+                              "text": "[",
+                              "trivia": [
+                                {
+                                  "kind": "Whitespace",
+                                  "text": " "
+                                }
+                              ]
+                            },
+                            "specifier": {
+                              "kind": "RangeDimensionSpecifier",
+                              "selector": {
+                                "kind": "SimpleRangeSelect",
+                                "left": {
+                                  "kind": "IntegerLiteralExpression",
+                                  "literal": {
+                                    "kind": "IntegerLiteral",
+                                    "text": "7"
+                                  }
+                                },
+                                "range": {
+                                  "kind": "Colon",
+                                  "text": ":"
+                                },
+                                "right": {
+                                  "kind": "IntegerLiteralExpression",
+                                  "literal": {
+                                    "kind": "IntegerLiteral",
+                                    "text": "0"
+                                  }
+                                }
+                              }
+                            },
+                            "closeBracket": {
+                              "kind": "CloseBracket",
+                              "text": "]"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    "declarator": {
+                      "kind": "Declarator",
+                      "name": {
+                        "kind": "Identifier",
+                        "text": "count",
+                        "trivia": [
+                          {
+                            "kind": "Whitespace",
+                            "text": " "
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "closeParen": {
+                  "kind": "CloseParenthesis",
+                  "text": ")",
+                  "trivia": [
+                    {
+                      "kind": "EndOfLine",
+                      "text": "\n"
+                    }
+                  ]
+                }
+              },
+              "semi": {
+                "kind": "Semicolon",
+                "text": ";"
+              }
+            },
+            "members": [
+              {
+                "kind": "DataDeclaration",
+                "attributes": [
+                  {
+                    "kind": "AttributeInstance",
+                    "openParen": {
+                      "kind": "OpenParenthesis",
+                      "text": "(",
+                      "trivia": [
+                        {
+                          "kind": "EndOfLine",
+                          "text": "\n"
+                        },
+                        {
+                          "kind": "Whitespace",
+                          "text": "    "
+                        }
+                      ]
+                    },
+                    "openStar": {
+                      "kind": "Star",
+                      "text": "*"
+                    },
+                    "specs": [
+                      {
+                        "kind": "AttributeSpec",
+                        "name": {
+                          "kind": "Identifier",
+                          "text": "keep",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": " "
+                            }
+                          ]
+                        },
+                        "value": {
+                          "kind": "EqualsValueClause",
+                          "equals": {
+                            "kind": "Equals",
+                            "text": "=",
+                            "trivia": [
+                              {
+                                "kind": "Whitespace",
+                                "text": " "
+                              }
+                            ]
+                          },
+                          "expr": {
+                            "kind": "StringLiteralExpression",
+                            "literal": {
+                              "kind": "StringLiteral",
+                              "text": "\"true\"",
+                              "trivia": [
+                                {
+                                  "kind": "Whitespace",
+                                  "text": " "
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "closeStar": {
+                      "kind": "Star",
+                      "text": "*",
+                      "trivia": [
+                        {
+                          "kind": "Whitespace",
+                          "text": " "
+                        }
+                      ]
+                    },
+                    "closeParen": {
+                      "kind": "CloseParenthesis",
+                      "text": ")"
+                    }
+                  }
+                ],
+                "type": {
+                  "kind": "LogicType",
+                  "keyword": {
+                    "kind": "LogicKeyword",
+                    "text": "logic",
+                    "trivia": [
+                      {
+                        "kind": "EndOfLine",
+                        "text": "\n"
+                      },
+                      {
+                        "kind": "Whitespace",
+                        "text": "    "
+                      }
+                    ]
+                  },
+                  "dimensions": [
+                    {
+                      "kind": "VariableDimension",
+                      "openBracket": {
+                        "kind": "OpenBracket",
+                        "text": "[",
+                        "trivia": [
+                          {
+                            "kind": "Whitespace",
+                            "text": " "
+                          }
+                        ]
+                      },
+                      "specifier": {
+                        "kind": "RangeDimensionSpecifier",
+                        "selector": {
+                          "kind": "SimpleRangeSelect",
+                          "left": {
+                            "kind": "IntegerLiteralExpression",
+                            "literal": {
+                              "kind": "IntegerLiteral",
+                              "text": "7"
+                            }
+                          },
+                          "range": {
+                            "kind": "Colon",
+                            "text": ":"
+                          },
+                          "right": {
+                            "kind": "IntegerLiteralExpression",
+                            "literal": {
+                              "kind": "IntegerLiteral",
+                              "text": "0"
+                            }
+                          }
+                        }
+                      },
+                      "closeBracket": {
+                        "kind": "CloseBracket",
+                        "text": "]"
+                      }
+                    }
+                  ]
+                },
+                "declarators": [
+                  {
+                    "kind": "Declarator",
+                    "name": {
+                      "kind": "Identifier",
+                      "text": "counter",
+                      "trivia": [
+                        {
+                          "kind": "Whitespace",
+                          "text": " "
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "semi": {
+                  "kind": "Semicolon",
+                  "text": ";"
+                }
+              },
+              {
+                "kind": "AlwaysCombBlock",
+                "attributes": [
+                  {
+                    "kind": "AttributeInstance",
+                    "openParen": {
+                      "kind": "OpenParenthesis",
+                      "text": "(",
+                      "trivia": [
+                        {
+                          "kind": "EndOfLine",
+                          "text": "\n"
+                        },
+                        {
+                          "kind": "EndOfLine",
+                          "text": "\n"
+                        },
+                        {
+                          "kind": "Whitespace",
+                          "text": "    "
+                        }
+                      ]
+                    },
+                    "openStar": {
+                      "kind": "Star",
+                      "text": "*"
+                    },
+                    "specs": [
+                      {
+                        "kind": "AttributeSpec",
+                        "name": {
+                          "kind": "Identifier",
+                          "text": "full_case",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": " "
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "kind": "Comma",
+                        "text": ","
+                      },
+                      {
+                        "kind": "AttributeSpec",
+                        "name": {
+                          "kind": "Identifier",
+                          "text": "parallel_case",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": " "
+                            }
+                          ]
+                        }
+                      }
+                    ],
+                    "closeStar": {
+                      "kind": "Star",
+                      "text": "*",
+                      "trivia": [
+                        {
+                          "kind": "Whitespace",
+                          "text": " "
+                        }
+                      ]
+                    },
+                    "closeParen": {
+                      "kind": "CloseParenthesis",
+                      "text": ")"
+                    }
+                  }
+                ],
+                "keyword": {
+                  "kind": "AlwaysCombKeyword",
+                  "text": "always_comb",
+                  "trivia": [
+                    {
+                      "kind": "EndOfLine",
+                      "text": "\n"
+                    },
+                    {
+                      "kind": "Whitespace",
+                      "text": "    "
+                    }
+                  ]
+                },
+                "statement": {
+                  "kind": "SequentialBlockStatement",
+                  "begin": {
+                    "kind": "BeginKeyword",
+                    "text": "begin",
+                    "trivia": [
+                      {
+                        "kind": "Whitespace",
+                        "text": " "
+                      }
+                    ]
+                  },
+                  "items": [
+                    {
+                      "kind": "CaseStatement",
+                      "caseKeyword": {
+                        "kind": "CaseKeyword",
+                        "text": "case",
+                        "trivia": [
+                          {
+                            "kind": "EndOfLine",
+                            "text": "\n"
+                          },
+                          {
+                            "kind": "Whitespace",
+                            "text": "        "
+                          }
+                        ]
+                      },
+                      "openParen": {
+                        "kind": "OpenParenthesis",
+                        "text": "(",
+                        "trivia": [
+                          {
+                            "kind": "Whitespace",
+                            "text": " "
+                          }
+                        ]
+                      },
+                      "expr": {
+                        "kind": "IdentifierSelectName",
+                        "identifier": {
+                          "kind": "Identifier",
+                          "text": "counter"
+                        },
+                        "selectors": [
+                          {
+                            "kind": "ElementSelect",
+                            "openBracket": {
+                              "kind": "OpenBracket",
+                              "text": "["
+                            },
+                            "selector": {
+                              "kind": "SimpleRangeSelect",
+                              "left": {
+                                "kind": "IntegerLiteralExpression",
+                                "literal": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "1"
+                                }
+                              },
+                              "range": {
+                                "kind": "Colon",
+                                "text": ":"
+                              },
+                              "right": {
+                                "kind": "IntegerLiteralExpression",
+                                "literal": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "0"
+                                }
+                              }
+                            },
+                            "closeBracket": {
+                              "kind": "CloseBracket",
+                              "text": "]"
+                            }
+                          }
+                        ]
+                      },
+                      "closeParen": {
+                        "kind": "CloseParenthesis",
+                        "text": ")"
+                      },
+                      "items": [
+                        {
+                          "kind": "StandardCaseItem",
+                          "expressions": [
+                            {
+                              "kind": "IntegerVectorExpression",
+                              "size": {
+                                "kind": "IntegerLiteral",
+                                "text": "2",
+                                "trivia": [
+                                  {
+                                    "kind": "EndOfLine",
+                                    "text": "\n"
+                                  },
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": "            "
+                                  }
+                                ]
+                              },
+                              "base": {
+                                "kind": "IntegerBase",
+                                "text": "'b"
+                              },
+                              "value": {
+                                "kind": "IntegerLiteral",
+                                "text": "00"
+                              }
+                            }
+                          ],
+                          "colon": {
+                            "kind": "Colon",
+                            "text": ":"
+                          },
+                          "clause": {
+                            "kind": "ExpressionStatement",
+                            "expr": {
+                              "kind": "AssignmentExpression",
+                              "left": {
+                                "kind": "IdentifierName",
+                                "identifier": {
+                                  "kind": "Identifier",
+                                  "text": "count",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                }
+                              },
+                              "operatorToken": {
+                                "kind": "Equals",
+                                "text": "=",
+                                "trivia": [
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": " "
+                                  }
+                                ]
+                              },
+                              "right": {
+                                "kind": "IntegerVectorExpression",
+                                "size": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "8",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                },
+                                "base": {
+                                  "kind": "IntegerBase",
+                                  "text": "'d"
+                                },
+                                "value": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "0"
+                                }
+                              }
+                            },
+                            "semi": {
+                              "kind": "Semicolon",
+                              "text": ";"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "StandardCaseItem",
+                          "expressions": [
+                            {
+                              "kind": "IntegerVectorExpression",
+                              "size": {
+                                "kind": "IntegerLiteral",
+                                "text": "2",
+                                "trivia": [
+                                  {
+                                    "kind": "EndOfLine",
+                                    "text": "\n"
+                                  },
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": "            "
+                                  }
+                                ]
+                              },
+                              "base": {
+                                "kind": "IntegerBase",
+                                "text": "'b"
+                              },
+                              "value": {
+                                "kind": "IntegerLiteral",
+                                "text": "01"
+                              }
+                            }
+                          ],
+                          "colon": {
+                            "kind": "Colon",
+                            "text": ":"
+                          },
+                          "clause": {
+                            "kind": "ExpressionStatement",
+                            "expr": {
+                              "kind": "AssignmentExpression",
+                              "left": {
+                                "kind": "IdentifierName",
+                                "identifier": {
+                                  "kind": "Identifier",
+                                  "text": "count",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                }
+                              },
+                              "operatorToken": {
+                                "kind": "Equals",
+                                "text": "=",
+                                "trivia": [
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": " "
+                                  }
+                                ]
+                              },
+                              "right": {
+                                "kind": "IntegerVectorExpression",
+                                "size": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "8",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                },
+                                "base": {
+                                  "kind": "IntegerBase",
+                                  "text": "'d"
+                                },
+                                "value": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "1"
+                                }
+                              }
+                            },
+                            "semi": {
+                              "kind": "Semicolon",
+                              "text": ";"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "StandardCaseItem",
+                          "expressions": [
+                            {
+                              "kind": "IntegerVectorExpression",
+                              "size": {
+                                "kind": "IntegerLiteral",
+                                "text": "2",
+                                "trivia": [
+                                  {
+                                    "kind": "EndOfLine",
+                                    "text": "\n"
+                                  },
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": "            "
+                                  }
+                                ]
+                              },
+                              "base": {
+                                "kind": "IntegerBase",
+                                "text": "'b"
+                              },
+                              "value": {
+                                "kind": "IntegerLiteral",
+                                "text": "10"
+                              }
+                            }
+                          ],
+                          "colon": {
+                            "kind": "Colon",
+                            "text": ":"
+                          },
+                          "clause": {
+                            "kind": "ExpressionStatement",
+                            "expr": {
+                              "kind": "AssignmentExpression",
+                              "left": {
+                                "kind": "IdentifierName",
+                                "identifier": {
+                                  "kind": "Identifier",
+                                  "text": "count",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                }
+                              },
+                              "operatorToken": {
+                                "kind": "Equals",
+                                "text": "=",
+                                "trivia": [
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": " "
+                                  }
+                                ]
+                              },
+                              "right": {
+                                "kind": "IntegerVectorExpression",
+                                "size": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "8",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                },
+                                "base": {
+                                  "kind": "IntegerBase",
+                                  "text": "'d"
+                                },
+                                "value": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "2"
+                                }
+                              }
+                            },
+                            "semi": {
+                              "kind": "Semicolon",
+                              "text": ";"
+                            }
+                          }
+                        },
+                        {
+                          "kind": "StandardCaseItem",
+                          "expressions": [
+                            {
+                              "kind": "IntegerVectorExpression",
+                              "size": {
+                                "kind": "IntegerLiteral",
+                                "text": "2",
+                                "trivia": [
+                                  {
+                                    "kind": "EndOfLine",
+                                    "text": "\n"
+                                  },
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": "            "
+                                  }
+                                ]
+                              },
+                              "base": {
+                                "kind": "IntegerBase",
+                                "text": "'b"
+                              },
+                              "value": {
+                                "kind": "IntegerLiteral",
+                                "text": "11"
+                              }
+                            }
+                          ],
+                          "colon": {
+                            "kind": "Colon",
+                            "text": ":"
+                          },
+                          "clause": {
+                            "kind": "ExpressionStatement",
+                            "expr": {
+                              "kind": "AssignmentExpression",
+                              "left": {
+                                "kind": "IdentifierName",
+                                "identifier": {
+                                  "kind": "Identifier",
+                                  "text": "count",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                }
+                              },
+                              "operatorToken": {
+                                "kind": "Equals",
+                                "text": "=",
+                                "trivia": [
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": " "
+                                  }
+                                ]
+                              },
+                              "right": {
+                                "kind": "IntegerVectorExpression",
+                                "size": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "8",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                },
+                                "base": {
+                                  "kind": "IntegerBase",
+                                  "text": "'d"
+                                },
+                                "value": {
+                                  "kind": "IntegerLiteral",
+                                  "text": "3"
+                                }
+                              }
+                            },
+                            "semi": {
+                              "kind": "Semicolon",
+                              "text": ";"
+                            }
+                          }
+                        }
+                      ],
+                      "endcase": {
+                        "kind": "EndCaseKeyword",
+                        "text": "endcase",
+                        "trivia": [
+                          {
+                            "kind": "EndOfLine",
+                            "text": "\n"
+                          },
+                          {
+                            "kind": "Whitespace",
+                            "text": "        "
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "end": {
+                    "kind": "EndKeyword",
+                    "text": "end",
+                    "trivia": [
+                      {
+                        "kind": "EndOfLine",
+                        "text": "\n"
+                      },
+                      {
+                        "kind": "Whitespace",
+                        "text": "    "
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "kind": "AlwaysFFBlock",
+                "keyword": {
+                  "kind": "AlwaysFFKeyword",
+                  "text": "always_ff",
+                  "trivia": [
+                    {
+                      "kind": "EndOfLine",
+                      "text": "\n"
+                    },
+                    {
+                      "kind": "EndOfLine",
+                      "text": "\n"
+                    },
+                    {
+                      "kind": "Whitespace",
+                      "text": "    "
+                    }
+                  ]
+                },
+                "statement": {
+                  "kind": "TimingControlStatement",
+                  "timingControl": {
+                    "kind": "EventControlWithExpression",
+                    "at": {
+                      "kind": "At",
+                      "text": "@",
+                      "trivia": [
+                        {
+                          "kind": "Whitespace",
+                          "text": " "
+                        }
+                      ]
+                    },
+                    "expr": {
+                      "kind": "ParenthesizedEventExpression",
+                      "openParen": {
+                        "kind": "OpenParenthesis",
+                        "text": "("
+                      },
+                      "expr": {
+                        "kind": "SignalEventExpression",
+                        "edge": {
+                          "kind": "PosEdgeKeyword",
+                          "text": "posedge"
+                        },
+                        "expr": {
+                          "kind": "IdentifierName",
+                          "identifier": {
+                            "kind": "Identifier",
+                            "text": "clk",
+                            "trivia": [
+                              {
+                                "kind": "Whitespace",
+                                "text": " "
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "closeParen": {
+                        "kind": "CloseParenthesis",
+                        "text": ")"
+                      }
+                    }
+                  },
+                  "statement": {
+                    "kind": "SequentialBlockStatement",
+                    "begin": {
+                      "kind": "BeginKeyword",
+                      "text": "begin",
+                      "trivia": [
+                        {
+                          "kind": "Whitespace",
+                          "text": " "
+                        }
+                      ]
+                    },
+                    "items": [
+                      {
+                        "kind": "ConditionalStatement",
+                        "ifKeyword": {
+                          "kind": "IfKeyword",
+                          "text": "if",
+                          "trivia": [
+                            {
+                              "kind": "EndOfLine",
+                              "text": "\n"
+                            },
+                            {
+                              "kind": "Whitespace",
+                              "text": "        "
+                            }
+                          ]
+                        },
+                        "openParen": {
+                          "kind": "OpenParenthesis",
+                          "text": "(",
+                          "trivia": [
+                            {
+                              "kind": "Whitespace",
+                              "text": " "
+                            }
+                          ]
+                        },
+                        "predicate": {
+                          "kind": "ConditionalPredicate",
+                          "conditions": [
+                            {
+                              "kind": "ConditionalPattern",
+                              "expr": {
+                                "kind": "UnaryLogicalNotExpression",
+                                "operatorToken": {
+                                  "kind": "Exclamation",
+                                  "text": "!"
+                                },
+                                "operand": {
+                                  "kind": "IdentifierName",
+                                  "identifier": {
+                                    "kind": "Identifier",
+                                    "text": "rst_n"
+                                  }
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        "closeParen": {
+                          "kind": "CloseParenthesis",
+                          "text": ")"
+                        },
+                        "statement": {
+                          "kind": "ExpressionStatement",
+                          "expr": {
+                            "kind": "NonblockingAssignmentExpression",
+                            "left": {
+                              "kind": "IdentifierName",
+                              "identifier": {
+                                "kind": "Identifier",
+                                "text": "counter",
+                                "trivia": [
+                                  {
+                                    "kind": "EndOfLine",
+                                    "text": "\n"
+                                  },
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": "            "
+                                  }
+                                ]
+                              }
+                            },
+                            "operatorToken": {
+                              "kind": "LessThanEquals",
+                              "text": "<=",
+                              "trivia": [
+                                {
+                                  "kind": "Whitespace",
+                                  "text": " "
+                                }
+                              ]
+                            },
+                            "right": {
+                              "kind": "UnbasedUnsizedLiteralExpression",
+                              "literal": {
+                                "kind": "UnbasedUnsizedLiteral",
+                                "text": "'0",
+                                "trivia": [
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": " "
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          "semi": {
+                            "kind": "Semicolon",
+                            "text": ";"
+                          }
+                        },
+                        "elseClause": {
+                          "kind": "ElseClause",
+                          "elseKeyword": {
+                            "kind": "ElseKeyword",
+                            "text": "else",
+                            "trivia": [
+                              {
+                                "kind": "EndOfLine",
+                                "text": "\n"
+                              },
+                              {
+                                "kind": "Whitespace",
+                                "text": "        "
+                              }
+                            ]
+                          },
+                          "clause": {
+                            "kind": "ExpressionStatement",
+                            "expr": {
+                              "kind": "NonblockingAssignmentExpression",
+                              "left": {
+                                "kind": "IdentifierName",
+                                "identifier": {
+                                  "kind": "Identifier",
+                                  "text": "counter",
+                                  "trivia": [
+                                    {
+                                      "kind": "EndOfLine",
+                                      "text": "\n"
+                                    },
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": "            "
+                                    }
+                                  ]
+                                }
+                              },
+                              "operatorToken": {
+                                "kind": "LessThanEquals",
+                                "text": "<=",
+                                "trivia": [
+                                  {
+                                    "kind": "Whitespace",
+                                    "text": " "
+                                  }
+                                ]
+                              },
+                              "right": {
+                                "kind": "AddExpression",
+                                "left": {
+                                  "kind": "IdentifierName",
+                                  "identifier": {
+                                    "kind": "Identifier",
+                                    "text": "counter",
+                                    "trivia": [
+                                      {
+                                        "kind": "Whitespace",
+                                        "text": " "
+                                      }
+                                    ]
+                                  }
+                                },
+                                "operatorToken": {
+                                  "kind": "Plus",
+                                  "text": "+",
+                                  "trivia": [
+                                    {
+                                      "kind": "Whitespace",
+                                      "text": " "
+                                    }
+                                  ]
+                                },
+                                "right": {
+                                  "kind": "IntegerLiteralExpression",
+                                  "literal": {
+                                    "kind": "IntegerLiteral",
+                                    "text": "1",
+                                    "trivia": [
+                                      {
+                                        "kind": "Whitespace",
+                                        "text": " "
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            },
+                            "semi": {
+                              "kind": "Semicolon",
+                              "text": ";"
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "end": {
+                      "kind": "EndKeyword",
+                      "text": "end",
+                      "trivia": [
+                        {
+                          "kind": "EndOfLine",
+                          "text": "\n"
+                        },
+                        {
+                          "kind": "Whitespace",
+                          "text": "    "
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ],
+            "endmodule": {
+              "kind": "EndModuleKeyword",
+              "text": "endmodule",
+              "trivia": [
+                {
+                  "kind": "EndOfLine",
+                  "text": "\n"
+                }
+              ]
+            }
+          }
+        ],
+        "endOfFile": {
+          "kind": "EndOfFile",
+          "text": "",
+          "trivia": [
+            {
+              "kind": "EndOfLine",
+              "text": "\n"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

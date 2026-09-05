@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/format__Config",
+  "$defs": {
+    "format__AlignConfig": {
+      "type": "object",
+      "properties": {
+        "maxSpaces": {
+          "description": "Split the group if a space of this size or more is inserted (null = never split on padding width)",
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "linesBetweenGroups": {
+          "type": "integer",
+          "description": "Number of separator lines required to split an alignment group of in-body code (assignment statements, local declarations). Empty lines count once; a standalone N-line comment region counts N-1. Structural groups (ports, params, case items, struct members, struct-pattern assigns) always require 2 separator lines."
+        }
+      },
+      "required": []
+    },
+    "format__Config": {
+      "type": "object",
+      "properties": {
+        "indentWidth": {
+          "type": "integer",
+          "description": "Number of spaces per indentation level"
+        },
+        "columnLimit": {
+          "type": "integer",
+          "description": "Column limit for line wrapping (0 = no limit)"
+        },
+        "spacesBeforeTrailingComment": {
+          "type": "integer",
+          "description": "Number of spaces before trailing comments"
+        },
+        "respectUserFormatting": {
+          "description": "When true, preserve user line breaks in expressions if all resulting lines fit within the column limit",
+          "type": "boolean"
+        },
+        "alignment": {
+          "$ref": "#/$defs/format__AlignConfig",
+          "description": "Alignment config"
+        },
+        "excludeDirs": {
+          "type": "array",
+          "description": "Directory names to exclude from formatting, omitted while crawling",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dirs": {
+          "type": "array",
+          "description": "Paths (relative to the config file's directory) to format when the formatter is pointed at that config directory itself. Lets a project scope formatting to specific subtrees (e.g. [\"fpga\"]) without formatting the whole tree. Ignored when a subdirectory or file is targeted directly, so you can still format any path ad hoc.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": []
+    }
+  }
+}

@@ -1,0 +1,74 @@
+name: CI Build
+
+on:
+    workflow_dispatch:
+    workflow_call:
+        inputs:
+            upload_artifacts:
+                description: Upload release artifacts
+                required: false
+                type: boolean
+                default: false
+            ref:
+                description: Git ref to check out
+                required: false
+                type: string
+                default: ""
+    push:
+        branches: [main]
+        paths-ignore:
+            - "docs/**"
+            - "*.md"
+            - "mkdocs.yaml"
+    pull_request:
+        paths-ignore:
+            - "docs/**"
+            - "*.md"
+            - "mkdocs.yaml"
+
+jobs:
+    build:
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - preset: clang-release
+                      os: ubuntu-latest
+                      artifact_name: slang-format-linux-x64-clang
+                    - preset: gcc-release
+                      os: ubuntu-latest
+                      artifact_name: slang-format-linux-x64-gcc
+
+        runs-on: ${{ matrix.os }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ inputs.ref || github.ref }}
+                  submodules: recursive
+                  fetch-depth: 0
+
+            - name: Configure
+              run: cmake --preset ${{ matrix.preset }} -DSLANG_FORMAT_CI_BUILD=ON
+
+            - name: Build
+              run: cmake --build build/${{ matrix.preset }} -j8
+
+            - name: Test
+              run: ctest --test-dir build/${{ matrix.preset }} --output-on-failure --no-tests=error -j8
+
+            - name: Package
+              if: inputs.upload_artifacts
+              shell: bash
+              run: |
+                  strip build/${{ matrix.preset }}/bin/slang-format
+                  mkdir -p release-artifacts/${{ matrix.artifact_name }}
+                  cp build/${{ matrix.preset }}/bin/slang-format release-artifacts/${{ matrix.artifact_name }}/
+                  cp LICENSE README.md release-artifacts/${{ matrix.artifact_name }}/
+                  tar -C release-artifacts -czf release-artifacts/${{ matrix.artifact_name }}.tar.gz ${{ matrix.artifact_name }}
+
+            - uses: actions/upload-artifact@v4
+              if: inputs.upload_artifacts
+              with:
+                  name: ${{ matrix.artifact_name }}
+                  path: release-artifacts/${{ matrix.artifact_name }}.tar.gz
+                  if-no-files-found: error
