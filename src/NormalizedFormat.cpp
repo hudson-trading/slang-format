@@ -497,10 +497,15 @@ private:
         return false;
     }
 
-    void appendBlankLines(NormalizedToken& token, size_t lineBreaks, bool atDocumentStart) {
+    void appendBlankLines(
+        NormalizedToken& token,
+        size_t lineBreaks,
+        bool atDocumentStart,
+        bool preserve = false
+    ) {
         if (atDocumentStart && token.leading.empty())
             return;
-        if (!token.preservesBlankBefore && !token.followsPreservedList)
+        if (!preserve && !token.preservesBlankBefore && !token.followsPreservedList)
             return;
         if (lineBreaks > 1) {
             NormalizedTrivia blank{
@@ -883,7 +888,7 @@ private:
                                     break;
                             }
                         }
-                        appendBlankLines(current, lineBreaks, !previous);
+                        appendBlankLines(current, lineBreaks, !previous, true);
                         bool multiline = text.find('\n') != std::string::npos ||
                                          text.find('\r') != std::string::npos;
                         bool recoveredContinuation =

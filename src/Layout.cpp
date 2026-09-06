@@ -374,12 +374,12 @@ private:
                     append(builder.verbatim(trivia.text));
                     std::string_view flat =
                         lastToken && lastToken->token.kind != TokenKind::OpenParenthesis ? " " : "";
-                    append(
-                        trivia.endsLine || (inDynamicList && dynamicListLikelyVertical)
-                            ? builder.hardLine(1, true)
-                            : builder.softLine(20, flat, currentDynamicGroup)
-                    );
-                    spacingProvided = true;
+                    if (trivia.endsLine || (inDynamicList && dynamicListLikelyVertical))
+                        hardLine(1, true);
+                    else {
+                        append(builder.softLine(20, flat, currentDynamicGroup));
+                        spacingProvided = true;
+                    }
                     break;
                 }
                 if (trailing && trivia.placement == TriviaPlacement::Trailing) {

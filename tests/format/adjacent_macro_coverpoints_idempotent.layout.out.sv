@@ -9,5 +9,6 @@
 covergroup sample_group with function sample(int value, int status);
     `VALUE_COVERPOINT
     `STATUS_COVERPOINT
+
     value_status_cross: cross value_cp, status_cp;
 endgroup
