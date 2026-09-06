@@ -412,15 +412,22 @@ struct RenderRun {
                 if (closingDelimiter) {
                     cursor.delimiters.pop_back();
                 }
-                else if (atom.text == "(" || atom.text == "{" || atom.text == "[") {
-                    bool aligned = cursor.pendingAlignedDelimiter ||
+                else if (atom.text == "(" || atom.text == "{" || atom.text == "[" ||
+                         atom.text == "'{") {
+                    bool assignmentPattern = atom.text == "'{";
+                    auto patternAnchor = cursor.anchors.end();
+                    if (assignmentPattern && !cursor.anchorStack.empty())
+                        patternAnchor = cursor.anchors.find(cursor.anchorStack.back().first);
+                    bool anchoredPattern = patternAnchor != cursor.anchors.end();
+                    bool aligned = anchoredPattern || cursor.pendingAlignedDelimiter ||
                                    (!cursor.delimiters.empty() && cursor.delimiters.back().aligned);
-                    size_t extra = atom.text == "(" ? 5 : 4;
+                    size_t delimiterColumn = anchoredPattern ? patternAnchor->second : tokenColumn;
+                    size_t contentIndent = anchoredPattern
+                                               ? delimiterColumn + config.indentWidth.get()
+                                               : tokenColumn + (atom.text == "(" ? 5 : 4);
                     cursor.delimiters.push_back(
-                        {atom.text == "("   ? ')'
-                         : atom.text == "{" ? '}'
-                                            : ']',
-                         tokenColumn, tokenColumn + extra, aligned}
+                        {atom.text == "(" ? ')' : (atom.text == "[" ? ']' : '}'), delimiterColumn,
+                         contentIndent, aligned}
                     );
                 }
                 cursor.pendingAlignedDelimiter = false;
@@ -908,6 +915,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
         size_t groupBegin = 0;
         while (groupBegin < rows.size()) {
             size_t groupEnd = groupBegin + 1;
+            bool proceduralBlock = constants::isProceduralBlockAlignKind(key.kind);
             int threshold = constants::isBodyAlignKind(key.kind)
                                 ? config.alignment.get().linesBetweenGroups.get()
                                 : constants::defaultGroupSeparatorLines;
@@ -916,11 +924,8 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 groupBegin = groupEnd;
                 continue;
             }
+            size_t sectionBegin = groupBegin;
             while (groupEnd < rows.size()) {
-                if (isTerminalAssignmentAnchor(*rows[groupEnd])) {
-                    groupEnd++;
-                    break;
-                }
                 auto nextLine = lines[rows[groupEnd]->line];
                 while (!nextLine.empty() && (nextLine.front() == ' ' || nextLine.front() == '\t')) {
                     nextLine.remove_prefix(1);
@@ -935,11 +940,34 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                         leadingIndent(rows[groupEnd]->line)) {
                     break;
                 }
+                if (key.column == 100) {
+                    size_t previousColumn = rows[groupEnd - 1]->column +
+                                            rowShifts[rows[groupEnd - 1]->line];
+                    size_t nextColumn = rows[groupEnd]->column + rowShifts[rows[groupEnd]->line];
+                    size_t gap = std::max(previousColumn, nextColumn) -
+                                 std::min(previousColumn, nextColumn);
+                    if (gap > std::max<size_t>(config.indentWidth.get(), 1))
+                        break;
+                }
                 bool ignoreContent = multilineRow ||
                                      key.kind == slang::syntax::SyntaxKind::AssignmentPatternItem;
-                if (separatorCount(
-                        rows[groupEnd - 1]->line, rows[groupEnd]->line, threshold, ignoreContent
-                    ) >= threshold) {
+                int separators = separatorCount(
+                    rows[groupEnd - 1]->line, rows[groupEnd]->line, threshold, ignoreContent
+                );
+                if (separators >= threshold)
+                    break;
+                if (proceduralBlock && separators > 0) {
+                    bool leftSectionSingleton = groupEnd - sectionBegin == 1;
+                    bool rightSectionSingleton =
+                        groupEnd + 1 == rows.size() ||
+                        separatorCount(rows[groupEnd]->line, rows[groupEnd + 1]->line, threshold) >
+                            0;
+                    if (leftSectionSingleton || rightSectionSingleton)
+                        break;
+                    sectionBegin = groupEnd;
+                }
+                if (isTerminalAssignmentAnchor(*rows[groupEnd])) {
+                    groupEnd++;
                     break;
                 }
                 groupEnd++;

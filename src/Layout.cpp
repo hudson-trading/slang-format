@@ -244,6 +244,7 @@ private:
                                 : 0;
         lineStartOffset = 0;
         bool firstLine = true;
+        size_t blankLineRun = 0;
         while (lineStartOffset < text.size()) {
             size_t lineEnd = text.find('\n', lineStartOffset);
             if (lineEnd == std::string_view::npos)
@@ -264,18 +265,25 @@ private:
             if (!nestedConditionalIndents.empty())
                 relativeIndent = std::max(relativeIndent, nestedConditionalIndents.back());
             relativeIndent += listIndent;
-            if (firstLine) {
+            if (line.empty()) {
+                blankLineRun++;
+                append(builder.indent(
+                    static_cast<int>(relativeIndent),
+                    builder.hardLine(static_cast<int>(blankLineRun + 1))
+                ));
+            }
+            else if (firstLine) {
+                size_t firstLineIndent = blankLineRun ? 0 : relativeIndent;
+                blankLineRun = 0;
                 append(
                     memberOwned
                         ? builder.memberVerbatim(line, static_cast<int>(relativeIndent))
-                        : builder.verbatim(std::string(relativeIndent, ' ') + std::string(line))
+                        : builder.verbatim(std::string(firstLineIndent, ' ') + std::string(line))
                 );
                 firstLine = false;
             }
-            else if (line.empty()) {
-                append(builder.indent(static_cast<int>(relativeIndent), builder.hardLine(2)));
-            }
             else {
+                blankLineRun = 0;
                 auto content = memberOwned
                                    ? builder.memberVerbatim(line, static_cast<int>(relativeIndent))
                                    : builder.verbatim(line);
@@ -1930,10 +1938,15 @@ private:
     void lowerControlledStatement(const NormalizedNode& node) {
         for (const auto& child : node.children) {
             auto nested = childNode(child);
-            if (nested && StatementSyntax::isKind(nested->kind) && !isBlock(*nested))
+            if (nested && StatementSyntax::isKind(nested->kind) && !isBlock(*nested)) {
+                auto savedAlignmentGroup = currentAlignmentGroup;
+                currentAlignmentGroup = builder.createAlignmentGroup();
                 lowerIndentedChild(child);
-            else
+                currentAlignmentGroup = savedAlignmentGroup;
+            }
+            else {
                 lowerChild(child);
+            }
         }
     }
 
@@ -2477,20 +2490,42 @@ private:
         };
         auto implication = findImplication(findImplication, node);
         if (!implication || !config.columnLimit.get() ||
-            formattedFlatWidth(*implication) <= config.columnLimit.get()) {
+            formattedFlatWidth(node) <= config.columnLimit.get()) {
             for (const auto& child : node.children)
                 lowerChild(child);
             return;
         }
 
-        for (const auto& child : node.children) {
-            if (auto tokenIndex = std::get_if<size_t>(&child.value)) {
-                auto token = normalized.tokens().at(*tokenIndex).token;
-                if (token && token.kind == TokenKind::CloseParenthesis)
-                    hardLine();
-            }
-            lowerChild(child);
+        size_t openParen = SIZE_MAX;
+        size_t closeParen = SIZE_MAX;
+        for (size_t i = 0; i < node.children.size(); i++) {
+            auto tokenIndex = std::get_if<size_t>(&node.children[i].value);
+            if (!tokenIndex)
+                continue;
+            auto token = normalized.tokens().at(*tokenIndex).token;
+            if (!token)
+                continue;
+            if (token.kind == TokenKind::OpenParenthesis)
+                openParen = i;
+            else if (token.kind == TokenKind::CloseParenthesis)
+                closeParen = i;
         }
+        if (openParen == SIZE_MAX || closeParen == SIZE_MAX || openParen >= closeParen) {
+            for (const auto& child : node.children)
+                lowerChild(child);
+            return;
+        }
+
+        lowerChildren(node, 0, openParen + 1);
+        size_t bodyBegin = mark();
+        hardLine();
+        const NormalizedNode* savedWrappedImplication = verticallyWrappedImplication;
+        verticallyWrappedImplication = implication;
+        lowerChildren(node, openParen + 1, closeParen);
+        verticallyWrappedImplication = savedWrappedImplication;
+        append(builder.indent(static_cast<int>(config.indentWidth.get()), capture(bodyBegin)));
+        hardLine();
+        lowerChildren(node, closeParen, node.children.size());
     }
 
     bool caseItemNeedsClauseBreak(const NormalizedNode& item) const {
@@ -3036,6 +3071,10 @@ private:
         bool addBinaryContinuationIndent = false;
         bool anchorBinaryContinuation = false;
         int binaryContinuationAnchorOffset = static_cast<int>(config.indentWidth.get());
+        bool parenthesizedBinary = isBinaryKind(node.kind) &&
+                                   (parentExpressionKind == SyntaxKind::ParenthesizedExpression ||
+                                    parentExpressionKind == SyntaxKind::ParenthesizedPropertyExpr ||
+                                    parentExpressionKind == SyntaxKind::ParenthesizedSequenceExpr);
         if (isBinaryKind(node.kind) && !assignment) {
             bool sameChain = isBinaryKind(parentExpressionKind) &&
                              SyntaxFacts::getPrecedence(node.kind) > 0 &&
@@ -3082,10 +3121,14 @@ private:
             else if (!sameChain) {
                 addBinaryContinuationIndent = isBinaryKind(parentExpressionKind);
             }
+            if (parenthesizedBinary) {
+                addBinaryContinuationIndent = true;
+                anchorBinaryContinuation = true;
+                binaryContinuationScope = true;
+            }
             if (!node.children.empty() && childContainsMacro(node.children.front()))
                 addBinaryContinuationIndent = false;
-            if (anchorBinaryContinuation &&
-                parentExpressionKind == SyntaxKind::ParenthesizedExpression) {
+            if (anchorBinaryContinuation && parenthesizedBinary) {
                 int precedence = SyntaxFacts::getPrecedence(node.kind);
                 auto containsNestedPrecedenceGroup = [&](auto&& self,
                                                          const NormalizedNode& current) -> bool {
@@ -3154,6 +3197,7 @@ private:
                  node.kind == SyntaxKind::AssumePropertyStatement)
             lowerConcurrentAssertion(node);
         else if (node.kind == SyntaxKind::LoopStatement ||
+                 node.kind == SyntaxKind::ForLoopStatement ||
                  node.kind == SyntaxKind::ForeachLoopStatement ||
                  node.kind == SyntaxKind::ForeverStatement)
             lowerControlledStatement(node);
@@ -3201,13 +3245,22 @@ private:
         if (castWithOperandBreak)
             contents = builder.relativeAnchor(static_cast<int>(config.indentWidth.get()), contents);
 
+        if (node.kind == SyntaxKind::AssignmentPatternExpression &&
+            currentMemberKind == SyntaxKind::NamedPortConnection) {
+            contents = builder.relativeAnchor(0, contents);
+        }
+
         if (isBinaryKind(node.kind) && !assignment) {
             if (addBinaryContinuationIndent && !inTernaryTableValue) {
                 int width = static_cast<int>(config.indentWidth.get());
-                if (PropertyExprSyntax::isKind(node.kind) || SequenceExprSyntax::isKind(node.kind))
+                if ((PropertyExprSyntax::isKind(node.kind) ||
+                     SequenceExprSyntax::isKind(node.kind)) &&
+                    !parenthesizedBinary && verticallyWrappedImplication != &node) {
                     contents = builder.indent(width, contents);
-                else if (anchorBinaryContinuation)
+                }
+                else if (anchorBinaryContinuation) {
                     contents = builder.relativeAnchor(binaryContinuationAnchorOffset, contents);
+                }
             }
         }
         else if (node.kind == SyntaxKind::ConditionalExpression && !ternaryTable) {
@@ -3289,6 +3342,7 @@ private:
     bool noNameCallStyle = false;
     size_t instanceOpenParenPadding = 0;
     const NormalizedNode* assignmentRhsRoot = nullptr;
+    const NormalizedNode* verticallyWrappedImplication = nullptr;
     bool binaryContinuationScope = false;
     int binaryContinuationIndent = 0;
     bool inMultipleConcatenation = false;

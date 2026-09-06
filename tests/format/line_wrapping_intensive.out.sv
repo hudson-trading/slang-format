@@ -79,7 +79,7 @@ module line_wrapping_intensive;
                                 if (g) begin
                                     if (h) begin
                                         if (((aaaaaaaaaaaaa
-                                                 >> bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
+                                                  >> bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb)
                                                  + (ccccccccccccc[$clog2(dddddddddddddddddddddddddddddddddd)-1:0] != '0)))
                                         begin end
                                     end

@@ -53,15 +53,29 @@ constexpr size_t maxInlineMultiLabelWidth = 12;
 constexpr int defaultGroupSeparatorLines = 2;
 
 /// True for row kinds that represent "body" code — statements and local
-/// declarations inside a function/always/initial block. These honor the
-/// user's `AlignConfig::linesBetweenGroups`; all other kinds (ports,
-/// params, case items, struct members, struct-pattern assigns) use
+/// declarations inside a function/always/initial block. These honor the user's
+/// `AlignConfig::linesBetweenGroups`; all other kinds use
 /// `defaultGroupSeparatorLines`.
 constexpr bool isBodyAlignKind(slang::syntax::SyntaxKind kind) {
     switch (kind) {
         case slang::syntax::SyntaxKind::ExpressionStatement:
         case slang::syntax::SyntaxKind::ParameterDeclarationStatement:
         case slang::syntax::SyntaxKind::DataDeclaration:
+            return true;
+        default:
+            return false;
+    }
+}
+
+/// True for module-level procedural blocks whose direct statement owns the row.
+constexpr bool isProceduralBlockAlignKind(slang::syntax::SyntaxKind kind) {
+    switch (kind) {
+        case slang::syntax::SyntaxKind::InitialBlock:
+        case slang::syntax::SyntaxKind::FinalBlock:
+        case slang::syntax::SyntaxKind::AlwaysBlock:
+        case slang::syntax::SyntaxKind::AlwaysCombBlock:
+        case slang::syntax::SyntaxKind::AlwaysFFBlock:
+        case slang::syntax::SyntaxKind::AlwaysLatchBlock:
             return true;
         default:
             return false;

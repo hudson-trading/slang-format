@@ -16,7 +16,8 @@ module dut;
         if (~rst)
             assert property (~a_signal);
 
-    long_wrap: assume property ((!rst && some_module_inst.req_valid) |->
-            (some_module_inst.req_addr[ADDR_WIDTH-1:CLIENT_ADDR_WIDTH] == BASE_ADDR)
+    long_wrap: assume property (
+        (!rst && some_module_inst.req_valid) |->
+        (some_module_inst.req_addr[ADDR_WIDTH-1:CLIENT_ADDR_WIDTH] == BASE_ADDR)
     );
 endmodule

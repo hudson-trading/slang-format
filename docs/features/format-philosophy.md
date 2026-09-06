@@ -143,6 +143,10 @@ Standalone comment regions also contribute to that threshold, but their first ph
 
 All alignable lists treat preserved blank/comment gaps below that threshold as soft boundaries. The columns continue across the gap when every row still fits; when shared alignment would add overflow or line breaks, the formatter partitions at a soft boundary and aligns the sections independently.
 
+Module-level one-line procedural blocks also use soft boundaries. Multi-row sections can keep a shared alignment across one, but a singleton section is isolated rather than padded to match a neighboring block.
+
+Trailing comments align while adjacent comment anchors are within one indentation width. A wider jump starts a new comment group so one long row does not push shorter comments far to the right.
+
 ```systemverilog
 // Structural — single blank kept, group stays aligned:
 input  logic [7:0]  data_in,
