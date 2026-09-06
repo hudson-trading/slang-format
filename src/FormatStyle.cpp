@@ -55,8 +55,13 @@ bool isOpenDelim(TokenKind kind) {
     }
 }
 
-bool shouldInsertWhitespace(TokenKind left, TokenKind right, SyntaxKind leftParent,
-                            SyntaxKind rightParent, bool rightInDataType) {
+bool shouldInsertWhitespace(
+    TokenKind left,
+    TokenKind right,
+    SyntaxKind leftParent,
+    SyntaxKind rightParent,
+    bool rightInDataType
+) {
     // No previous token yet -- doesn't matter, caller handles line start.
     if (left == TokenKind::Unknown)
         return false;

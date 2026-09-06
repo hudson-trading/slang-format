@@ -17,9 +17,14 @@
 
 namespace format {
 
-Formatter::Formatter(const Config& config, const slang::SourceManager* sourceManager,
-                     FormatStage stage) :
-    config_(config), sourceManager_(sourceManager), stage_(stage) {
+Formatter::Formatter(
+    const Config& config,
+    const slang::SourceManager* sourceManager,
+    FormatStage stage
+)
+    : config_(config),
+      sourceManager_(sourceManager),
+      stage_(stage) {
 }
 
 std::string Formatter::format(const slang::syntax::SyntaxNode& root) {

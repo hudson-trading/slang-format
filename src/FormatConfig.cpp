@@ -50,8 +50,9 @@ std::optional<Config> loadConfigFile(const fs::path& path, std::string& error) {
     buffer << file.rdbuf();
     auto result = rfl::json::read<Config, rfl::DefaultIfMissing>(buffer.str());
     if (!result) {
-        error = fmt::format("failed to parse config file '{}': {}", path.string(),
-                            result.error().what());
+        error = fmt::format(
+            "failed to parse config file '{}': {}", path.string(), result.error().what()
+        );
         return std::nullopt;
     }
 

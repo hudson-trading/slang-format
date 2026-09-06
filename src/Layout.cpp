@@ -79,8 +79,9 @@ bool tokenNeedsSeparation(Token left, Token right) {
 
 class Lowerer {
 public:
-    Lowerer(const NormalizedFormatDocument& normalized, const Config& config) :
-        normalized(normalized), config(config) {
+    Lowerer(const NormalizedFormatDocument& normalized, const Config& config)
+        : normalized(normalized),
+          config(config) {
         for (const auto& token : normalized.tokens()) {
             auto hasDefine = [](const auto& triviaList) {
                 return std::ranges::any_of(triviaList, [](const NormalizedTrivia& trivia) {
@@ -142,8 +143,9 @@ private:
             return;
         int relativeDepth = static_cast<int>(conditionalDepth) -
                             static_cast<int>(itemFinalConditionalDepth);
-        append(builder.indent(relativeDepth * static_cast<int>(config.indentWidth.get()),
-                              builder.hardLine()));
+        append(builder.indent(
+            relativeDepth * static_cast<int>(config.indentWidth.get()), builder.hardLine()
+        ));
     }
 
     void emitDirectiveVerbatim(const NormalizedTrivia& trivia) {
@@ -190,14 +192,19 @@ private:
             }
             size_t relative = indent >= baseline ? indent - baseline : indent;
             continuation.push_back(
-                builder.text(std::string(relative, ' ') + std::string(lines[i].substr(indent))));
+                builder.text(std::string(relative, ' ') + std::string(lines[i].substr(indent)))
+            );
         }
-        append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                              builder.concat(std::move(continuation))));
+        append(builder.indent(
+            static_cast<int>(config.indentWidth.get()), builder.concat(std::move(continuation))
+        ));
     }
 
-    void emitConditionalVerbatim(std::string_view text, bool memberOwned = false,
-                                 int conditionalDepthChange = 0) {
+    void emitConditionalVerbatim(
+        std::string_view text,
+        bool memberOwned = false,
+        int conditionalDepthChange = 0
+    ) {
         if (lineStart && memberOwned) {
             while (!text.empty() && slang::isWhitespace(text.front()))
                 text.remove_prefix(1);
@@ -258,9 +265,11 @@ private:
                 relativeIndent = std::max(relativeIndent, nestedConditionalIndents.back());
             relativeIndent += listIndent;
             if (firstLine) {
-                append(memberOwned ? builder.memberVerbatim(line, static_cast<int>(relativeIndent))
-                                   : builder.verbatim(std::string(relativeIndent, ' ') +
-                                                      std::string(line)));
+                append(
+                    memberOwned
+                        ? builder.memberVerbatim(line, static_cast<int>(relativeIndent))
+                        : builder.verbatim(std::string(relativeIndent, ' ') + std::string(line))
+                );
                 firstLine = false;
             }
             else if (line.empty()) {
@@ -270,14 +279,19 @@ private:
                 auto content = memberOwned
                                    ? builder.memberVerbatim(line, static_cast<int>(relativeIndent))
                                    : builder.verbatim(line);
-                append(memberOwned ? builder.concat({builder.hardLine(), content})
-                                   : builder.indent(static_cast<int>(relativeIndent),
-                                                    builder.concat({builder.hardLine(), content})));
+                append(
+                    memberOwned ? builder.concat({builder.hardLine(), content})
+                                : builder.indent(
+                                      static_cast<int>(relativeIndent),
+                                      builder.concat({builder.hardLine(), content})
+                                  )
+                );
             }
             if (line.starts_with("`ifdef") || line.starts_with("`ifndef") ||
                 line.starts_with("`else") || line.starts_with("`elsif")) {
-                nestedConditionalIndents.push_back(relativeIndent - listIndent +
-                                                   config.indentWidth.get());
+                nestedConditionalIndents.push_back(
+                    relativeIndent - listIndent + config.indentWidth.get()
+                );
             }
             lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
         }
@@ -285,8 +299,8 @@ private:
         spacingProvided = false;
         lastWasMacro = false;
         if (conditionalDepthChange < 0) {
-            conditionalDepth -= std::min(conditionalDepth,
-                                         static_cast<size_t>(-conditionalDepthChange));
+            conditionalDepth -=
+                std::min(conditionalDepth, static_cast<size_t>(-conditionalDepthChange));
         }
         else {
             conditionalDepth += static_cast<size_t>(conditionalDepthChange);
@@ -298,24 +312,28 @@ private:
         auto rhs = text.substr(equals + 1);
         int assignmentPriority = rhs.find(" && ") == std::string_view::npos ? 1 : 3;
         append(builder.verbatim(text.substr(0, equals + 1)));
-        append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                              builder.softLine(assignmentPriority, " ", 0, true)));
+        append(builder.indent(
+            static_cast<int>(config.indentWidth.get()),
+            builder.softLine(assignmentPriority, " ", 0, true)
+        ));
 
         while (!rhs.empty() && slang::isWhitespace(rhs.front()))
             rhs.remove_prefix(1);
 
         if (size_t logicalAnd = rhs.find(" && "); logicalAnd != std::string_view::npos) {
             append(builder.verbatim(rhs.substr(0, logicalAnd)));
-            append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                                  builder.softLine(2, " ", 0, true)));
+            append(builder.indent(
+                static_cast<int>(config.indentWidth.get()), builder.softLine(2, " ", 0, true)
+            ));
             append(builder.verbatim(rhs.substr(logicalAnd + 1)));
         }
         else if (size_t openParen = rhs.find('('); openParen != std::string_view::npos &&
                                                    config.columnLimit.get() &&
                                                    rhs.size() > config.columnLimit.get() * 3 / 5) {
             append(builder.verbatim(rhs.substr(0, openParen + 1)));
-            append(builder.indent(static_cast<int>(config.indentWidth.get() * 2),
-                                  builder.softLine(2, "", 0, true)));
+            append(builder.indent(
+                static_cast<int>(config.indentWidth.get() * 2), builder.softLine(2, "", 0, true)
+            ));
             auto arguments = rhs.substr(openParen + 1);
             while (!arguments.empty() && slang::isWhitespace(arguments.front()))
                 arguments.remove_prefix(1);
@@ -348,9 +366,11 @@ private:
                     append(builder.verbatim(trivia.text));
                     std::string_view flat =
                         lastToken && lastToken->token.kind != TokenKind::OpenParenthesis ? " " : "";
-                    append(trivia.endsLine || (inDynamicList && dynamicListLikelyVertical)
-                               ? builder.hardLine(1, true)
-                               : builder.softLine(20, flat, currentDynamicGroup));
+                    append(
+                        trivia.endsLine || (inDynamicList && dynamicListLikelyVertical)
+                            ? builder.hardLine(1, true)
+                            : builder.softLine(20, flat, currentDynamicGroup)
+                    );
                     spacingProvided = true;
                     break;
                 }
@@ -365,8 +385,9 @@ private:
                                 ? 1
                                 : 0;
                         if (trivia.lineComment) {
-                            append(builder.alignmentAnchor(100, currentMemberKind,
-                                                           currentAlignmentGroup, separatorColumn));
+                            append(builder.alignmentAnchor(
+                                100, currentMemberKind, currentAlignmentGroup, separatorColumn
+                            ));
                         }
                     }
                     size_t spaces = afterMacro ||
@@ -389,8 +410,10 @@ private:
                 }
                 append(builder.verbatim(trivia.text));
                 if (trivia.lineComment) {
-                    hardLine(1, !trailing || !emittingAssignmentOperator ||
-                                    assignmentOperatorCommentUseAnchor);
+                    hardLine(
+                        1, !trailing || !emittingAssignmentOperator ||
+                               assignmentOperatorCommentUseAnchor
+                    );
                 }
                 else if (!trailing) {
                     hardLine(1, true);
@@ -411,14 +434,18 @@ private:
                     hardLine(1, true);
                 }
                 if (trailing && lastToken && !lineStart && !spacingProvided &&
-                    shouldInsertWhitespace(lastToken->token.kind, TokenKind::Identifier,
-                                           lastToken->parentKind, SyntaxKind::Unknown, false)) {
+                    shouldInsertWhitespace(
+                        lastToken->token.kind, TokenKind::Identifier, lastToken->parentKind,
+                        SyntaxKind::Unknown, false
+                    )) {
                     append(builder.text(" "));
                 }
                 if (!trailing && trivia.placement == TriviaPlacement::Inline && lastToken &&
                     !lineStart && !spacingProvided &&
-                    shouldInsertWhitespace(lastToken->token.kind, TokenKind::Identifier,
-                                           lastToken->parentKind, SyntaxKind::Unknown, false)) {
+                    shouldInsertWhitespace(
+                        lastToken->token.kind, TokenKind::Identifier, lastToken->parentKind,
+                        SyntaxKind::Unknown, false
+                    )) {
                     append(builder.text(" "));
                 }
                 append(builder.verbatim(trivia.text));
@@ -440,7 +467,8 @@ private:
                                         static_cast<int>(itemFinalConditionalDepth);
                     if (relativeDepth) {
                         directive = builder.indent(
-                            relativeDepth * static_cast<int>(config.indentWidth.get()), directive);
+                            relativeDepth * static_cast<int>(config.indentWidth.get()), directive
+                        );
                     }
                     append(directive);
                 }
@@ -470,9 +498,10 @@ private:
                     }
                     if (!closing && (kind == SyntaxKind::IfDefDirective ||
                                      kind == SyntaxKind::IfNDefDirective)) {
-                        conditionalAssignmentStack.push_back(conditionalAssignmentRhs &&
-                                                             currentMemberKind ==
-                                                                 SyntaxKind::ContinuousAssign);
+                        conditionalAssignmentStack.push_back(
+                            conditionalAssignmentRhs &&
+                            currentMemberKind == SyntaxKind::ContinuousAssign
+                        );
                     }
                     break;
                 }
@@ -485,14 +514,15 @@ private:
                 if (kind == SyntaxKind::EndIfDirective && !conditionalAssignmentStack.empty()) {
                     conditionalAssignmentStack.pop_back();
                 }
-                auto directive = builder.concat(
-                    {builder.hardLine(), builder.verbatim(trivia.text)});
+                auto directive =
+                    builder.concat({builder.hardLine(), builder.verbatim(trivia.text)});
                 int relativeDepth = static_cast<int>(conditionalDepth) -
                                     static_cast<int>(itemFinalConditionalDepth) -
                                     (dedentListConditionalDirective ? 1 : 0);
                 if (relativeDepth) {
                     directive = builder.indent(
-                        relativeDepth * static_cast<int>(config.indentWidth.get()), directive);
+                        relativeDepth * static_cast<int>(config.indentWidth.get()), directive
+                    );
                 }
                 append(directive);
                 lineStart = false;
@@ -500,9 +530,10 @@ private:
                 if (kind != SyntaxKind::EndIfDirective)
                     conditionalDepth++;
                 if (kind == SyntaxKind::IfDefDirective || kind == SyntaxKind::IfNDefDirective) {
-                    conditionalAssignmentStack.push_back(conditionalAssignmentRhs &&
-                                                         currentMemberKind ==
-                                                             SyntaxKind::ContinuousAssign);
+                    conditionalAssignmentStack.push_back(
+                        conditionalAssignmentRhs &&
+                        currentMemberKind == SyntaxKind::ContinuousAssign
+                    );
                 }
                 break;
             }
@@ -527,8 +558,9 @@ private:
                 }
                 lastWasMacro = false;
                 if (conditionalDepth > 0 && trivia.text.find('\n') != std::string::npos) {
-                    emitConditionalVerbatim(trivia.text, memberOwned,
-                                            trivia.conditionalDepthChange);
+                    emitConditionalVerbatim(
+                        trivia.text, memberOwned, trivia.conditionalDepthChange
+                    );
                     break;
                 }
                 if (trivia.placement == TriviaPlacement::Inline &&
@@ -622,23 +654,29 @@ private:
             if (hasConditional && token.kind == TokenKind::CloseParenthesis)
                 append(triviaDoc);
             else if (token.kind == TokenKind::EndKeyword && hasConditional)
-                append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                                      builder.concat({builder.hardLine(), triviaDoc})));
+                append(builder.indent(
+                    static_cast<int>(config.indentWidth.get()),
+                    builder.concat({builder.hardLine(), triviaDoc})
+                ));
             else if (token.kind == TokenKind::EndKeyword) {
-                bool followsBlank = std::ranges::any_of(normalizedToken.leading,
-                                                        [](const NormalizedTrivia& trivia) {
-                                                            return trivia.kind ==
-                                                                   NormalizedTriviaKind::BlankLine;
-                                                        });
+                bool followsBlank = std::ranges::any_of(
+                    normalizedToken.leading, [](const NormalizedTrivia& trivia) {
+                        return trivia.kind == NormalizedTriviaKind::BlankLine;
+                    }
+                );
                 if (followsBlank)
                     append(triviaDoc);
                 else
-                    append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                                          builder.concat({builder.hardLine(), triviaDoc})));
+                    append(builder.indent(
+                        static_cast<int>(config.indentWidth.get()),
+                        builder.concat({builder.hardLine(), triviaDoc})
+                    ));
             }
             else
-                append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                                      builder.concat({builder.hardLine(), triviaDoc})));
+                append(builder.indent(
+                    static_cast<int>(config.indentWidth.get()),
+                    builder.concat({builder.hardLine(), triviaDoc})
+                ));
             append(builder.hardLine());
             lineStart = true;
         }
@@ -697,21 +735,23 @@ private:
             pendingRecoveredAssignmentBreak = false;
         }
         else if (beforeOperator) {
-            bool operatorHasLineComment = std::ranges::any_of(normalizedToken.trailing,
-                                                              [](const NormalizedTrivia& trivia) {
-                                                                  return trivia.lineComment;
-                                                              });
+            bool operatorHasLineComment =
+                std::ranges::any_of(normalizedToken.trailing, [](const NormalizedTrivia& trivia) {
+                    return trivia.lineComment;
+                });
             if (hardBreakCurrentBinary ||
                 (operatorHasLineComment &&
                  normalizedToken.parentKind == SyntaxKind::LogicalOrExpression)) {
                 auto line = builder.hardLine(1, true);
-                append(binaryContinuationIndent ? builder.indent(binaryContinuationIndent, line)
-                                                : line);
+                append(
+                    binaryContinuationIndent ? builder.indent(binaryContinuationIndent, line) : line
+                );
             }
             else {
                 auto line = builder.softLine(breakPriority(normalizedToken.parentKind));
-                append(binaryContinuationIndent ? builder.indent(binaryContinuationIndent, line)
-                                                : line);
+                append(
+                    binaryContinuationIndent ? builder.indent(binaryContinuationIndent, line) : line
+                );
             }
             spacingProvided = true;
         }
@@ -737,18 +777,20 @@ private:
                 append(builder.text(" "));
             }
             else if (lastWasMacro) {
-                if (!compact &&
-                    shouldInsertWhitespace(TokenKind::Identifier, token.kind, SyntaxKind::Unknown,
-                                           normalizedToken.parentKind, tokenInDataType)) {
+                if (!compact && shouldInsertWhitespace(
+                                    TokenKind::Identifier, token.kind, SyntaxKind::Unknown,
+                                    normalizedToken.parentKind, tokenInDataType
+                                )) {
                     append(builder.text(" "));
                 }
             }
             else if (lastToken &&
                      (tokenNeedsSeparation(lastToken->token, token) ||
                       (!compact &&
-                       shouldInsertWhitespace(lastToken->token.kind, token.kind,
-                                              lastToken->parentKind, normalizedToken.parentKind,
-                                              tokenInDataType) &&
+                       shouldInsertWhitespace(
+                           lastToken->token.kind, token.kind, lastToken->parentKind,
+                           normalizedToken.parentKind, tokenInDataType
+                       ) &&
                        !(noNameCallStyle && token.kind == TokenKind::OpenParenthesis &&
                          (normalizedToken.parentKind == SyntaxKind::HierarchicalInstance ||
                           lastToken->parentKind == SyntaxKind::HierarchyInstantiation))))) {
@@ -877,8 +919,10 @@ private:
             emitTrivia(trivia, true);
     }
 
-    void lowerChild(const NormalizedChild& child,
-                    SyntaxKind parentExpressionKind = SyntaxKind::Unknown) {
+    void lowerChild(
+        const NormalizedChild& child,
+        SyntaxKind parentExpressionKind = SyntaxKind::Unknown
+    ) {
         if (auto token = std::get_if<size_t>(&child.value)) {
             emitToken(*token);
         }
@@ -966,12 +1010,14 @@ private:
         if (auto token = std::get_if<size_t>(&child.value))
             return tokenHasComment(*token);
         if (auto node = childNode(child)) {
-            return std::ranges::any_of(node->children,
-                                       [&](const auto& nested) { return childHasComment(nested); });
+            return std::ranges::any_of(node->children, [&](const auto& nested) {
+                return childHasComment(nested);
+            });
         }
         const auto& list = **std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
-        return std::ranges::any_of(list.children,
-                                   [&](const auto& nested) { return childHasComment(nested); });
+        return std::ranges::any_of(list.children, [&](const auto& nested) {
+            return childHasComment(nested);
+        });
     }
 
     bool childHasForcingComment(const NormalizedChild& child) const {
@@ -1049,11 +1095,12 @@ private:
         auto token = findReal(findReal, child);
         if (!token)
             return false;
-        return std::ranges::any_of(normalized.tokens().at(*token).leading,
-                                   [](const NormalizedTrivia& trivia) {
-                                       return trivia.kind == NormalizedTriviaKind::Verbatim &&
-                                              trivia.placement == TriviaPlacement::Inline;
-                                   });
+        return std::ranges::any_of(
+            normalized.tokens().at(*token).leading, [](const NormalizedTrivia& trivia) {
+                return trivia.kind == NormalizedTriviaKind::Verbatim &&
+                       trivia.placement == TriviaPlacement::Inline;
+            }
+        );
     }
 
     bool childStartsWithMacroUsage(const NormalizedChild& child) const {
@@ -1085,10 +1132,11 @@ private:
         auto token = findReal(findReal, child);
         if (!token)
             return false;
-        return std::ranges::any_of(normalized.tokens().at(*token).leading,
-                                   [](const NormalizedTrivia& trivia) {
-                                       return trivia.kind == NormalizedTriviaKind::MacroUsage;
-                                   });
+        return std::ranges::any_of(
+            normalized.tokens().at(*token).leading, [](const NormalizedTrivia& trivia) {
+                return trivia.kind == NormalizedTriviaKind::MacroUsage;
+            }
+        );
     }
 
     bool childStartsWithInlineBlockComment(const NormalizedChild& child) const {
@@ -1148,8 +1196,10 @@ private:
         return false;
     }
 
-    void collectTokens(const NormalizedChild& child,
-                       std::vector<const NormalizedToken*>& result) const {
+    void collectTokens(
+        const NormalizedChild& child,
+        std::vector<const NormalizedToken*>& result
+    ) const {
         if (auto token = std::get_if<size_t>(&child.value)) {
             result.push_back(&normalized.tokens().at(*token));
             return;
@@ -1179,11 +1229,12 @@ private:
                 continue;
             }
             bool compact = depth > 0;
-            if (previous && (tokenNeedsSeparation(previous->token, token) ||
-                             (!compact && shouldInsertWhitespace(previous->token.kind, token.kind,
-                                                                 previous->parentKind,
-                                                                 normalizedToken->parentKind,
-                                                                 normalizedToken->inDataType)))) {
+            if (previous &&
+                (tokenNeedsSeparation(previous->token, token) ||
+                 (!compact && shouldInsertWhitespace(
+                                  previous->token.kind, token.kind, previous->parentKind,
+                                  normalizedToken->parentKind, normalizedToken->inDataType
+                              )))) {
                 width++;
             }
             width += token.rawText().size();
@@ -1266,11 +1317,11 @@ private:
             right = nested.right;
         }
         size_t threshold = config.columnLimit.get() ? config.columnLimit.get() * 4 / 5 : SIZE_MAX;
-        bool singleFitsValueColumn = !config.columnLimit.get() ||
-                                     formattedFlatWidth(*first.predicate) + 3 +
-                                             std::max(formattedFlatWidth(*first.left),
-                                                      formattedFlatWidth(*first.right)) <=
-                                         config.columnLimit.get() - config.indentWidth.get() * 2;
+        bool singleFitsValueColumn =
+            !config.columnLimit.get() ||
+            formattedFlatWidth(*first.predicate) + 3 +
+                    std::max(formattedFlatWidth(*first.left), formattedFlatWidth(*first.right)) <=
+                config.columnLimit.get() - config.indentWidth.get() * 2;
         return formattedFlatWidth(node) > threshold &&
                (first.left->kind == SyntaxKind::ConditionalExpression || segments > 1 ||
                 (formattedFlatWidth(*first.predicate) < config.columnLimit.get() * 3 / 5 &&
@@ -1295,8 +1346,11 @@ private:
         return std::nullopt;
     }
 
-    std::optional<size_t> firstTokenIndex(const NormalizedNode& node, size_t begin,
-                                          size_t end) const {
+    std::optional<size_t> firstTokenIndex(
+        const NormalizedNode& node,
+        size_t begin,
+        size_t end
+    ) const {
         for (size_t i = begin; i < end; i++) {
             if (auto result = firstTokenIndex(node.children[i]))
                 return result;
@@ -1392,7 +1446,8 @@ private:
             hardLine(1, true);
             lowerChild(node.children[first.question], node.kind);
             moveLeadingCommentsToCurrentLine(
-                firstTokenIndex(node, first.question + 1, first.colon));
+                firstTokenIndex(node, first.question + 1, first.colon)
+            );
             bool savedForceTernaryBranches = forceTernaryBranches;
             forceTernaryBranches = true;
             lowerChildren(node, first.question + 1, first.colon);
@@ -1400,7 +1455,8 @@ private:
             hardLine(1, true);
             lowerChild(node.children[first.colon], node.kind);
             moveLeadingCommentsToCurrentLine(
-                firstTokenIndex(node, first.colon + 1, node.children.size()));
+                firstTokenIndex(node, first.colon + 1, node.children.size())
+            );
             lowerChildren(node, first.colon + 1, node.children.size());
             auto branches = capture(branchesBegin);
             append(builder.indent(static_cast<int>(config.indentWidth.get()), branches));
@@ -1421,13 +1477,17 @@ private:
             GroupId group = builder.createConsistentGroup();
             size_t ternaryBegin = mark();
             lowerChildren(node, 0, first.question);
-            append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                                  builder.softLine(ternaryBreakPriority, " ", group)));
+            append(builder.indent(
+                static_cast<int>(config.indentWidth.get()),
+                builder.softLine(ternaryBreakPriority, " ", group)
+            ));
             spacingProvided = true;
             lowerChild(node.children[first.question], node.kind);
             lowerChildren(node, first.question + 1, first.colon);
-            append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                                  builder.softLine(ternaryBreakPriority, " ", group)));
+            append(builder.indent(
+                static_cast<int>(config.indentWidth.get()),
+                builder.softLine(ternaryBreakPriority, " ", group)
+            ));
             spacingProvided = true;
             lowerChild(node.children[first.colon], node.kind);
             lowerChildren(node, first.colon + 1, node.children.size());
@@ -1454,7 +1514,8 @@ private:
             spacingProvided = true;
             lowerChild(segment->children[segmentParts.question], segment->kind);
             moveLeadingCommentsToCurrentLine(
-                firstTokenIndex(*segment, segmentParts.question + 1, segmentParts.colon));
+                firstTokenIndex(*segment, segmentParts.question + 1, segmentParts.colon)
+            );
             size_t valueBegin = mark();
             bool savedTableValue = inTernaryTableValue;
             inTernaryTableValue = true;
@@ -1469,11 +1530,13 @@ private:
             if (segmentIndex + 1 < segments.size()) {
                 const auto& [nextSegment, nextParts] = segments[segmentIndex + 1];
                 moveLeadingCommentsToCurrentLine(
-                    firstTokenIndex(*nextSegment, 0, nextParts.question));
+                    firstTokenIndex(*nextSegment, 0, nextParts.question)
+                );
             }
             else {
                 moveLeadingCommentsToCurrentLine(
-                    firstTokenIndex(*segment, segmentParts.colon + 1, segment->children.size()));
+                    firstTokenIndex(*segment, segmentParts.colon + 1, segment->children.size())
+                );
             }
             hardLine(1, true);
         }
@@ -1660,8 +1723,9 @@ private:
             });
         }
         const auto& list = **std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
-        return std::ranges::any_of(list.children,
-                                   [&](const auto& nested) { return childContainsMacro(nested); });
+        return std::ranges::any_of(list.children, [&](const auto& nested) {
+            return childContainsMacro(nested);
+        });
     }
 
     bool childHasMacroPlaceholder(const NormalizedChild& child) const {
@@ -1758,8 +1822,9 @@ private:
             });
         }
         const auto& list = **std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
-        return std::ranges::any_of(list.children,
-                                   [&](const auto& nested) { return childHasSemicolon(nested); });
+        return std::ranges::any_of(list.children, [&](const auto& nested) {
+            return childHasSemicolon(nested);
+        });
     }
 
     void lowerIndentedChild(const NormalizedChild& child) {
@@ -1770,8 +1835,10 @@ private:
         size_t begin = mark();
         lowerChild(child);
         auto contents = capture(begin);
-        append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                              builder.concat({builder.hardLine(), contents})));
+        append(builder.indent(
+            static_cast<int>(config.indentWidth.get()),
+            builder.concat({builder.hardLine(), contents})
+        ));
         lineStart = false;
     }
 
@@ -1905,8 +1972,9 @@ private:
                 lowerChild(node.children[i]);
             }
         auto body = capture(bodyBegin);
-        append(builder.indent(static_cast<int>(config.indentWidth.get()),
-                              builder.concat({builder.hardLine(), body})));
+        append(builder.indent(
+            static_cast<int>(config.indentWidth.get()), builder.concat({builder.hardLine(), body})
+        ));
         hardLine();
         for (size_t i = declarationEnd; i < node.children.size(); i++)
             lowerChild(node.children[i]);
@@ -1953,8 +2021,8 @@ private:
                             return trivia.lineComment;
                         })) {
                         trailingCommentAnchor = mark();
-                        trailingCommentAnchorOffset = static_cast<int>(
-                            token.token.rawText().size() + 2);
+                        trailingCommentAnchorOffset =
+                            static_cast<int>(token.token.rawText().size() + 2);
                     }
                 }
                 bool savedEmittingAssignmentOperator = emittingAssignmentOperator;
@@ -2060,8 +2128,8 @@ private:
                 auto parts = ternaryParts(*rhsNode);
                 bool questionHasComment = false;
                 if (parts.question < rhsNode->children.size()) {
-                    if (auto questionToken = std::get_if<size_t>(
-                            &rhsNode->children[parts.question].value)) {
+                    if (auto questionToken =
+                            std::get_if<size_t>(&rhsNode->children[parts.question].value)) {
                         questionHasComment = tokenHasComment(*questionToken);
                     }
                 }
@@ -2114,7 +2182,8 @@ private:
             if (parameterAssignment && rhsNode &&
                 rhsNode->kind == SyntaxKind::MultipleConcatenationExpression) {
                 rhs = builder.relativeAnchor(
-                    0, rhs, config.indentWidth.get() + maxMulticoncatItemWidth(*rhsNode));
+                    0, rhs, config.indentWidth.get() + maxMulticoncatItemWidth(*rhsNode)
+                );
             }
             if (!rhsNode || !isListHandledExpression(rhsNode->kind)) {
                 rhs = builder.indent(static_cast<int>(config.indentWidth.get()), rhs);
@@ -2210,13 +2279,15 @@ private:
                 parameterWidth = std::max(parameterWidth, formattedFlatWidth(*nested));
                 parameterHasComment = parameterHasComment || childHasForcingComment(child);
                 for (const auto& parameterChild : nested->children) {
-                    if (auto parameterList = std::get_if<std::unique_ptr<NormalizedList>>(
-                            &parameterChild.value)) {
+                    if (auto parameterList =
+                            std::get_if<std::unique_ptr<NormalizedList>>(&parameterChild.value)) {
                         parameterCount += std::ranges::count_if(
                             (*parameterList)->children, [](const NormalizedChild& item) {
                                 return std::holds_alternative<std::unique_ptr<NormalizedNode>>(
-                                    item.value);
-                            });
+                                    item.value
+                                );
+                            }
+                        );
                     }
                 }
             }
@@ -2236,11 +2307,11 @@ private:
                     for (const auto& instanceChild : instanceNode->children) {
                         if (auto name = childNode(instanceChild);
                             name && name->kind == SyntaxKind::InstanceName) {
-                            maxInstanceNameWidth = std::max(maxInstanceNameWidth,
-                                                            formattedFlatWidth(*name));
+                            maxInstanceNameWidth =
+                                std::max(maxInstanceNameWidth, formattedFlatWidth(*name));
                         }
-                        auto connections = std::get_if<std::unique_ptr<NormalizedList>>(
-                            &instanceChild.value);
+                        auto connections =
+                            std::get_if<std::unique_ptr<NormalizedList>>(&instanceChild.value);
                         if (!connections)
                             continue;
                         size_t count = listItemCount(**connections);
@@ -2538,15 +2609,15 @@ private:
         bool dedentAfterAssignmentConditional = false;
         bool previousItemSkipped = false;
         while (i < list.children.size()) {
-            size_t finalConditionalDepth = conditionalDepthAfter(list.children[i],
-                                                                 conditionalDepth);
+            size_t finalConditionalDepth =
+                conditionalDepthAfter(list.children[i], conditionalDepth);
             if (i + 1 < list.children.size() &&
                 std::holds_alternative<size_t>(list.children[i + 1].value)) {
                 auto separator =
                     normalized.tokens().at(std::get<size_t>(list.children[i + 1].value)).token;
                 if (separator && separator.kind == TokenKind::Comma) {
-                    finalConditionalDepth = conditionalDepthAfter(list.children[i + 1],
-                                                                  finalConditionalDepth);
+                    finalConditionalDepth =
+                        conditionalDepthAfter(list.children[i + 1], finalConditionalDepth);
                 }
             }
             bool closesAssignmentConditional = finalConditionalDepth < conditionalDepth &&
@@ -2646,11 +2717,12 @@ private:
             int itemIndent = 0;
             if (!rootList) {
                 if (separated)
-                    itemIndent = static_cast<int>(std::max<size_t>(relativeConditionalDepth, 1) *
-                                                  config.indentWidth.get());
+                    itemIndent = static_cast<int>(
+                        std::max<size_t>(relativeConditionalDepth, 1) * config.indentWidth.get()
+                    );
                 else
-                    itemIndent = static_cast<int>((relativeConditionalDepth + 1) *
-                                                  config.indentWidth.get());
+                    itemIndent =
+                        static_cast<int>((relativeConditionalDepth + 1) * config.indentWidth.get());
             }
             else {
                 itemIndent = static_cast<int>(relativeConditionalDepth * config.indentWidth.get());
@@ -2722,10 +2794,10 @@ private:
         bool hasComment = std::ranges::any_of(list.children, [&](const NormalizedChild& child) {
             return childHasForcingComment(child);
         });
-        bool hasEscapedIdentifier = std::ranges::any_of(list.children,
-                                                        [&](const NormalizedChild& child) {
-                                                            return childHasEscapedIdentifier(child);
-                                                        });
+        bool hasEscapedIdentifier =
+            std::ranges::any_of(list.children, [&](const NormalizedChild& child) {
+                return childHasEscapedIdentifier(child);
+            });
         bool hasMacro = std::ranges::any_of(list.children, [&](const NormalizedChild& child) {
             return childContainsMacro(child);
         });
@@ -2783,7 +2855,8 @@ private:
                         normalized.tokens().at(*tokenIndex).trailing,
                         [](const NormalizedTrivia& trivia) {
                             return trivia.kind == NormalizedTriviaKind::MacroUsage;
-                        });
+                        }
+                    );
                     previousSeparatorCarriedMacro = carriesFollowingMacro;
                     if (!carriesFollowingMacro) {
                         if (forceVertical)
@@ -2803,9 +2876,10 @@ private:
         if (hasComment && list.parentKind == SyntaxKind::HierarchicalInstance)
             listIndent += 2;
         auto indented = builder.indent(listIndent, contents);
-        append(
-            builder.concat({indented, forceVertical ? builder.hardLine(1, true)
-                                                    : builder.softLine(listPriority, "", group)}));
+        append(builder.concat(
+            {indented,
+             forceVertical ? builder.hardLine(1, true) : builder.softLine(listPriority, "", group)}
+        ));
     }
 
     void lowerList(const NormalizedList& list) {
@@ -2837,7 +2911,8 @@ private:
                         normalized.tokens().at(*token).leading, [](const NormalizedTrivia& trivia) {
                             return trivia.kind == NormalizedTriviaKind::Comment &&
                                    trivia.placement == TriviaPlacement::Standalone;
-                        });
+                        }
+                    );
                 }
             }
             if (!hasComment || !startsWithStandaloneComment) {
@@ -2934,15 +3009,15 @@ private:
         if (commentedPatternConditional)
             forceTernaryBranches = true;
         if (node.kind == SyntaxKind::VariableDimension) {
-            bool containsMacro = std::ranges::any_of(node.children,
-                                                     [&](const NormalizedChild& child) {
-                                                         return childContainsMacro(child);
-                                                     });
-            macroVariableDimension = !hasMacroDefinitions &&
-                                     std::ranges::any_of(node.children,
-                                                         [&](const NormalizedChild& child) {
-                                                             return childHasMacroPlaceholder(child);
-                                                         });
+            bool containsMacro =
+                std::ranges::any_of(node.children, [&](const NormalizedChild& child) {
+                    return childContainsMacro(child);
+                });
+            macroVariableDimension =
+                !hasMacroDefinitions &&
+                std::ranges::any_of(node.children, [&](const NormalizedChild& child) {
+                    return childHasMacroPlaceholder(child);
+                });
             spaceBeforeMacroVariableDimension = containsMacro && !macroVariableDimension;
             size_t macroCount = 0;
             for (const auto& child : node.children)
@@ -3234,8 +3309,10 @@ private:
 
 } // namespace
 
-FormatDocument buildLayoutDocument(const NormalizedFormatDocument& normalized,
-                                   const Config& config) {
+FormatDocument buildLayoutDocument(
+    const NormalizedFormatDocument& normalized,
+    const Config& config
+) {
     return Lowerer(normalized, config).build();
 }
 

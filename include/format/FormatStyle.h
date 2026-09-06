@@ -36,9 +36,11 @@ bool isNonstandardAttributeListSyntax(slang::syntax::SyntaxKind parentKind);
 /// The parent SyntaxKind of each token provides context for ambiguous tokens
 /// like colons (ternary vs bit-select vs case label).
 bool shouldInsertWhitespace(
-    slang::parsing::TokenKind left, slang::parsing::TokenKind right,
+    slang::parsing::TokenKind left,
+    slang::parsing::TokenKind right,
     slang::syntax::SyntaxKind leftParent = slang::syntax::SyntaxKind::Unknown,
     slang::syntax::SyntaxKind rightParent = slang::syntax::SyntaxKind::Unknown,
-    bool rightInDataType = false);
+    bool rightInDataType = false
+);
 
 } // namespace format

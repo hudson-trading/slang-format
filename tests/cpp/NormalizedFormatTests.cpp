@@ -23,8 +23,11 @@ std::shared_ptr<SyntaxTree> parse(std::string_view text) {
     return SyntaxTree::fromText(text, sourceManager, "normalized_test", "", options);
 }
 
-const format::NormalizedTrivia* findTrivia(const format::NormalizedFormatDocument& document,
-                                           std::string_view text, bool trailing) {
+const format::NormalizedTrivia* findTrivia(
+    const format::NormalizedFormatDocument& document,
+    std::string_view text,
+    bool trailing
+) {
     for (const auto& token : document.tokens()) {
         const auto& trivia = trailing ? token.trailing : token.leading;
         auto it = std::ranges::find_if(trivia, [&](const auto& item) {
@@ -52,8 +55,8 @@ bool hasVerbatimNode(const format::NormalizedNode& node, std::string_view text) 
         }
         else if (auto list = std::get_if<std::unique_ptr<format::NormalizedList>>(&child.value)) {
             for (const auto& item : (*list)->children) {
-                if (auto nested = std::get_if<std::unique_ptr<format::NormalizedNode>>(
-                        &item.value)) {
+                if (auto nested =
+                        std::get_if<std::unique_ptr<format::NormalizedNode>>(&item.value)) {
                     if (hasVerbatimNode(**nested, text))
                         return true;
                 }
@@ -110,8 +113,8 @@ endmodule
 
     const format::NormalizedConditional* nested = nullptr;
     for (const auto& content : outer.branches[1].contents) {
-        if (auto conditional = std::get_if<std::unique_ptr<format::NormalizedConditional>>(
-                &content)) {
+        if (auto conditional =
+                std::get_if<std::unique_ptr<format::NormalizedConditional>>(&content)) {
             nested = conditional->get();
             break;
         }
@@ -255,11 +258,11 @@ endclass
             if (auto nested = std::get_if<std::unique_ptr<format::NormalizedNode>>(&child.value)) {
                 self(self, **nested);
             }
-            else if (auto list = std::get_if<std::unique_ptr<format::NormalizedList>>(
-                         &child.value)) {
+            else if (auto list =
+                         std::get_if<std::unique_ptr<format::NormalizedList>>(&child.value)) {
                 for (const auto& item : (*list)->children) {
-                    if (auto nested = std::get_if<std::unique_ptr<format::NormalizedNode>>(
-                            &item.value)) {
+                    if (auto nested =
+                            std::get_if<std::unique_ptr<format::NormalizedNode>>(&item.value)) {
                         self(self, **nested);
                     }
                 }

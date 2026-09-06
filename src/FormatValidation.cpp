@@ -34,8 +34,12 @@ struct PipelineRender {
     std::string layoutText;
 };
 
-PipelineRender runPipeline(const SyntaxNode& root, const Config& config, FormatStage stage,
-                           SourceManager& sourceManager) {
+PipelineRender runPipeline(
+    const SyntaxNode& root,
+    const Config& config,
+    FormatStage stage,
+    SourceManager& sourceManager
+) {
     // Both public stages start from the same normalized syntax. The aligned
     // formatter internally consumes the layout document and its selected
     // breaks; it does not reparse layout text as a formatting input.
@@ -70,23 +74,29 @@ std::string describeTextDiff(std::string_view a, std::string_view b) {
             return fmt::format(
                 "first difference at line {}:\n    pass 1: '{}'\n    pass 2: '{}'", lineNum,
                 lineA.size() > 120 ? fmt::format("{}...", lineA.substr(0, 120)) : lineA,
-                lineB.size() > 120 ? fmt::format("{}...", lineB.substr(0, 120)) : lineB);
+                lineB.size() > 120 ? fmt::format("{}...", lineB.substr(0, 120)) : lineB
+            );
         }
         posA = endA + 1;
         posB = endB + 1;
         lineNum++;
     }
     if (posA < a.size())
-        return fmt::format("pass 2 is shorter: pass 1 has extra content starting at line {}",
-                           lineNum);
+        return fmt::format(
+            "pass 2 is shorter: pass 1 has extra content starting at line {}", lineNum
+        );
     if (posB < b.size())
         return fmt::format("pass 2 is longer: extra content starting at line {}", lineNum);
     return "";
 }
 
 /// Primary formatting method; Performs extra validation
-FormatResult format(std::string_view filename, std::string_view input, const format::Config& config,
-                    FormatStage stage) {
+FormatResult format(
+    std::string_view filename,
+    std::string_view input,
+    const format::Config& config,
+    FormatStage stage
+) {
 
     FormatResult result = {};
 
@@ -162,7 +172,8 @@ FormatResult format(std::string_view filename, std::string_view input, const for
             auto line = sm.getLineNumber(tok.location());
             auto col = sm.getColumnNumber(tok.location());
             result.unmatchedDelims.push_back(
-                fmt::format("{}:{}:{}: unmatched '{}'", loc, line, col, tok.rawText()));
+                fmt::format("{}:{}:{}: unmatched '{}'", loc, line, col, tok.rawText())
+            );
         }
     }
 
@@ -175,9 +186,9 @@ FormatResult format(std::string_view filename, std::string_view input, const for
         // the caller requested alignment. Validate the boundary itself so an
         // alignment reparse cannot hide a layout-stage token/trivia bug.
         if (stage == FormatStage::Aligned) {
-            auto layoutTree = SyntaxTree::fromFileInMemory(rendered.layoutText, sm,
-                                                           fmt::format("{} (layout)", filename), "",
-                                                           optionsBag);
+            auto layoutTree = SyntaxTree::fromFileInMemory(
+                rendered.layoutText, sm, fmt::format("{} (layout)", filename), "", optionsBag
+            );
             if (!layoutTree) {
                 result.failedReparse = true;
                 return result;
@@ -191,8 +202,8 @@ FormatResult format(std::string_view filename, std::string_view input, const for
         }
 
         // Validate CST by reparsing the formatted output
-        auto newTree = SyntaxTree::fromFileInMemory(result.formatted, sm, "formatted source", "",
-                                                    optionsBag);
+        auto newTree =
+            SyntaxTree::fromFileInMemory(result.formatted, sm, "formatted source", "", optionsBag);
         if (!newTree) {
             result.failedReparse = true;
         }

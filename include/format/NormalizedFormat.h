@@ -80,9 +80,12 @@ struct NormalizedChild {
         std::variant<size_t, std::unique_ptr<NormalizedNode>, std::unique_ptr<NormalizedList>>;
     Value value;
 
-    explicit NormalizedChild(size_t tokenIndex) : value(tokenIndex) {}
-    explicit NormalizedChild(std::unique_ptr<NormalizedNode> node) : value(std::move(node)) {}
-    explicit NormalizedChild(std::unique_ptr<NormalizedList> list) : value(std::move(list)) {}
+    explicit NormalizedChild(size_t tokenIndex)
+        : value(tokenIndex) {}
+    explicit NormalizedChild(std::unique_ptr<NormalizedNode> node)
+        : value(std::move(node)) {}
+    explicit NormalizedChild(std::unique_ptr<NormalizedList> list)
+        : value(std::move(list)) {}
 
     NormalizedChild(NormalizedChild&&) noexcept = default;
     NormalizedChild& operator=(NormalizedChild&&) noexcept = default;
@@ -121,8 +124,10 @@ struct NormalizedConditional {
 
 class NormalizedFormatDocument {
 public:
-    static NormalizedFormatDocument build(const slang::syntax::SyntaxNode& root,
-                                          const slang::SourceManager* sourceManager);
+    static NormalizedFormatDocument build(
+        const slang::syntax::SyntaxNode& root,
+        const slang::SourceManager* sourceManager
+    );
 
     NormalizedFormatDocument(NormalizedFormatDocument&&) noexcept = default;
     NormalizedFormatDocument& operator=(NormalizedFormatDocument&&) noexcept = default;

@@ -204,8 +204,9 @@ int recoveredConditionalDepthChange(std::string_view text) {
 
 class NormalizedDocumentBuilder {
 public:
-    NormalizedDocumentBuilder(const SyntaxNode& root, const SourceManager* sourceManager) :
-        root(root), sourceManager(sourceManager) {}
+    NormalizedDocumentBuilder(const SyntaxNode& root, const SourceManager* sourceManager)
+        : root(root),
+          sourceManager(sourceManager) {}
 
     NormalizedFormatDocument build() {
         NormalizedFormatDocument result;
@@ -216,8 +217,8 @@ public:
         if (sourceManager) {
             auto location = root.getFirstToken().location();
             if (location)
-                foreignTemplate = hasForeignTemplateDirective(
-                    sourceManager->getSourceText(location.buffer()));
+                foreignTemplate =
+                    hasForeignTemplateDirective(sourceManager->getSourceText(location.buffer()));
         }
         if (foreignTemplate) {
             result.root_->verbatim = true;
@@ -298,8 +299,9 @@ private:
                 if (hasRecovery) {
                     for (size_t i = 0; i < prefixEnd; i++)
                         node.leading.push_back(std::move(leading[i]));
-                    leading.erase(leading.begin(),
-                                  leading.begin() + static_cast<ptrdiff_t>(prefixEnd));
+                    leading.erase(
+                        leading.begin(), leading.begin() + static_cast<ptrdiff_t>(prefixEnd)
+                    );
                 }
             }
         }
@@ -378,8 +380,11 @@ private:
         }
     }
 
-    std::unique_ptr<NormalizedNode> buildNode(const SyntaxNode& syntax, size_t depth,
-                                              bool inDataType) {
+    std::unique_ptr<NormalizedNode> buildNode(
+        const SyntaxNode& syntax,
+        size_t depth,
+        bool inDataType
+    ) {
         auto result = std::make_unique<NormalizedNode>();
         result->kind = syntax.kind;
         result->syntax = &syntax;
@@ -423,8 +428,12 @@ private:
         return result;
     }
 
-    NormalizedChild buildChild(const SyntaxNode& parent, size_t index, size_t depth,
-                               bool inDataType) {
+    NormalizedChild buildChild(
+        const SyntaxNode& parent,
+        size_t index,
+        size_t depth,
+        bool inDataType
+    ) {
         if (auto child = parent.childNode(index))
             return NormalizedChild(buildNode(*child, depth, inDataType));
 
@@ -494,33 +503,40 @@ private:
         if (!token.preservesBlankBefore && !token.followsPreservedList)
             return;
         if (lineBreaks > 1) {
-            NormalizedTrivia blank{NormalizedTriviaKind::BlankLine, TriviaPlacement::Standalone, "",
-                                   nullptr, false};
+            NormalizedTrivia blank{
+                NormalizedTriviaKind::BlankLine, TriviaPlacement::Standalone, "", nullptr, false
+            };
             blank.lineBreakCount = lineBreaks;
             token.leading.push_back(std::move(blank));
         }
     }
 
-    bool classifyDirectiveSubTrivia(const SyntaxNode& syntax, NormalizedToken& current,
-                                    size_t& lineBreaks, NormalizedToken* previous,
-                                    const std::optional<TriviaOwner>& previousMacro,
-                                    std::vector<NormalizedTrivia>* previousDirectiveOwner,
-                                    size_t previousDirectiveIndex,
-                                    const SyntaxNode* previousDirectiveSyntax,
-                                    bool disabledTextAlreadyCaptured) {
+    bool classifyDirectiveSubTrivia(
+        const SyntaxNode& syntax,
+        NormalizedToken& current,
+        size_t& lineBreaks,
+        NormalizedToken* previous,
+        const std::optional<TriviaOwner>& previousMacro,
+        std::vector<NormalizedTrivia>* previousDirectiveOwner,
+        size_t previousDirectiveIndex,
+        const SyntaxNode* previousDirectiveSyntax,
+        bool disabledTextAlreadyCaptured
+    ) {
         auto triviaView = syntax.getFirstToken().trivia();
         bool hadLineBreak = false;
         std::string pendingDisabledText;
         auto flushDisabledText = [&] {
             if (pendingDisabledText.empty())
                 return;
-            bool hasContent = std::ranges::any_of(pendingDisabledText,
-                                                  [](char c) { return !isWhitespace(c); });
+            bool hasContent = std::ranges::any_of(pendingDisabledText, [](char c) {
+                return !isWhitespace(c);
+            });
             if (hasContent) {
                 if (!disabledTextAlreadyCaptured) {
-                    current.leading.push_back({NormalizedTriviaKind::ConditionalBranch,
-                                               TriviaPlacement::Standalone,
-                                               std::move(pendingDisabledText), nullptr, false});
+                    current.leading.push_back(
+                        {NormalizedTriviaKind::ConditionalBranch, TriviaPlacement::Standalone,
+                         std::move(pendingDisabledText), nullptr, false}
+                    );
                 }
                 lineBreaks = 0;
             }
@@ -546,9 +562,10 @@ private:
             if (!isCommentTrivia(trivia))
                 continue;
 
-            NormalizedTrivia item{NormalizedTriviaKind::Comment, TriviaPlacement::Standalone,
-                                  std::string(trivia.getRawText()), nullptr,
-                                  isLineCommentTrivia(trivia)};
+            NormalizedTrivia item{
+                NormalizedTriviaKind::Comment, TriviaPlacement::Standalone,
+                std::string(trivia.getRawText()), nullptr, isLineCommentTrivia(trivia)
+            };
             item.preserveSingleSpace = true;
             bool trailsPreviousDirective = false;
             if (lineBreaks == 0 && sourceManager && previousDirectiveOwner &&
@@ -625,8 +642,8 @@ private:
                         macro.joinsFollowingToken = true;
                         previousMacro->token->trailing.push_back(
                             {NormalizedTriviaKind::Comment, TriviaPlacement::Trailing,
-                             std::string(trivia.getRawText()), nullptr,
-                             isLineCommentTrivia(trivia)});
+                             std::string(trivia.getRawText()), nullptr, isLineCommentTrivia(trivia)}
+                        );
                         lastDirectiveOwner = nullptr;
                         continue;
                     }
@@ -637,10 +654,10 @@ private:
                         lastDirectiveOwner = nullptr;
                         continue;
                     }
-                    NormalizedTrivia item{NormalizedTriviaKind::Comment,
-                                          TriviaPlacement::Standalone,
-                                          std::string(trivia.getRawText()), nullptr,
-                                          isLineCommentTrivia(trivia)};
+                    NormalizedTrivia item{
+                        NormalizedTriviaKind::Comment, TriviaPlacement::Standalone,
+                        std::string(trivia.getRawText()), nullptr, isLineCommentTrivia(trivia)
+                    };
                     bool endsLine = item.lineComment;
                     for (size_t i = triviaIndex + 1; i < triviaView.size(); i++) {
                         if (triviaView[i].kind == TriviaKind::EndOfLine) {
@@ -658,7 +675,8 @@ private:
                     if (lineBreaks == 0 && previous && !prefixBlockComment) {
                         bool blockBeforeBinary = !item.lineComment &&
                                                  SyntaxFacts::getBinaryExpression(
-                                                     current.token.kind) != SyntaxKind::Unknown;
+                                                     current.token.kind
+                                                 ) != SyntaxKind::Unknown;
                         item.placement = endsLine && !inlineBeforeElse && !blockBeforeBinary
                                              ? TriviaPlacement::Trailing
                                              : TriviaPlacement::Inline;
@@ -695,7 +713,8 @@ private:
                     bool hadLineBreak = classifyDirectiveSubTrivia(
                         syntax, current, lineBreaks, previous, previousMacro,
                         previousDirectiveOwner, previousDirectiveIndex, previousDirectiveSyntax,
-                        absorbedConditionalSuffix);
+                        absorbedConditionalSuffix
+                    );
                     if (absorbedConditionalSuffix)
                         lineBreaks = 0;
                     size_t directiveLineBreaks = lineBreaks;
@@ -711,16 +730,18 @@ private:
                         std::ranges::none_of(current.leading, [](const NormalizedTrivia& item) {
                             return item.kind == NormalizedTriviaKind::BlankLine;
                         })) {
-                        current.leading.push_back({NormalizedTriviaKind::BlankLine,
-                                                   TriviaPlacement::Standalone, "", nullptr,
-                                                   false});
+                        current.leading.push_back(
+                            {NormalizedTriviaKind::BlankLine, TriviaPlacement::Standalone, "",
+                             nullptr, false}
+                        );
                     }
 
                     TriviaPlacement placement = !hadLineBreak && lineBreaks == 0 && previous
                                                     ? TriviaPlacement::Inline
                                                     : TriviaPlacement::Standalone;
-                    NormalizedTrivia item{kind, placement, syntaxText(syntax, sourceManager),
-                                          &syntax, false};
+                    NormalizedTrivia item{
+                        kind, placement, syntaxText(syntax, sourceManager), &syntax, false
+                    };
                     if (kind == NormalizedTriviaKind::MacroUsage &&
                         placement == TriviaPlacement::Standalone) {
                         size_t content = 0;
@@ -770,9 +791,11 @@ private:
                                 disabled.erase(0, lineEnd);
                             }
                             if (!disabled.empty()) {
-                                current.leading.push_back({NormalizedTriviaKind::ConditionalBranch,
-                                                           TriviaPlacement::Standalone,
-                                                           std::move(disabled), nullptr, false});
+                                current.leading.push_back(
+                                    {NormalizedTriviaKind::ConditionalBranch,
+                                     TriviaPlacement::Standalone, std::move(disabled), nullptr,
+                                     false}
+                                );
                             }
                         }
                     }
@@ -797,10 +820,10 @@ private:
                             bool trailingComment = firstLine.starts_with("//") ||
                                                    firstLine.starts_with("/*");
                             if (lineEnd != std::string::npos && trailingComment) {
-                                NormalizedTrivia prefix{NormalizedTriviaKind::Verbatim,
-                                                        TriviaPlacement::Inline,
-                                                        std::string(text).substr(0, lineEnd),
-                                                        nullptr, false};
+                                NormalizedTrivia prefix{
+                                    NormalizedTriviaKind::Verbatim, TriviaPlacement::Inline,
+                                    std::string(text).substr(0, lineEnd), nullptr, false
+                                };
                                 prefix.endsLine = true;
                                 previous->trailing.push_back(std::move(prefix));
 
@@ -869,13 +892,14 @@ private:
                         bool recoveredMemberAfterEnd =
                             previous && previous->token.kind == TokenKind::EndFunctionKeyword &&
                             current.parentKind == SyntaxKind::ClassMethodDeclaration;
-                        NormalizedTrivia item{NormalizedTriviaKind::Verbatim,
-                                              !recoveredMemberAfterEnd &&
-                                                      (lineBreaks == 0 || recoveredContinuation) &&
-                                                      !multiline
-                                                  ? TriviaPlacement::Inline
-                                                  : TriviaPlacement::Standalone,
-                                              std::move(text), nullptr, false};
+                        NormalizedTrivia item{
+                            NormalizedTriviaKind::Verbatim,
+                            !recoveredMemberAfterEnd &&
+                                    (lineBreaks == 0 || recoveredContinuation) && !multiline
+                                ? TriviaPlacement::Inline
+                                : TriviaPlacement::Standalone,
+                            std::move(text), nullptr, false
+                        };
                         item.endsLine = followedByLineBreak;
                         item.conditionalDepthChange = recoveredConditionalDepthChange(item.text);
                         size_t boundary = triviaIndex + 1;
@@ -896,7 +920,8 @@ private:
                     current.leading.push_back(
                         {NormalizedTriviaKind::Verbatim,
                          lineBreaks == 0 ? TriviaPlacement::Inline : TriviaPlacement::Standalone,
-                         std::move(text), nullptr, false});
+                         std::move(text), nullptr, false}
+                    );
                     lineBreaks = 0;
                 }
             }
@@ -930,7 +955,8 @@ private:
                             while (!text.empty() && isTabOrSpace(text.front()))
                                 text.remove_prefix(1);
                             return text.starts_with(',') || text.find('=') != std::string::npos;
-                        });
+                        }
+                    );
                     if (ownsRecoveredContinuation)
                         trivia.joinsFollowingToken = true;
                     if (leading && tokens[tokenIndex].token &&
@@ -952,8 +978,9 @@ private:
                                 restOfLine = restOfLine.substr(0, lineEnd);
                             trivia.joinsFollowingToken =
                                 trivia.joinsFollowingToken ||
-                                std::ranges::any_of(restOfLine,
-                                                    [](char c) { return !isTabOrSpace(c); });
+                                std::ranges::any_of(restOfLine, [](char c) {
+                                    return !isTabOrSpace(c);
+                                });
                         }
                     }
                     if (trivia.joinsFollowingToken)
@@ -1017,8 +1044,8 @@ private:
                     size_t previousEnd = previousStart.offset() + previous->token.rawText().size();
                     if (previousEnd <= currentStart.offset()) {
                         auto source = sourceManager->getSourceText(currentStart.buffer());
-                        auto between = source.substr(previousEnd,
-                                                     currentStart.offset() - previousEnd);
+                        auto between =
+                            source.substr(previousEnd, currentStart.offset() - previousEnd);
                         current.lineBreakBefore = between.find_first_of("\r\n") !=
                                                   std::string_view::npos;
                     }
@@ -1067,8 +1094,10 @@ private:
     std::vector<std::unique_ptr<NormalizedConditional>> conditionals;
 };
 
-NormalizedFormatDocument NormalizedFormatDocument::build(const SyntaxNode& root,
-                                                         const SourceManager* sourceManager) {
+NormalizedFormatDocument NormalizedFormatDocument::build(
+    const SyntaxNode& root,
+    const SourceManager* sourceManager
+) {
     return NormalizedDocumentBuilder(root, sourceManager).build();
 }
 

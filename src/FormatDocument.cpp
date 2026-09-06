@@ -65,51 +65,65 @@ struct FlattenContext {
     int conditionalIndent = 0;
 };
 
-void flatten(const FormatDocument& document, DocId id, FlattenContext context,
-             std::vector<FlatAtom>& result) {
+void flatten(
+    const FormatDocument& document,
+    DocId id,
+    FlattenContext context,
+    std::vector<FlatAtom>& result
+) {
     const auto& node = document.nodes.at(id);
     switch (node.kind) {
         case DocKind::Empty:
             break;
         case DocKind::Text:
-            result.push_back({FlatAtom::Kind::Text, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
-                              node.syntaxKind, context.member});
+            result.push_back(
+                {FlatAtom::Kind::Text, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
+                 node.syntaxKind, context.member}
+            );
             break;
         case DocKind::Verbatim:
-            result.push_back({FlatAtom::Kind::Verbatim, node.text, 0, 0, 0, 1, context.indent, 0, 0,
-                              0, node.syntaxKind, context.member});
+            result.push_back(
+                {FlatAtom::Kind::Verbatim, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
+                 node.syntaxKind, context.member}
+            );
             break;
         case DocKind::MemberVerbatim:
-            result.push_back({FlatAtom::Kind::MemberVerbatim, node.text, 0, 0, 0, 1,
-                              context.memberIndent + node.value, 0, 0, 0, node.syntaxKind,
-                              context.member});
+            result.push_back(
+                {FlatAtom::Kind::MemberVerbatim, node.text, 0, 0, 0, 1,
+                 context.memberIndent + node.value, 0, 0, 0, node.syntaxKind, context.member}
+            );
             break;
         case DocKind::AbsoluteText:
-            result.push_back({FlatAtom::Kind::AbsoluteText, node.text, 0, 0, 0, 1, context.indent,
-                              0, 0, 0, node.syntaxKind, context.member});
+            result.push_back(
+                {FlatAtom::Kind::AbsoluteText, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
+                 node.syntaxKind, context.member}
+            );
             break;
         case DocKind::SoftLine:
-            result.push_back({FlatAtom::Kind::SoftLine, node.text, node.id,
-                              node.group ? node.group : context.group, node.value, 1,
-                              context.indent, 0, 0, 0, node.syntaxKind,
-                              node.global ? 0 : context.member});
+            result.push_back(
+                {FlatAtom::Kind::SoftLine, node.text, node.id,
+                 node.group ? node.group : context.group, node.value, 1, context.indent, 0, 0, 0,
+                 node.syntaxKind, node.global ? 0 : context.member}
+            );
             result.back().anchorIndent = context.anchorIndent;
             result.back().conditionalIndentBreak = context.conditionalIndentBreak;
             result.back().conditionalIndent = context.conditionalIndent;
             break;
         case DocKind::HardLine:
-            result.push_back({FlatAtom::Kind::HardLine,
-                              {},
-                              0,
-                              context.group,
-                              0,
-                              node.value,
-                              context.indent,
-                              0,
-                              0,
-                              0,
-                              node.syntaxKind,
-                              context.member});
+            result.push_back(
+                {FlatAtom::Kind::HardLine,
+                 {},
+                 0,
+                 context.group,
+                 0,
+                 node.value,
+                 context.indent,
+                 0,
+                 0,
+                 0,
+                 node.syntaxKind,
+                 context.member}
+            );
             result.back().anchorIndent = node.id ? context.anchorIndent : -1;
             result.back().conditionalIndentBreak = context.conditionalIndentBreak;
             result.back().conditionalIndent = context.conditionalIndent;
@@ -131,52 +145,58 @@ void flatten(const FormatDocument& document, DocId id, FlattenContext context,
             flatten(document, node.children.front(), context, result);
             break;
         case DocKind::RelativeAnchor:
-            result.push_back({FlatAtom::Kind::AnchorStart,
-                              {},
-                              0,
-                              0,
-                              node.value,
-                              1,
-                              context.indent,
-                              node.id,
-                              0,
-                              0,
-                              node.syntaxKind,
-                              context.member});
+            result.push_back(
+                {FlatAtom::Kind::AnchorStart,
+                 {},
+                 0,
+                 0,
+                 node.value,
+                 1,
+                 context.indent,
+                 node.id,
+                 0,
+                 0,
+                 node.syntaxKind,
+                 context.member}
+            );
             result.back().anchorFitWidth = node.width;
             context.anchorDepth++;
             context.anchorIndent = 0;
             flatten(document, node.children.front(), context, result);
-            result.push_back({FlatAtom::Kind::AnchorEnd,
-                              {},
-                              0,
-                              0,
-                              0,
-                              1,
-                              context.indent,
-                              node.id,
-                              0,
-                              0,
-                              node.syntaxKind,
-                              context.member});
+            result.push_back(
+                {FlatAtom::Kind::AnchorEnd,
+                 {},
+                 0,
+                 0,
+                 0,
+                 1,
+                 context.indent,
+                 node.id,
+                 0,
+                 0,
+                 node.syntaxKind,
+                 context.member}
+            );
             break;
         case DocKind::ConsistentGroup:
             context.group = node.id;
             flatten(document, node.children.front(), context, result);
             break;
         case DocKind::AlignmentAnchor:
-            result.push_back({FlatAtom::Kind::Alignment,
-                              {},
-                              0,
-                              0,
-                              0,
-                              1,
-                              context.indent,
-                              0,
-                              node.id,
-                              static_cast<uint32_t>(node.value),
-                              node.syntaxKind,
-                              context.member});
+            result.push_back(
+                {FlatAtom::Kind::Alignment,
+                 {},
+                 0,
+                 0,
+                 0,
+                 1,
+                 context.indent,
+                 0,
+                 node.id,
+                 static_cast<uint32_t>(node.value),
+                 node.syntaxKind,
+                 context.member}
+            );
             result.back().minimumPadding = node.width;
             result.back().alignmentGroup = node.alignmentGroup;
             break;
@@ -282,9 +302,16 @@ struct RenderRun {
     MemberId registeredLineMember = 0;
     std::unordered_map<MemberId, size_t> memberContinuationIndents;
 
-    RenderRun(const Config& config, const RenderOptions& options, bool collectText,
-              RenderCursor cursor) :
-        config(config), options(options), collectText(collectText), cursor(std::move(cursor)) {}
+    RenderRun(
+        const Config& config,
+        const RenderOptions& options,
+        bool collectText,
+        RenderCursor cursor
+    )
+        : config(config),
+          options(options),
+          collectText(collectText),
+          cursor(std::move(cursor)) {}
 
     void applyIndent() {
         if (!cursor.atLineStart)
@@ -348,8 +375,9 @@ struct RenderRun {
         if (atom.anchorIndent >= 0 && !cursor.anchorStack.empty()) {
             auto found = cursor.anchors.find(cursor.anchorStack.back().first);
             if (found != cursor.anchors.end()) {
-                indent = std::max(indent, found->second +
-                                              static_cast<size_t>(std::max(atom.anchorIndent, 0)));
+                indent = std::max(
+                    indent, found->second + static_cast<size_t>(std::max(atom.anchorIndent, 0))
+                );
                 hasRelativeAnchor = true;
             }
             else {
@@ -367,8 +395,11 @@ struct RenderRun {
         return indent;
     }
 
-    void render(const FlatAtom& atom, const RenderMetadata& metadata,
-                const std::unordered_set<GroupId>& brokenGroups) {
+    void render(
+        const FlatAtom& atom,
+        const RenderMetadata& metadata,
+        const std::unordered_set<GroupId>& brokenGroups
+    ) {
         switch (atom.kind) {
             case FlatAtom::Kind::Text: {
                 bool closingDelimiter = atom.text.size() == 1 && !cursor.delimiters.empty() &&
@@ -385,10 +416,12 @@ struct RenderRun {
                     bool aligned = cursor.pendingAlignedDelimiter ||
                                    (!cursor.delimiters.empty() && cursor.delimiters.back().aligned);
                     size_t extra = atom.text == "(" ? 5 : 4;
-                    cursor.delimiters.push_back({atom.text == "("   ? ')'
-                                                 : atom.text == "{" ? '}'
-                                                                    : ']',
-                                                 tokenColumn, tokenColumn + extra, aligned});
+                    cursor.delimiters.push_back(
+                        {atom.text == "("   ? ')'
+                         : atom.text == "{" ? '}'
+                                            : ']',
+                         tokenColumn, tokenColumn + extra, aligned}
+                    );
                 }
                 cursor.pendingAlignedDelimiter = false;
                 break;
@@ -417,7 +450,8 @@ struct RenderRun {
                     newline(1, breakIndent(atom));
                     result.rendered.breaks.insert(atom.breakId);
                     result.rendered.renderedBreaks.push_back(
-                        {atom.breakId, collectText ? result.rendered.text.size() : 0});
+                        {atom.breakId, collectText ? result.rendered.text.size() : 0}
+                    );
                     result.cost.breaks++;
                     if (atom.memberId)
                         result.memberCosts[atom.memberId].breaks++;
@@ -433,10 +467,10 @@ struct RenderRun {
             case FlatAtom::Kind::AnchorStart: {
                 applyIndent();
                 auto it = cursor.anchors.find(atom.anchorId);
-                cursor.anchorStack.emplace_back(atom.anchorId,
-                                                it == cursor.anchors.end()
-                                                    ? std::optional<size_t>{}
-                                                    : std::optional<size_t>{it->second});
+                cursor.anchorStack.emplace_back(
+                    atom.anchorId, it == cursor.anchors.end() ? std::optional<size_t>{}
+                                                              : std::optional<size_t>{it->second}
+                );
                 auto target = static_cast<int64_t>(cursor.column) + atom.priority;
                 bool fits = target >= 0 && (!atom.anchorFitWidth || !config.columnLimit.get() ||
                                             static_cast<size_t>(target) + atom.anchorFitWidth <=
@@ -476,7 +510,8 @@ struct RenderRun {
                 result.rendered.alignmentAnchors.push_back(
                     {atom.alignmentId, atom.alignmentColumn, atom.syntaxKind, atom.alignmentGroup,
                      atom.memberId, line, cursor.column,
-                     collectText ? result.rendered.text.size() : 0, atom.minimumPadding});
+                     collectText ? result.rendered.text.size() : 0, atom.minimumPadding}
+                );
                 break;
             }
         }
@@ -489,10 +524,14 @@ struct RenderRun {
     }
 };
 
-RenderResult renderAtoms(const std::vector<FlatAtom>& atoms, const Config& config,
-                         const RenderOptions& options, bool collectText,
-                         const RenderMetadata* suppliedMetadata = nullptr,
-                         const RenderSlice& slice = {}) {
+RenderResult renderAtoms(
+    const std::vector<FlatAtom>& atoms,
+    const Config& config,
+    const RenderOptions& options,
+    bool collectText,
+    const RenderMetadata* suppliedMetadata = nullptr,
+    const RenderSlice& slice = {}
+) {
     RenderMetadata localMetadata;
     if (!suppliedMetadata) {
         localMetadata = collectRenderMetadata(atoms);
@@ -506,8 +545,9 @@ RenderResult renderAtoms(const std::vector<FlatAtom>& atoms, const Config& confi
         }
     }
 
-    RenderRun run{config, options, collectText,
-                  slice.initialCursor ? *slice.initialCursor : RenderCursor{}};
+    RenderRun run{
+        config, options, collectText, slice.initialCursor ? *slice.initialCursor : RenderCursor{}
+    };
     size_t end = std::min(slice.end, atoms.size());
     for (size_t atomIndex = std::min(slice.begin, end); atomIndex < end; atomIndex++) {
         if (slice.capturePoints && slice.capturedCursors) {
@@ -534,8 +574,10 @@ struct MemberRange {
     size_t end = 0;
 };
 
-std::vector<Action> collectActions(const std::vector<FlatAtom>& atoms,
-                                   const std::unordered_set<BreakId>& fixed) {
+std::vector<Action> collectActions(
+    const std::vector<FlatAtom>& atoms,
+    const std::unordered_set<BreakId>& fixed
+) {
     std::map<GroupId, Action> groups;
     std::vector<Action> actions;
     for (const auto& atom : atoms) {
@@ -568,8 +610,10 @@ std::vector<Action> collectActions(const std::vector<FlatAtom>& atoms,
     return actions;
 }
 
-std::unordered_map<MemberId, MemberRange> collectMemberRanges(const std::vector<FlatAtom>& atoms,
-                                                              const std::vector<Action>& actions) {
+std::unordered_map<MemberId, MemberRange> collectMemberRanges(
+    const std::vector<FlatAtom>& atoms,
+    const std::vector<Action>& actions
+) {
     std::unordered_map<MemberId, MemberRange> ranges;
     std::unordered_map<BreakId, MemberId> breakMembers;
     for (const auto& action : actions) {
@@ -664,8 +708,9 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
             memberSlice.end = range->second.end;
             memberSlice.initialCursor = &initialCursor->second;
             memberSlice.finish = memberSlice.end == atoms.size();
-            return memberCost(renderAtoms(atoms, config, options, false, &metadata, memberSlice),
-                              member);
+            return memberCost(
+                renderAtoms(atoms, config, options, false, &metadata, memberSlice), member
+            );
         };
 
         struct State {
@@ -677,7 +722,8 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
         constexpr size_t maxCandidateAtomVisits = 4 * 1024 * 1024;
         size_t candidateBudget = std::min(
             maxCandidateRenders,
-            std::max<size_t>(1, maxCandidateAtomVisits / std::max<size_t>(renderAtomCount, 1)));
+            std::max<size_t>(1, maxCandidateAtomVisits / std::max<size_t>(renderAtomCount, 1))
+        );
         size_t candidateRenders = 0;
         bool greedyTiers = false;
         size_t tierBegin = memberBegin;
@@ -691,8 +737,9 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
             if (greedyTiers) {
                 auto candidate = std::move(states.front().options);
                 for (size_t actionIndex = tierBegin; actionIndex < tierEnd; actionIndex++) {
-                    candidate.breaks.insert(actions[actionIndex].breaks.begin(),
-                                            actions[actionIndex].breaks.end());
+                    candidate.breaks.insert(
+                        actions[actionIndex].breaks.begin(), actions[actionIndex].breaks.end()
+                    );
                 }
                 states = {{std::move(candidate), {}}};
                 states.front().cost = renderCost(states.front().options);
@@ -710,8 +757,9 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
                             break;
                         }
                         auto candidate = states[stateIndex].options;
-                        candidate.breaks.insert(actions[actionIndex].breaks.begin(),
-                                                actions[actionIndex].breaks.end());
+                        candidate.breaks.insert(
+                            actions[actionIndex].breaks.begin(), actions[actionIndex].breaks.end()
+                        );
                         states.push_back({candidate, renderCost(candidate)});
                         candidateRenders++;
                     }
@@ -727,8 +775,9 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
                 if (budgetExhausted) {
                     auto candidate = std::move(states.front().options);
                     for (size_t remaining = actionIndex; remaining < tierEnd; remaining++) {
-                        candidate.breaks.insert(actions[remaining].breaks.begin(),
-                                                actions[remaining].breaks.end());
+                        candidate.breaks.insert(
+                            actions[remaining].breaks.begin(), actions[remaining].breaks.end()
+                        );
                     }
                     states = {{std::move(candidate), {}}};
                     states.front().cost = renderCost(states.front().options);
@@ -888,8 +937,9 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 }
                 bool ignoreContent = multilineRow ||
                                      key.kind == slang::syntax::SyntaxKind::AssignmentPatternItem;
-                if (separatorCount(rows[groupEnd - 1]->line, rows[groupEnd]->line, threshold,
-                                   ignoreContent) >= threshold) {
+                if (separatorCount(
+                        rows[groupEnd - 1]->line, rows[groupEnd]->line, threshold, ignoreContent
+                    ) >= threshold) {
                     break;
                 }
                 groupEnd++;
@@ -898,8 +948,9 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 auto found = groups.find({key.kind, 2, key.group});
                 if (found != groups.end()) {
                     auto declarators = found->second;
-                    std::ranges::sort(declarators, {},
-                                      [](const auto* anchor) { return anchor->line; });
+                    std::ranges::sort(declarators, {}, [](const auto* anchor) {
+                        return anchor->line;
+                    });
                     auto pivot = std::ranges::find_if(declarators, [&](const auto* anchor) {
                         return anchor->member == rows[groupBegin]->member;
                     });
@@ -907,13 +958,15 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                         size_t begin = static_cast<size_t>(pivot - declarators.begin());
                         size_t end = begin + 1;
                         while (begin > 0 &&
-                               separatorCount(declarators[begin - 1]->line,
-                                              declarators[begin]->line, threshold) < threshold) {
+                               separatorCount(
+                                   declarators[begin - 1]->line, declarators[begin]->line, threshold
+                               ) < threshold) {
                             begin--;
                         }
                         while (end < declarators.size() &&
-                               separatorCount(declarators[end - 1]->line, declarators[end]->line,
-                                              threshold) < threshold) {
+                               separatorCount(
+                                   declarators[end - 1]->line, declarators[end]->line, threshold
+                               ) < threshold) {
                             end++;
                         }
                         std::unordered_set<MemberId> dimensionMembers;
@@ -1181,8 +1234,12 @@ DocId DocumentBuilder::absoluteText(std::string_view value) {
     return add(std::move(node));
 }
 
-DocId DocumentBuilder::softLine(int priority, std::string_view flatText, GroupId group,
-                                bool global) {
+DocId DocumentBuilder::softLine(
+    int priority,
+    std::string_view flatText,
+    GroupId group,
+    bool global
+) {
     DocNode node;
     node.kind = DocKind::SoftLine;
     node.text = flatText;
@@ -1264,8 +1321,12 @@ AlignmentGroupId DocumentBuilder::createAlignmentGroup() {
     return nextAlignmentGroup_++;
 }
 
-DocId DocumentBuilder::alignmentAnchor(uint32_t column, slang::syntax::SyntaxKind rowKind,
-                                       AlignmentGroupId group, uint32_t minimumPadding) {
+DocId DocumentBuilder::alignmentAnchor(
+    uint32_t column,
+    slang::syntax::SyntaxKind rowKind,
+    AlignmentGroupId group,
+    uint32_t minimumPadding
+) {
     DocNode node;
     node.kind = DocKind::AlignmentAnchor;
     node.id = nextAlignment_++;
@@ -1303,8 +1364,10 @@ RenderedDocument DocumentRenderer::renderLayout(const FormatDocument& document) 
     return result;
 }
 
-RenderedDocument DocumentRenderer::renderAligned(const FormatDocument& document,
-                                                 const RenderedDocument& layout) const {
+RenderedDocument DocumentRenderer::renderAligned(
+    const FormatDocument& document,
+    const RenderedDocument& layout
+) const {
     std::vector<FlatAtom> atoms;
     flatten(document, document.root, {}, atoms);
     RenderOptions options;

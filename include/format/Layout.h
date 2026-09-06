@@ -13,7 +13,9 @@
 
 namespace format {
 
-FormatDocument buildLayoutDocument(const NormalizedFormatDocument& normalized,
-                                   const Config& config);
+FormatDocument buildLayoutDocument(
+    const NormalizedFormatDocument& normalized,
+    const Config& config
+);
 
 } // namespace format

@@ -23,8 +23,11 @@ namespace format {
 
 class Formatter {
 public:
-    explicit Formatter(const Config& config, const slang::SourceManager* sourceManager = nullptr,
-                       FormatStage stage = FormatStage::Aligned);
+    explicit Formatter(
+        const Config& config,
+        const slang::SourceManager* sourceManager = nullptr,
+        FormatStage stage = FormatStage::Aligned
+    );
 
     std::string format(const slang::syntax::SyntaxNode& root);
 

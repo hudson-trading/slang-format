@@ -84,8 +84,10 @@ struct FormatResult {
     std::vector<FormatDiagnostic> diagnostics() const {
         std::vector<FormatDiagnostic> diags;
         if (!internalError.empty()) {
-            diags.push_back({FormatDiagnosticKind::InternalError,
-                             fmt::format("internal error: {}", internalError)});
+            diags.push_back(
+                {FormatDiagnosticKind::InternalError,
+                 fmt::format("internal error: {}", internalError)}
+            );
         }
         if (structuralImbalance) {
             // Parse errors cascade — print only the first few. The
@@ -98,14 +100,17 @@ struct FormatResult {
             for (size_t i = 0; i < shown; i++)
                 msg += "\n" + diagnosticMessages[i];
             if (diagnosticMessages.size() > shown) {
-                msg += fmt::format("\n... and {} more error{}", diagnosticMessages.size() - shown,
-                                   diagnosticMessages.size() - shown == 1 ? "" : "s");
+                msg += fmt::format(
+                    "\n... and {} more error{}", diagnosticMessages.size() - shown,
+                    diagnosticMessages.size() - shown == 1 ? "" : "s"
+                );
             }
             diags.push_back({FormatDiagnosticKind::StructuralImbalance, std::move(msg)});
         }
         if (failedReparse) {
             diags.push_back(
-                {FormatDiagnosticKind::FailedReparse, "formatted output failed to reparse"});
+                {FormatDiagnosticKind::FailedReparse, "formatted output failed to reparse"}
+            );
         }
         if (cstMismatch) {
             std::string msg = "formatting changed the syntax tree";
@@ -124,13 +129,19 @@ struct FormatResult {
 };
 
 /// Primary formatting method; Performs extra validation
-FormatResult format(std::string_view filename, std::string_view input, const format::Config& config,
-                    FormatStage stage = FormatStage::Aligned);
+FormatResult format(
+    std::string_view filename,
+    std::string_view input,
+    const format::Config& config,
+    FormatStage stage = FormatStage::Aligned
+);
 
 /// Checks that two syntax nodes are equivalent including preprocessor directives
 /// and skipped syntax.
-bool isPreprocessorEquivalentTo(const slang::syntax::SyntaxNode& a,
-                                const slang::syntax::SyntaxNode& b);
+bool isPreprocessorEquivalentTo(
+    const slang::syntax::SyntaxNode& a,
+    const slang::syntax::SyntaxNode& b
+);
 
 /// Checks that two syntax nodes are equivalent including preprocessor directives
 /// and comments.
@@ -146,8 +157,10 @@ bool isTokenEquivalentTo(const slang::syntax::SyntaxNode& a, const slang::syntax
 
 /// Describes the first token-level difference between two trees. Returns an
 /// empty string if equivalent.
-std::string describeTokenDiff(const slang::syntax::SyntaxNode& a,
-                              const slang::syntax::SyntaxNode& b);
+std::string describeTokenDiff(
+    const slang::syntax::SyntaxNode& a,
+    const slang::syntax::SyntaxNode& b
+);
 
 /// Describe the first line that differs between two strings.
 /// Returns a human-readable message with the line number and both versions.
@@ -155,7 +168,9 @@ std::string describeTextDiff(std::string_view a, std::string_view b);
 
 /// Walks two syntax trees in parallel and returns a description of the first difference found,
 /// printing the actual before/after node text. Returns an empty string if equivalent.
-std::string describeCstDiff(const slang::syntax::SyntaxNode& node,
-                            const slang::syntax::SyntaxNode& other);
+std::string describeCstDiff(
+    const slang::syntax::SyntaxNode& node,
+    const slang::syntax::SyntaxNode& other
+);
 
 } // namespace format

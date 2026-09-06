@@ -48,8 +48,11 @@ fs::path configSearchRoot(const std::vector<std::string>& positional) {
 
 // Recursively collect SystemVerilog source files under `dir`, skipping any
 // subdirectory whose name exactly matches an entry in `excludeDirs`.
-void collectSourceFiles(const fs::path& dir, const std::vector<std::string>& excludeDirs,
-                        std::vector<std::string>& out) {
+void collectSourceFiles(
+    const fs::path& dir,
+    const std::vector<std::string>& excludeDirs,
+    std::vector<std::string>& out
+) {
     static constexpr std::array<std::string_view, 4> kExtensions = {".sv", ".svh", ".v", ".vh"};
 
     std::error_code ec;
@@ -85,8 +88,11 @@ struct FileFormatResult {
     bool fileReadError = false;
 };
 // Format a single file and return the result. May be threaded, so don't emit errors directly.
-FileFormatResult formatFile(const std::string& path, const format::Config& config,
-                            format::FormatStage stage) {
+FileFormatResult formatFile(
+    const std::string& path,
+    const format::Config& config,
+    format::FormatStage stage
+) {
     FileFormatResult result;
     result.path = path;
 
@@ -154,17 +160,29 @@ bool interpretResult(const format::FormatResult& result, std::string_view path) 
                 OS::printE(fmt::format("{} {}\n", kindPrefix("warning:", warnStyle), diag.message));
                 break;
             case format::FormatDiagnosticKind::CstMismatch:
-                OS::printE(fmt::format("{} {}\n  {}\n", kindPrefix("cst mismatch:", warnStyle),
-                                       pathFmt(path), diag.message));
+                OS::printE(
+                    fmt::format(
+                        "{} {}\n  {}\n", kindPrefix("cst mismatch:", warnStyle), pathFmt(path),
+                        diag.message
+                    )
+                );
                 break;
             case format::FormatDiagnosticKind::NotIdempotent:
-                OS::printE(fmt::format("{} {}\n  {}\n", kindPrefix("not idempotent:", warnStyle),
-                                       pathFmt(path), diag.message));
+                OS::printE(
+                    fmt::format(
+                        "{} {}\n  {}\n", kindPrefix("not idempotent:", warnStyle), pathFmt(path),
+                        diag.message
+                    )
+                );
                 break;
             case format::FormatDiagnosticKind::InternalError:
             default:
-                OS::printE(fmt::format("{} {}: {}\n", kindPrefix("internal error:", errStyle),
-                                       pathFmt(path), diag.message));
+                OS::printE(
+                    fmt::format(
+                        "{} {}: {}\n", kindPrefix("internal error:", errStyle), pathFmt(path),
+                        diag.message
+                    )
+                );
                 break;
         }
     }
@@ -205,8 +223,10 @@ int main(int argc, char** argv) {
     cmdline.add("-f,--force", force, "Force output even if validation fails");
 
     std::optional<std::string> configPath;
-    cmdline.add("--config", configPath, "Path to config file (default: .slang/format.json)",
-                "<path>", CommandLineFlags::FilePath);
+    cmdline.add(
+        "--config", configPath, "Path to config file (default: .slang/format.json)", "<path>",
+        CommandLineFlags::FilePath
+    );
 
     std::optional<bool> dumpConfig;
     cmdline.add("--dump-config", dumpConfig, "Dump current configuration and exit");
@@ -215,8 +235,9 @@ int main(int argc, char** argv) {
     cmdline.add("--stage", stageName, "Last formatter stage to run: layout or aligned", "<stage>");
 
     std::optional<uint32_t> numThreads;
-    cmdline.add("-j,--jobs", numThreads, "Number of parallel jobs (default: number of CPU cores)",
-                "<n>");
+    cmdline.add(
+        "-j,--jobs", numThreads, "Number of parallel jobs (default: number of CPU cores)", "<n>"
+    );
 
     std::optional<bool> verbose;
     cmdline.add("-v,--verbose", verbose, "Print each file before formatting (implies -j1)");
@@ -235,36 +256,39 @@ int main(int argc, char** argv) {
         if (*stageName == "layout")
             stage = format::FormatStage::Layout;
         else if (*stageName != "aligned") {
-            OS::printE(fmt::format("error: invalid --stage '{}'; expected layout or aligned\n",
-                                   *stageName));
+            OS::printE(
+                fmt::format("error: invalid --stage '{}'; expected layout or aligned\n", *stageName)
+            );
             return 1;
         }
     }
 
     if (showHelp == true) {
-        OS::print("OVERVIEW: slang-format - SystemVerilog formatter\n"
-                  "\n"
-                  "USAGE: slang-format [options] [<file-or-dir> ...]\n"
-                  "\n"
-                  "If no files are specified, reads from stdin and writes to stdout.\n"
-                  "If a single file is given without -i, prints formatted output to stdout.\n"
-                  "With -i, modifies files in-place.\n"
-                  "Directory arguments recurse into all .sv/.svh/.v/.vh files; subdirs are\n"
-                  "filtered using the config's excludeDirs (match on directory name).\n"
-                  "\n"
-                  "OPTIONS:\n"
-                  "  -h, --help        Display this help message\n"
-                  "  --version         Display version information\n"
-                  "  -i, --inplace     Edit files in-place\n"
-                  "  -n, --dry-run     Format and validate but do not write\n"
-                  "  -f, --force       Force output even if validation fails\n"
-                  "  --config <path>   Path to config file. If omitted, searches for\n"
-                  "                    .slang/format.json walking up from the target\n"
-                  "                    path, then from the current directory\n"
-                  "  --dump-config     Dump current configuration and exit\n"
-                  "  --stage <stage>   Stop after layout or aligned output (default: aligned)\n"
-                  "  -j, --jobs <n>    Number of parallel jobs (default: CPU cores)\n"
-                  "  -v, --verbose     Print each file before formatting (implies -j1)\n");
+        OS::print(
+            "OVERVIEW: slang-format - SystemVerilog formatter\n"
+            "\n"
+            "USAGE: slang-format [options] [<file-or-dir> ...]\n"
+            "\n"
+            "If no files are specified, reads from stdin and writes to stdout.\n"
+            "If a single file is given without -i, prints formatted output to stdout.\n"
+            "With -i, modifies files in-place.\n"
+            "Directory arguments recurse into all .sv/.svh/.v/.vh files; subdirs are\n"
+            "filtered using the config's excludeDirs (match on directory name).\n"
+            "\n"
+            "OPTIONS:\n"
+            "  -h, --help        Display this help message\n"
+            "  --version         Display version information\n"
+            "  -i, --inplace     Edit files in-place\n"
+            "  -n, --dry-run     Format and validate but do not write\n"
+            "  -f, --force       Force output even if validation fails\n"
+            "  --config <path>   Path to config file. If omitted, searches for\n"
+            "                    .slang/format.json walking up from the target\n"
+            "                    path, then from the current directory\n"
+            "  --dump-config     Dump current configuration and exit\n"
+            "  --stage <stage>   Stop after layout or aligned output (default: aligned)\n"
+            "  -j, --jobs <n>    Number of parallel jobs (default: CPU cores)\n"
+            "  -v, --verbose     Print each file before formatting (implies -j1)\n"
+        );
         return 0;
     }
 
@@ -393,8 +417,11 @@ int main(int argc, char** argv) {
                 for (const auto& d : config.dirs.value()) {
                     fs::path sub = configRoot / d;
                     if (!fs::exists(sub)) {
-                        OS::printE(fmt::format("warning: config 'dirs' entry not found: '{}'\n",
-                                               sub.string()));
+                        OS::printE(
+                            fmt::format(
+                                "warning: config 'dirs' entry not found: '{}'\n", sub.string()
+                            )
+                        );
                         continue;
                     }
                     if (fs::is_directory(sub))
@@ -518,8 +545,9 @@ int main(int argc, char** argv) {
         futures.reserve(files.size());
 
         for (const auto& path : files) {
-            futures.push_back(pool.submit_task(
-                [&path, &config, stage]() { return formatFile(path, config, stage); }));
+            futures.push_back(pool.submit_task([&path, &config, stage]() {
+                return formatFile(path, config, stage);
+            }));
         }
 
         for (auto& future : futures) {

@@ -223,20 +223,24 @@ endmodule
 }
 
 TEST_CASE("comment equivalence ignores formatter-owned horizontal whitespace") {
-    auto tree1 = parse("module m;\n"
-                       "    // heading   \n"
-                       "    //   \n"
-                       "    /* first line  \n"
-                       "     * second line\t\n"
-                       "     */\n"
-                       "endmodule\n");
-    auto tree2 = parse("module m;\n"
-                       "    // heading\n"
-                       "    //\n"
-                       "    /* first line\n"
-                       "         * second line\n"
-                       "         */\n"
-                       "endmodule\n");
+    auto tree1 = parse(
+        "module m;\n"
+        "    // heading   \n"
+        "    //   \n"
+        "    /* first line  \n"
+        "     * second line\t\n"
+        "     */\n"
+        "endmodule\n"
+    );
+    auto tree2 = parse(
+        "module m;\n"
+        "    // heading\n"
+        "    //\n"
+        "    /* first line\n"
+        "         * second line\n"
+        "         */\n"
+        "endmodule\n"
+    );
 
     CHECK(format::isCommentEquivalentTo(tree1->root(), tree2->root()));
     CHECK(format::isTokenEquivalentTo(tree1->root(), tree2->root()));
@@ -350,7 +354,9 @@ endmodule
 
 TEST_CASE("format accepts parsed members that need an include context") {
     format::Config config;
-    auto result = format::format("fragment.svh", R"(
+    auto result = format::format(
+        "fragment.svh",
+        R"(
 always_comb begin
 lhs=rhs;
 end
@@ -359,7 +365,8 @@ always_ff @(posedge clk) begin
 registered<=lhs;
 end
 )",
-                                 config);
+        config
+    );
 
     CHECK(result.errorCount == 0);
     CHECK(!result.structuralImbalance);
@@ -370,11 +377,14 @@ end
 
 TEST_CASE("format retains parser errors unrelated to compilation-unit context") {
     format::Config config;
-    auto result = format::format("broken_fragment.svh", R"(
+    auto result = format::format(
+        "broken_fragment.svh",
+        R"(
 always_comb begin
 lhs = ;
 )",
-                                 config);
+        config
+    );
 
     CHECK(result.errorCount > 0);
 }

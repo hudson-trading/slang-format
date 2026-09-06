@@ -171,8 +171,11 @@ std::string describeToken(const Token& tok) {
 }
 
 template<bool CheckComments>
-std::string describeCstDiffImpl(const SyntaxNode& node, const SyntaxNode& other,
-                                std::string path = "root") {
+std::string describeCstDiffImpl(
+    const SyntaxNode& node,
+    const SyntaxNode& other,
+    std::string path = "root"
+) {
     if (node.kind != other.kind)
         return path + ": node kind differs: " + std::string(toString(other.kind)) + " vs " +
                std::string(toString(node.kind)) + "\n  original:  " + truncate(other.toString()) +
@@ -310,17 +313,23 @@ bool isTokenEquivalentTo(const SyntaxNode& a, const SyntaxNode& b) {
                 for (const auto& trivia : token.trivia()) {
                     switch (trivia.kind) {
                         case TriviaKind::LineComment:
-                            result.push_back({ItemKind::LineComment, TokenKind::Unknown,
-                                              canonicalizeComment(trivia.getRawText(), false)});
+                            result.push_back(
+                                {ItemKind::LineComment, TokenKind::Unknown,
+                                 canonicalizeComment(trivia.getRawText(), false)}
+                            );
                             break;
                         case TriviaKind::BlockComment:
-                            result.push_back({ItemKind::BlockComment, TokenKind::Unknown,
-                                              canonicalizeComment(trivia.getRawText(), true)});
+                            result.push_back(
+                                {ItemKind::BlockComment, TokenKind::Unknown,
+                                 canonicalizeComment(trivia.getRawText(), true)}
+                            );
                             break;
                         case TriviaKind::DisabledText:
                             if (!std::ranges::all_of(trivia.getRawText(), isWhitespace)) {
-                                result.push_back({ItemKind::DisabledText, TokenKind::Unknown,
-                                                  std::string(trivia.getRawText())});
+                                result.push_back(
+                                    {ItemKind::DisabledText, TokenKind::Unknown,
+                                     std::string(trivia.getRawText())}
+                                );
                             }
                             break;
                         case TriviaKind::Directive:
@@ -373,11 +382,14 @@ static std::string describeTriviaShort(const Trivia& tr) {
 
 // Render a side-by-side diff with leading shared rows, the divergence row,
 // and trailing rows. The left column width is sized to the widest entry.
-static std::string renderSideBySide(const std::vector<std::string>& leadOrig,
-                                    const std::vector<std::string>& leadFmt,
-                                    const std::string& divergeOrig, const std::string& divergeFmt,
-                                    const std::vector<std::string>& trailOrig,
-                                    const std::vector<std::string>& trailFmt) {
+static std::string renderSideBySide(
+    const std::vector<std::string>& leadOrig,
+    const std::vector<std::string>& leadFmt,
+    const std::string& divergeOrig,
+    const std::string& divergeFmt,
+    const std::vector<std::string>& trailOrig,
+    const std::vector<std::string>& trailFmt
+) {
     size_t leftWidth = std::string("original").size();
     auto widen = [&](const std::vector<std::string>& v) {
         for (auto& s : v)
@@ -408,8 +420,8 @@ static std::string renderSideBySide(const std::vector<std::string>& leadOrig,
     out += line(">>> " + divergeOrig, ">>> " + divergeFmt);
     size_t trailRows = std::max(trailOrig.size(), trailFmt.size());
     for (size_t i = 0; i < trailRows; i++) {
-        out += line(i < trailOrig.size() ? trailOrig[i] : "",
-                    i < trailFmt.size() ? trailFmt[i] : "");
+        out +=
+            line(i < trailOrig.size() ? trailOrig[i] : "", i < trailFmt.size() ? trailFmt[i] : "");
     }
     return out;
 }
@@ -474,9 +486,10 @@ std::string describeTokenDiff(const SyntaxNode& a, const SyntaxNode& b) {
             else
                 reason = "trivia differs";
 
-            return fmt::format("trivia[{}]: {}\n{}", i, reason,
-                               renderSideBySide(leadOrig, leadFmt, divOrig, divFmt, trailOrig,
-                                                trailFmt));
+            return fmt::format(
+                "trivia[{}]: {}\n{}", i, reason,
+                renderSideBySide(leadOrig, leadFmt, divOrig, divFmt, trailOrig, trailFmt)
+            );
         }
     }
 
@@ -540,15 +553,21 @@ std::string describeTokenDiff(const SyntaxNode& a, const SyntaxNode& b) {
 
         if (aDone) {
             auto trailRows = pullText(bIt, bEnd);
-            return fmt::format("real-token[{}]: formatted ended early\n{}", index,
-                               renderSideBySide(leadRows, leadRows, joinTokens({*bIt}),
-                                                "<end of stream>", trailRows, {}));
+            return fmt::format(
+                "real-token[{}]: formatted ended early\n{}", index,
+                renderSideBySide(
+                    leadRows, leadRows, joinTokens({*bIt}), "<end of stream>", trailRows, {}
+                )
+            );
         }
         if (bDone) {
             auto trailRows = pullText(aIt, aEnd);
-            return fmt::format("real-token[{}]: original ended early\n{}", index,
-                               renderSideBySide(leadRows, leadRows, "<end of stream>",
-                                                joinTokens({*aIt}), {}, trailRows));
+            return fmt::format(
+                "real-token[{}]: original ended early\n{}", index,
+                renderSideBySide(
+                    leadRows, leadRows, "<end of stream>", joinTokens({*aIt}), {}, trailRows
+                )
+            );
         }
         if ((*aIt).kind != (*bIt).kind || (*aIt).valueText() != (*bIt).valueText()) {
             std::string reason = (*aIt).kind != (*bIt).kind ? "token kind differs"
@@ -559,12 +578,14 @@ std::string describeTokenDiff(const SyntaxNode& a, const SyntaxNode& b) {
             ++bIt;
             auto origTrailRows = pullText(bIt, bEnd);
             auto fmtTrailRows = pullText(aIt, aEnd);
-            return fmt::format("real-token[{}]: {}\n    original:  {}\n    formatted: {}\n\n{}",
-                               index, reason, describeToken<true>(bDiverge),
-                               describeToken<true>(aDiverge),
-                               renderSideBySide(leadRows, leadRows, std::string(rawOf(bDiverge)),
-                                                std::string(rawOf(aDiverge)), origTrailRows,
-                                                fmtTrailRows));
+            return fmt::format(
+                "real-token[{}]: {}\n    original:  {}\n    formatted: {}\n\n{}", index, reason,
+                describeToken<true>(bDiverge), describeToken<true>(aDiverge),
+                renderSideBySide(
+                    leadRows, leadRows, std::string(rawOf(bDiverge)), std::string(rawOf(aDiverge)),
+                    origTrailRows, fmtTrailRows
+                )
+            );
         }
         pushLead(*aIt);
         ++aIt;

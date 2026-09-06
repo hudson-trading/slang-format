@@ -15,7 +15,8 @@ TEST_CASE("layout solver reuses costs for many fitting members") {
 
     for (size_t i = 0; i < memberCount; i++) {
         auto member = builder.concat(
-            {builder.text("assign value ="), builder.softLine(1), builder.text("source;")});
+            {builder.text("assign value ="), builder.softLine(1), builder.text("source;")}
+        );
         lines.push_back(builder.member(member, slang::syntax::SyntaxKind::ContinuousAssign));
         lines.push_back(builder.hardLine());
         expected += "assign value = source;\n";
@@ -39,8 +40,9 @@ TEST_CASE("layout solver bounds pathological member search") {
     }
     expression.push_back(builder.text("value"));
 
-    auto member = builder.member(builder.concat(std::move(expression)),
-                                 slang::syntax::SyntaxKind::ContinuousAssign);
+    auto member = builder.member(
+        builder.concat(std::move(expression)), slang::syntax::SyntaxKind::ContinuousAssign
+    );
     auto document = std::move(builder).finish(member);
     format::Config config;
     auto rendered = format::DocumentRenderer(config).renderLayout(document);
@@ -53,14 +55,15 @@ TEST_CASE("layout solver bounds pathological member search") {
 TEST_CASE("alignment uses stable line coordinates after whitespace normalization") {
     format::DocumentBuilder builder;
     auto group = builder.createAlignmentGroup();
-    auto anchorA = builder.alignmentAnchor(2, slang::syntax::SyntaxKind::ParameterDeclaration,
-                                           group, 1);
-    auto anchorB = builder.alignmentAnchor(2, slang::syntax::SyntaxKind::ParameterDeclaration,
-                                           group, 1);
+    auto anchorA =
+        builder.alignmentAnchor(2, slang::syntax::SyntaxKind::ParameterDeclaration, group, 1);
+    auto anchorB =
+        builder.alignmentAnchor(2, slang::syntax::SyntaxKind::ParameterDeclaration, group, 1);
     auto root = builder.concat(
         {builder.verbatim(std::string("header") + std::string(1024, ' ') + "\n"), builder.text("a"),
          anchorA, builder.text(" = 1;"), builder.hardLine(), builder.text("long_name"), anchorB,
-         builder.text(" = 2;")});
+         builder.text(" = 2;")}
+    );
     auto document = std::move(builder).finish(root);
     format::Config config;
     format::DocumentRenderer renderer(config);
@@ -72,7 +75,8 @@ TEST_CASE("alignment uses stable line coordinates after whitespace normalization
 TEST_CASE("adjacent hard line requirements compose by maximum") {
     format::DocumentBuilder builder;
     auto root = builder.concat(
-        {builder.text("first"), builder.hardLine(2), builder.hardLine(2), builder.text("second")});
+        {builder.text("first"), builder.hardLine(2), builder.hardLine(2), builder.text("second")}
+    );
     auto document = std::move(builder).finish(root);
     format::Config config;
 
@@ -82,8 +86,9 @@ TEST_CASE("adjacent hard line requirements compose by maximum") {
 
 TEST_CASE("member verbatim text resets nested indentation") {
     format::DocumentBuilder builder;
-    auto nested = builder.indent(5, builder.concat(
-                                        {builder.hardLine(), builder.memberVerbatim("recovered")}));
+    auto nested = builder.indent(
+        5, builder.concat({builder.hardLine(), builder.memberVerbatim("recovered")})
+    );
     auto member = builder.member(nested, slang::syntax::SyntaxKind::FunctionDeclaration);
     auto document = std::move(builder).finish(builder.indent(8, member));
     format::Config config;

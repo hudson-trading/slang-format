@@ -68,13 +68,19 @@ public:
     DocumentBuilder();
 
     DocId empty();
-    DocId text(std::string_view value,
-               slang::syntax::SyntaxKind kind = slang::syntax::SyntaxKind::Unknown);
+    DocId text(
+        std::string_view value,
+        slang::syntax::SyntaxKind kind = slang::syntax::SyntaxKind::Unknown
+    );
     DocId verbatim(std::string_view value);
     DocId memberVerbatim(std::string_view value, int indent = 0);
     DocId absoluteText(std::string_view value);
-    DocId softLine(int priority, std::string_view flatText = " ", GroupId group = 0,
-                   bool global = false);
+    DocId softLine(
+        int priority,
+        std::string_view flatText = " ",
+        GroupId group = 0,
+        bool global = false
+    );
     DocId hardLine(int count = 1, bool useAnchor = false);
     DocId concat(std::vector<DocId> children);
     DocId indent(int columns, DocId child);
@@ -83,8 +89,12 @@ public:
     DocId consistentGroup(DocId child);
     GroupId createConsistentGroup();
     AlignmentGroupId createAlignmentGroup();
-    DocId alignmentAnchor(uint32_t column, slang::syntax::SyntaxKind rowKind,
-                          AlignmentGroupId group, uint32_t minimumPadding = 0);
+    DocId alignmentAnchor(
+        uint32_t column,
+        slang::syntax::SyntaxKind rowKind,
+        AlignmentGroupId group,
+        uint32_t minimumPadding = 0
+    );
     DocId member(DocId child, slang::syntax::SyntaxKind kind);
 
     FormatDocument finish(DocId root) &&;
@@ -127,11 +137,14 @@ struct RenderedDocument {
 
 class DocumentRenderer {
 public:
-    explicit DocumentRenderer(const Config& config) : config_(config) {}
+    explicit DocumentRenderer(const Config& config)
+        : config_(config) {}
 
     RenderedDocument renderLayout(const FormatDocument& document) const;
-    RenderedDocument renderAligned(const FormatDocument& document,
-                                   const RenderedDocument& layout) const;
+    RenderedDocument renderAligned(
+        const FormatDocument& document,
+        const RenderedDocument& layout
+    ) const;
 
 private:
     const Config& config_;
