@@ -5,70 +5,176 @@ on:
     workflow_call:
         inputs:
             upload_artifacts:
-                description: Upload release artifacts
+                description: "Upload build artifacts"
                 required: false
                 type: boolean
                 default: false
             ref:
-                description: Git ref to check out
+                description: "Git ref to checkout (branch, tag, or commit)"
                 required: false
                 type: string
                 default: ""
     push:
-        branches: [main]
+        branches: [main, ci-test]
         paths-ignore:
             - "docs/**"
             - "*.md"
             - "mkdocs.yaml"
+            - "pyproject.toml"
+            - "uv.lock"
     pull_request:
         paths-ignore:
             - "docs/**"
             - "*.md"
             - "mkdocs.yaml"
+            - "pyproject.toml"
+            - "uv.lock"
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
     build:
+        name: ${{ matrix.name }}
         strategy:
             fail-fast: false
             matrix:
                 include:
-                    - preset: clang-release
-                      os: ubuntu-latest
-                      artifact_name: slang-format-linux-x64-clang
-                    - preset: gcc-release
-                      os: ubuntu-latest
-                      artifact_name: slang-format-linux-x64-gcc
+                    # Canonical Linux release builds use glibc 2.28 for compatibility
+                    # with RHEL/Rocky/Alma 8, Debian 10, and newer distributions.
+                    - name: linux-x64
+                      preset: gcc-release
+                      os: ubuntu-24.04
+                      container: quay.io/pypa/manylinux_2_28_x86_64
+                      cmake_args: -DCMAKE_CXX_COMPILER=/opt/rh/gcc-toolset-14/root/usr/bin/g++
+                    - name: linux-arm64
+                      preset: gcc-release
+                      os: ubuntu-24.04-arm
+                      container: quay.io/pypa/manylinux_2_28_aarch64
+                      cmake_args: -DCMAKE_CXX_COMPILER=/opt/rh/gcc-toolset-14/root/usr/bin/g++
+                    # Dev-only Linux builds provide additional compiler and host coverage.
+                    - name: linux-x64-ubuntu-24.04-clang
+                      preset: clang-release
+                      os: ubuntu-24.04
+                      skip_upload: true
+                    - name: linux-arm64-ubuntu-24.04-clang
+                      preset: clang-release
+                      os: ubuntu-24.04-arm
+                      skip_upload: true
+                    - name: linux-x64-ubuntu-24.04-clang-debug
+                      preset: clang-debug
+                      os: ubuntu-24.04
+                      skip_upload: true
+                    - name: linux-x64-ubuntu-24.04-gcc
+                      preset: gcc-release
+                      os: ubuntu-24.04
+                      skip_upload: true
+                    - name: linux-x64-ubuntu-24.04-gcc-13
+                      preset: gcc-release
+                      os: ubuntu-24.04
+                      cmake_args: -DCMAKE_CXX_COMPILER=g++-13
+                      skip_upload: true
+                    - name: macos
+                      preset: macos-release
+                      os: macos-15
+                    - name: windows-x64
+                      preset: win64-release
+                      os: windows-latest
+                    - name: windows-arm64
+                      preset: winarm64-release
+                      os: windows-11-arm
 
         runs-on: ${{ matrix.os }}
+        container: ${{ matrix.container }}
+        defaults:
+            run:
+                shell: ${{ matrix.shell || (startsWith(matrix.os, 'windows') && 'pwsh' || 'bash') }}
+        env:
+            SLANG_FORMAT_ARTIFACT_NAME: slang-format-${{ matrix.name }}
         steps:
-            - uses: actions/checkout@v4
+            - name: Install dependencies (manylinux_2_28)
+              if: startsWith(matrix.container, 'quay.io/pypa/manylinux_2_28')
+              run: |
+                  dnf -y install gcc-toolset-14-libatomic-devel
+                  cmake --version
+            - name: Install Clang 21 (Ubuntu)
+              if: startsWith(matrix.preset, 'clang-')
+              run: |
+                  wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+                  sudo add-apt-repository "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-21 main"
+                  sudo apt-get update
+                  sudo apt-get install -y clang-21
+            - name: Install GCC 13 (Ubuntu)
+              if: contains(matrix.name, 'gcc-13')
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y g++-13
+            - uses: actions/checkout@v6
               with:
                   ref: ${{ inputs.ref || github.ref }}
-                  submodules: recursive
+                  submodules: true
                   fetch-depth: 0
+            - uses: ilammy/msvc-dev-cmd@v1
+              if: runner.os == 'Windows'
+              with:
+                  arch: ${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}
+            - uses: maxim-lobanov/setup-xcode@v1
+              if: runner.os == 'macOS'
+              with:
+                  xcode-version: "latest"
 
             - name: Configure
-              run: cmake --preset ${{ matrix.preset }} -DSLANG_FORMAT_CI_BUILD=ON
+              run: cmake --preset ${{ matrix.preset }} -DSLANG_FORMAT_CI_BUILD=ON ${{ matrix.cmake_args }}
 
             - name: Build
               run: cmake --build build/${{ matrix.preset }} -j8
 
-            - name: Test
+            - name: Run ctest
               run: ctest --test-dir build/${{ matrix.preset }} --output-on-failure --no-tests=error -j8
 
-            - name: Package
-              if: inputs.upload_artifacts
+            - name: Package release artifact
+              if: inputs.upload_artifacts && !matrix.skip_upload
               shell: bash
               run: |
-                  strip build/${{ matrix.preset }}/bin/slang-format
-                  mkdir -p release-artifacts/${{ matrix.artifact_name }}
-                  cp build/${{ matrix.preset }}/bin/slang-format release-artifacts/${{ matrix.artifact_name }}/
-                  cp LICENSE README.md release-artifacts/${{ matrix.artifact_name }}/
-                  tar -C release-artifacts -czf release-artifacts/${{ matrix.artifact_name }}.tar.gz ${{ matrix.artifact_name }}
+                  mkdir -p release-artifacts
 
-            - uses: actions/upload-artifact@v4
-              if: inputs.upload_artifacts
+                  if [[ "${RUNNER_OS}" == "Windows" ]]; then
+                    cp build/${{ matrix.preset }}/bin/slang-format.exe release-artifacts/slang-format.exe
+                  else
+                    cp build/${{ matrix.preset }}/bin/slang-format release-artifacts/slang-format
+                    chmod +x release-artifacts/slang-format
+                    if [[ "${RUNNER_OS}" == "Linux" ]]; then
+                      strip release-artifacts/slang-format
+                    fi
+                  fi
+
+                  cp LICENSE release-artifacts/LICENSE
+                  cat > release-artifacts/README.txt <<EOF
+                  slang-format - SystemVerilog formatter
+
+                  Add the slang-format binary to PATH after extracting this archive.
+
+                  For more information, visit:
+                  https://github.com/hudson-trading/slang-format
+
+                  Platform: ${{ env.SLANG_FORMAT_ARTIFACT_NAME }}
+                  Build date: $(date -u +%Y-%m-%d)
+                  EOF
+
+                  if [[ "${RUNNER_OS}" == "Windows" ]]; then
+                    (cd release-artifacts && 7z a ../${{ env.SLANG_FORMAT_ARTIFACT_NAME }}.zip *)
+                  else
+                    tar -czf ${{ env.SLANG_FORMAT_ARTIFACT_NAME }}.tar.gz -C release-artifacts .
+                  fi
+
+            - name: Upload artifact
+              if: inputs.upload_artifacts && !matrix.skip_upload
+              uses: actions/upload-artifact@v4
               with:
-                  name: ${{ matrix.artifact_name }}
-                  path: release-artifacts/${{ matrix.artifact_name }}.tar.gz
+                  name: ${{ env.SLANG_FORMAT_ARTIFACT_NAME }}
+                  path: |
+                      ${{ env.SLANG_FORMAT_ARTIFACT_NAME }}.tar.gz
+                      ${{ env.SLANG_FORMAT_ARTIFACT_NAME }}.zip
                   if-no-files-found: error
+                  retention-days: 7

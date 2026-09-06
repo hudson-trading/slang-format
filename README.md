@@ -1,6 +1,6 @@
 # slang-format
 
-`slang-format` is an opinionated SystemVerilog formatter built on the
+`slang-format` is an opinionated SystemVerilog formatter built on top of the
 [slang](https://github.com/MikePopoloski/slang) parser. It provides both a
 standalone command-line tool and the `slang::format` CMake library target.
 

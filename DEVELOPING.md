@@ -26,8 +26,7 @@ directives, disabled preprocessor branches, and other source trivia remain
 available throughout formatting. The core pipeline has three steps:
 
 1. `src/NormalizedFormat.cpp` converts the slang CST into a lossless,
-   formatter-owned tree. It classifies trivia, attaches trailing comments, and
-   represents conditional preprocessor branches explicitly.
+   formatter-owned tree. It classifies trivia, for example attaching trailing comments to the preceding token, multiline comments as their own nodes, and represents conditional preprocessor branches explicitly.
 2. `src/Layout.cpp` lowers the normalized tree into the document IR declared
    in `include/format/FormatDocument.h`. This is where syntax-specific spacing,
    indentation, wrapping, and alignment anchors are chosen.
@@ -69,9 +68,9 @@ tests/format/example.out.sv
 Run the whole golden suite, a filtered subset, or update a filtered golden:
 
 ```sh
-python3 scripts/test_format.py --build
-python3 scripts/test_format.py --build name_filter
-python3 scripts/test_format.py --build --update name_filter
+scripts/test_format.py --build
+scripts/test_format.py --build name_filter
+scripts/test_format.py --build --update name_filter
 ```
 
 Review every changed golden before keeping it. The harness checks expected
@@ -86,9 +85,9 @@ For CST and trivia debugging, use the repository helpers rather than invoking
 slang's CST JSON mode directly:
 
 ```sh
-python3 scripts/test_format.py --cst name_filter
-python3 scripts/inspect_cst.py tests/format/example.sv --directives
-python3 scripts/inspect_cst.py tests/format/example.sv --token assign
+scripts/test_format.py --cst name_filter
+scripts/inspect_cst.py tests/format/example.sv --directives
+scripts/inspect_cst.py tests/format/example.sv --token assign
 ```
 
 The C++ unit tests under `tests/cpp/` cover configuration, normalization, and
@@ -105,15 +104,15 @@ After changing the configuration types, regenerate the JSON schema and user
 documentation:
 
 ```sh
-python3 scripts/genconfig.py
+scripts/genconfig.py
 ```
 
 `src/FormatStyleGen.inc` is generated from slang's syntax definitions and the
 list policies in `scripts/gen_format_style.py`. Check or update it with:
 
 ```sh
-python3 scripts/gen_format_style.py --check
-python3 scripts/gen_format_style.py --write
+scripts/gen_format_style.py --check
+scripts/gen_format_style.py --write
 ```
 
 ## Embedding
@@ -133,12 +132,3 @@ When compatible `slang::slang` and `reflectcpp::reflectcpp` targets already
 exist, slang-format reuses them. Otherwise it adds its vendored submodules.
 Configuration loading and discovery are part of the formatter library, so
 embedded and standalone callers share the same behavior.
-
-## Before requesting review
-
-Run the complete tests and repository checks:
-
-```sh
-ctest --test-dir build --output-on-failure
-prek run --all-files
-```
