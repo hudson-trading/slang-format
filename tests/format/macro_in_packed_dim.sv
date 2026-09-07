@@ -1,10 +1,9 @@
 // When a macro stands in for an expression operand inside a packed dim
-// (e.g., `[`WIDTH - 1 : 0]` or `[ (X==`KIND_A)*(`MULT*3) ]`), slang's
+// (e.g., `[`WIDTH-1:0]` or `[(X==`KIND_A)*(`MULT*3)]`), slang's
 // parser produces an empty Identifier placeholder carrying the macro as
 // Directive trivia. The port alignment producer must preserve those
-// placeholders (instead of skipping all empty tokens) so the macro
-// survives into the formatted output; otherwise the CST diverges from
-// the input.
+// placeholders while retaining compact packed-dimension spacing; otherwise
+// the macro is lost or formatted differently from ordinary dimensions.
 
 module dut #(
     parameter integer P = 0,

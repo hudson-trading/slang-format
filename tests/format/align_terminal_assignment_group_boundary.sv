@@ -1,4 +1,5 @@
-// A wrapped assignment must not pull a declaration across a group boundary.
+// A wrapped initialized declaration does not participate in alignment or pull
+// adjacent declarations into its assignment column.
 module separated_declarations;
     wire ready = input_valid & output_ready;
 

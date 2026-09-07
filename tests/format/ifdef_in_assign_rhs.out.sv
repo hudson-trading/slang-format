@@ -25,10 +25,11 @@ interface test_if;
 // Pattern 3: ifdef with multiline expression
 wire [2:0] hmac_state;
 `ifdef GATE_LEVEL
-    assign hmac_state = {`HMAC_HIER.st_q_reg_2_.Q
-                        ,`HMAC_HIER.st_q_reg_1_.Q
-                        ,`HMAC_HIER.st_q_reg_0_.Q
-                        };
+    assign hmac_state = {`HMAC_HIER
+        .st_q_reg_2_.Q,
+        `HMAC_HIER.st_q_reg_1_.Q,
+        `HMAC_HIER.st_q_reg_0_.Q
+    };
 `else
     assign hmac_state = `HMAC_HIER.st_q;
 `endif

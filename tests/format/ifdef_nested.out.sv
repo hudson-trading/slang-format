@@ -1,6 +1,6 @@
 `ifdef OUTER
     module nested_ifdef (
-        input logic clk,
+        input  logic       clk,
         output logic [7:0] data
     );
         `ifdef INNER_A

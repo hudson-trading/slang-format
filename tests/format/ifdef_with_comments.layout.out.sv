@@ -2,20 +2,20 @@
 `ifdef PLATFORM_FPGA
     // FPGA-specific implementation
     module platform_mod (
-        input  logic clk,
+        input logic clk,
         output logic out
     );
         // Use BRAM inference
         /* Note: Vivado will infer BRAM for arrays >= 4096 bits */
-        logic [31:0] mem [128];
+        logic [31:0] mem[128];
 
         `ifdef XILINX
             // Xilinx-specific attribute
             (* ram_style = "block" *)
-            logic [31:0] bram [256];
-        `elsif ALTERA // Intel/Altera path
+            logic [31:0] bram[256];
+        `elsif ALTERA  // Intel/Altera path
             /* Altera uses a different attribute */
-            logic [31:0] bram [256] /* synthesis ramstyle = "M20K" */;
+            logic [31:0] bram[256] /* synthesis ramstyle = "M20K" */;
         `endif
 
         assign out = |mem[0];

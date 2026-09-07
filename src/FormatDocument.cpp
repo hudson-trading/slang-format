@@ -457,7 +457,7 @@ struct RenderRun {
                     newline(1, breakIndent(atom));
                     result.rendered.breaks.insert(atom.breakId);
                     result.rendered.renderedBreaks.push_back(
-                        {atom.breakId, collectText ? result.rendered.text.size() : 0}
+                        {atom.breakId, collectText ? result.rendered.text.size() : 0, atom.memberId}
                     );
                     result.cost.breaks++;
                     if (atom.memberId)
@@ -889,6 +889,22 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
             end = layout.text.size();
         return std::string_view(layout.text).substr(anchor.outputOffset, end - anchor.outputOffset);
     };
+    std::unordered_set<MemberId> membersWithBreaks;
+    for (const auto& lineBreak : layout.renderedBreaks) {
+        if (lineBreak.member)
+            membersWithBreaks.insert(lineBreak.member);
+    }
+    std::unordered_set<MemberId> wrappedDataDeclarations;
+    for (const auto& anchor : layout.alignmentAnchors) {
+        auto suffix = lineSuffix(anchor);
+        while (!suffix.empty() && slang::isTabOrSpace(suffix.front()))
+            suffix.remove_prefix(1);
+        bool assignmentAnchor = suffix.starts_with('=');
+        if (anchor.rowKind == slang::syntax::SyntaxKind::DataDeclaration && assignmentAnchor &&
+            (membersWithBreaks.contains(anchor.member) || isTerminalAssignmentAnchor(anchor))) {
+            wrappedDataDeclarations.insert(anchor.member);
+        }
+    }
 
     ComputedAlignment result;
     std::map<size_t, size_t> rowShifts;
@@ -903,6 +919,10 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
         std::ranges::sort(anchors, {}, [](const auto* anchor) { return anchor->line; });
         std::vector<const RenderedAlignmentAnchor*> rows;
         for (const auto* anchor : anchors) {
+            if (key.kind == slang::syntax::SyntaxKind::DataDeclaration &&
+                wrappedDataDeclarations.contains(anchor->member)) {
+                continue;
+            }
             auto line = lines[anchor->line];
             while (!line.empty() && (line.front() == ' ' || line.front() == '\t'))
                 line.remove_prefix(1);

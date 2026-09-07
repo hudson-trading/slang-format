@@ -283,9 +283,8 @@ module line_wrapping;
     always_comb aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa =
         bbbbbbbbbbbbbbbbbbb;
 
-    assign foo =
-        (bar & baz)         ? (something + 17'd42) :
-        (oh_crap | its_bad) ? (a & b) + myfunc(e, f[2:0]) :
-                              10'h1;
+    assign foo = (bar & baz)         ? (something + 17'd42) :
+                 (oh_crap | its_bad) ? (a & b) + myfunc(e, f[2:0]) :
+                                       10'h1;
 
 endmodule

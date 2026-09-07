@@ -10,13 +10,18 @@
 
 #include "format/FormatConstants.h"
 #include "format/FormatStyle.h"
+#include "format/FormatValidation.h"
 #include <algorithm>
 #include <optional>
 
+#include "slang/diagnostics/ParserDiags.h"
+#include "slang/parsing/Preprocessor.h"
 #include "slang/parsing/TokenKind.h"
 #include "slang/syntax/AllSyntax.h"
 #include "slang/syntax/SyntaxFacts.h"
+#include "slang/syntax/SyntaxTree.h"
 #include "slang/text/CharInfo.h"
+#include "slang/text/SourceManager.h"
 
 using namespace slang::parsing;
 using namespace slang::syntax;
@@ -79,9 +84,10 @@ bool tokenNeedsSeparation(Token left, Token right) {
 
 class Lowerer {
 public:
-    Lowerer(const NormalizedFormatDocument& normalized, const Config& config)
+    Lowerer(const NormalizedFormatDocument& normalized, const Config& config, FormatStage stage)
         : normalized(normalized),
-          config(config) {
+          config(config),
+          stage(stage) {
         for (const auto& token : normalized.tokens()) {
             auto hasDefine = [](const auto& triviaList) {
                 return std::ranges::any_of(triviaList, [](const NormalizedTrivia& trivia) {
@@ -205,6 +211,89 @@ private:
         bool memberOwned = false,
         int conditionalDepthChange = 0
     ) {
+        size_t leadingLineBreaks = 0;
+        for (char c : text) {
+            if (!slang::isWhitespace(c))
+                break;
+            if (c == '\n')
+                leadingLineBreaks++;
+        }
+
+        size_t subparseBaseline = SIZE_MAX;
+        size_t lineStartOffset = 0;
+        while (lineStartOffset < text.size()) {
+            size_t lineEnd = text.find('\n', lineStartOffset);
+            if (lineEnd == std::string_view::npos)
+                lineEnd = text.size();
+            size_t indent = 0;
+            while (lineStartOffset + indent < lineEnd &&
+                   slang::isTabOrSpace(text[lineStartOffset + indent])) {
+                indent++;
+            }
+            bool hasContent = lineStartOffset + indent < lineEnd &&
+                              text[lineStartOffset + indent] != '\r';
+            if (hasContent)
+                subparseBaseline = std::min(subparseBaseline, indent);
+            lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
+        }
+        if (subparseBaseline == SIZE_MAX)
+            subparseBaseline = 0;
+
+        std::string subparseInput;
+        subparseInput.reserve(text.size());
+        lineStartOffset = 0;
+        while (lineStartOffset < text.size()) {
+            size_t lineEnd = text.find('\n', lineStartOffset);
+            if (lineEnd == std::string_view::npos)
+                lineEnd = text.size();
+            size_t indent = 0;
+            while (lineStartOffset + indent < lineEnd && indent < subparseBaseline &&
+                   slang::isTabOrSpace(text[lineStartOffset + indent])) {
+                indent++;
+            }
+            subparseInput.append(
+                text.substr(lineStartOffset + indent, lineEnd - lineStartOffset - indent)
+            );
+            if (lineEnd != text.size())
+                subparseInput.push_back('\n');
+            lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
+        }
+
+        // Inactive branches are absent from the parent CST. Reparse complete branches
+        // opportunistically and leave context-dependent fragments verbatim.
+        std::string subparsedText;
+        slang::SourceManager sourceManager;
+        slang::parsing::PreprocessorOptions preprocessorOptions;
+        preprocessorOptions.maxIncludeDepth = 0;
+        preprocessorOptions.dontExpandMacros = true;
+        slang::Bag options(preprocessorOptions);
+        auto tree = SyntaxTree::fromFileInMemory(
+            subparseInput, sourceManager, "inactive conditional branch", "", options
+        );
+        bool hasParseError = tree &&
+                             std::ranges::any_of(tree->diagnostics(), [](const auto& diagnostic) {
+                                 return diagnostic.isError() &&
+                                        diagnostic.code != slang::diag::NotAllowedInCU;
+                             });
+        if (tree && !hasParseError) {
+            auto subparsed = NormalizedFormatDocument::build(tree->root(), &sourceManager);
+            auto document = Lowerer(subparsed, config, stage).build();
+            DocumentRenderer renderer(config);
+            auto layout = renderer.renderLayout(document);
+            subparsedText = stage == FormatStage::Layout
+                                ? std::move(layout.text)
+                                : renderer.renderAligned(document, layout).text;
+            slang::SourceManager formattedSourceManager;
+            auto formattedTree = SyntaxTree::fromFileInMemory(
+                subparsedText, formattedSourceManager, "formatted inactive conditional branch", "",
+                options
+            );
+            if (formattedTree && isTokenEquivalentTo(tree->root(), formattedTree->root())) {
+                subparsedText.insert(0, leadingLineBreaks, '\n');
+                text = subparsedText;
+            }
+        }
+
         if (lineStart && memberOwned) {
             while (!text.empty() && slang::isWhitespace(text.front()))
                 text.remove_prefix(1);
@@ -220,7 +309,7 @@ private:
         }
 
         size_t baseline = 0;
-        size_t lineStartOffset = 0;
+        lineStartOffset = 0;
         while (lineStartOffset < text.size()) {
             size_t lineEnd = text.find('\n', lineStartOffset);
             if (lineEnd == std::string_view::npos)
@@ -441,15 +530,15 @@ private:
                     lastToken->token.kind == TokenKind::Comma && !lineStart) {
                     hardLine(1, true);
                 }
-                if (trailing && lastToken && !lineStart && !spacingProvided &&
+                if (trailing && bracketDepth == 0 && lastToken && !lineStart && !spacingProvided &&
                     shouldInsertWhitespace(
                         lastToken->token.kind, TokenKind::Identifier, lastToken->parentKind,
                         SyntaxKind::Unknown, false
                     )) {
                     append(builder.text(" "));
                 }
-                if (!trailing && trivia.placement == TriviaPlacement::Inline && lastToken &&
-                    !lineStart && !spacingProvided &&
+                if (!trailing && bracketDepth == 0 && trivia.placement == TriviaPlacement::Inline &&
+                    lastToken && !lineStart && !spacingProvided &&
                     shouldInsertWhitespace(
                         lastToken->token.kind, TokenKind::Identifier, lastToken->parentKind,
                         SyntaxKind::Unknown, false
@@ -764,7 +853,7 @@ private:
             spacingProvided = true;
         }
 
-        bool compact = bracketDepth > 0 && !macroVariableDimension;
+        bool compact = bracketDepth > 0;
         bool tokenInDataType = (normalizedToken.inDataType &&
                                 normalizedToken.parentKind != SyntaxKind::VariableDimension) ||
                                macroVariableDimension || spaceBeforeMacroVariableDimension;
@@ -775,9 +864,6 @@ private:
         if (!lineStart && !spacingProvided) {
             if (lastToken && lastToken->token.kind == TokenKind::DoubleStar &&
                 currentMemberContainsMacro) {
-                append(builder.text(" "));
-            }
-            else if (macroVariableDimension && token.kind == TokenKind::Colon) {
                 append(builder.text(" "));
             }
             else if (noNameInstantiation && !noNameCallStyle &&
@@ -826,7 +912,8 @@ private:
             auto rowKind = alignmentRowKind();
             if (token.kind == TokenKind::OpenBracket && normalizedToken.inDataType &&
                 (rowKind == SyntaxKind::DataDeclaration ||
-                 rowKind == SyntaxKind::ImplicitAnsiPort) &&
+                 rowKind == SyntaxKind::ImplicitAnsiPort ||
+                 rowKind == SyntaxKind::TypedefDeclaration) &&
                 !packedDimensionAnchorEmitted) {
                 uint32_t column = rowKind == SyntaxKind::ImplicitAnsiPort ? 1 : 0;
                 append(builder.alignmentAnchor(column, rowKind, currentAlignmentGroup));
@@ -1255,6 +1342,11 @@ private:
         return width;
     }
 
+    bool castRequiresOperandBreak(const NormalizedNode& node) const {
+        return node.kind == SyntaxKind::CastExpression && config.columnLimit.get() &&
+               formattedFlatWidth(node) > config.columnLimit.get();
+    }
+
     size_t maxMulticoncatItemWidth(const NormalizedNode& node) const {
         size_t width = 0;
         for (const auto& child : node.children) {
@@ -1307,6 +1399,17 @@ private:
                 result.right = nested;
         }
         return result;
+    }
+
+    bool ternaryUsesLeadingColonBreak(const NormalizedNode& node) const {
+        auto parts = ternaryParts(node);
+        if (!parts.left || !parts.right || parts.left->kind != SyntaxKind::ScopedName ||
+            parts.right->kind != SyntaxKind::ScopedName) {
+            return false;
+        }
+        return std::ranges::none_of(node.children, [&](const NormalizedChild& child) {
+            return childHasForcingComment(child) || childContainsMacro(child);
+        });
     }
 
     bool ternaryUsesTable(const NormalizedNode& node) const {
@@ -1475,6 +1578,33 @@ private:
         bool hasComment = std::ranges::any_of(node.children, [&](const NormalizedChild& child) {
             return childHasForcingComment(child);
         });
+        if (segments.size() == 1 && !hasComment && ternaryUsesLeadingColonBreak(node)) {
+            bool savedManualBreaks = manualExpressionBreaks;
+            const NormalizedNode* savedTrueBranch = ternaryTrueBranch;
+            const NormalizedNode* savedFalseBranch = ternaryFalseBranch;
+            manualExpressionBreaks = true;
+            ternaryTrueBranch = first.left;
+            ternaryFalseBranch = first.right;
+            size_t ternaryBegin = mark();
+            lowerChildren(node, 0, first.question);
+            append(builder.indent(
+                static_cast<int>(config.indentWidth.get()), builder.softLine(ternaryBreakPriority)
+            ));
+            spacingProvided = true;
+            size_t branchesBegin = mark();
+            lowerChild(node.children[first.question], node.kind);
+            lowerChildren(node, first.question + 1, first.colon);
+            append(builder.softLine(0));
+            spacingProvided = true;
+            lowerChild(node.children[first.colon], node.kind);
+            lowerChildren(node, first.colon + 1, node.children.size());
+            append(builder.relativeAnchor(0, capture(branchesBegin)));
+            append(builder.relativeAnchor(0, capture(ternaryBegin)));
+            ternaryTrueBranch = savedTrueBranch;
+            ternaryFalseBranch = savedFalseBranch;
+            manualExpressionBreaks = savedManualBreaks;
+            return true;
+        }
         if (segments.size() == 1 && !hasComment) {
             bool savedManualBreaks = manualExpressionBreaks;
             const NormalizedNode* savedTrueBranch = ternaryTrueBranch;
@@ -2082,11 +2212,13 @@ private:
             size_t standaloneLimit = config.columnLimit.get() > config.indentWidth.get() * 2
                                          ? config.columnLimit.get() - config.indentWidth.get() * 2
                                          : 0;
-            bool declarationAssignment =
-                (parameterAssignment && (!rhsNode || !isListHandledExpression(rhsNode->kind))) ||
-                ((currentMemberKind == SyntaxKind::DataDeclaration ||
-                  currentMemberKind == SyntaxKind::NetDeclaration) &&
-                 rhsNode && standaloneLimit && formattedFlatWidth(*rhsNode) <= standaloneLimit);
+            bool dataDeclarationAssignment = (currentMemberKind == SyntaxKind::DataDeclaration ||
+                                              currentMemberKind == SyntaxKind::NetDeclaration) &&
+                                             rhsNode && standaloneLimit &&
+                                             formattedFlatWidth(*rhsNode) <= standaloneLimit;
+            bool declarationAssignment = (parameterAssignment &&
+                                          (!rhsNode || !isListHandledExpression(rhsNode->kind))) ||
+                                         dataDeclarationAssignment;
             const NormalizedNode* peeledRhs = rhsNode;
             while (peeledRhs && peeledRhs->kind == SyntaxKind::ParenthesizedExpression) {
                 const NormalizedNode* nestedExpression = nullptr;
@@ -2104,6 +2236,9 @@ private:
                                          (peeledRhs &&
                                           (peeledRhs->kind == SyntaxKind::ConditionalExpression ||
                                            isComparisonKind(peeledRhs->kind)));
+            bool compareDataDeclarationBinaryBreaks = !followsSkippedMember &&
+                                                      dataDeclarationAssignment &&
+                                                      isBinaryKind(rhsNode->kind);
             const NormalizedNode* binaryLeft = nullptr;
             if (rhsNode && isBinaryKind(rhsNode->kind)) {
                 for (const auto& nested : rhsNode->children) {
@@ -2139,6 +2274,7 @@ private:
             if (rhsNode && rhsNode->kind == SyntaxKind::ConditionalExpression &&
                 ternaryUsesTable(*rhsNode)) {
                 auto parts = ternaryParts(*rhsNode);
+                bool rhsHasForcingComment = childHasForcingComment(child);
                 bool questionHasComment = false;
                 if (parts.question < rhsNode->children.size()) {
                     if (auto questionToken =
@@ -2149,8 +2285,11 @@ private:
                 bool leftHasComment = false;
                 for (size_t i = parts.question + 1; i < parts.colon; i++)
                     leftHasComment = leftHasComment || childHasForcingComment(rhsNode->children[i]);
-                forceTernaryTable = !childHasForcingComment(child) || questionHasComment ||
-                                    leftHasComment;
+                bool cleanTernaryChain = parts.right &&
+                                         parts.right->kind == SyntaxKind::ConditionalExpression &&
+                                         !rhsHasForcingComment && !childContainsMacro(child);
+                forceTernaryTable = !cleanTernaryChain && !ternaryUsesLeadingColonBreak(*rhsNode) &&
+                                    (!rhsHasForcingComment || questionHasComment || leftHasComment);
             }
             bool forcingInvocation = directInvocation && (childHasForcingComment(child) ||
                                                           (config.columnLimit.get() &&
@@ -2159,7 +2298,9 @@ private:
             bool hugeRhs = rhsNode && config.columnLimit.get() &&
                            formattedFlatWidth(*rhsNode) > config.columnLimit.get() * 3;
             int assignmentPriority = 100;
-            if (preferAssignmentBreak || hugeRhs)
+            if (compareDataDeclarationBinaryBreaks)
+                assignmentPriority = expressionBreakPriority + 1;
+            else if (preferAssignmentBreak || hugeRhs)
                 assignmentPriority = 1;
             else if (rhsNode && isBinaryKind(rhsNode->kind))
                 assignmentPriority = SyntaxFacts::getPrecedence(rhsNode->kind) + 1;
@@ -2178,18 +2319,22 @@ private:
 
             size_t rhsBegin = mark();
             const NormalizedNode* savedAssignmentRhs = assignmentRhsRoot;
+            DocId savedAssignmentRhsLine = assignmentRhsLine;
             bool savedBinaryContinuationScope = binaryContinuationScope;
             assignmentRhsRoot = rhsNode;
+            assignmentRhsLine = assignmentLine;
             binaryContinuationScope = false;
             lowerChild(child);
             assignmentRhsRoot = savedAssignmentRhs;
+            assignmentRhsLine = savedAssignmentRhsLine;
             binaryContinuationScope = savedBinaryContinuationScope;
             auto rhs = capture(rhsBegin);
             if (rhsNode && isBinaryKind(rhsNode->kind)) {
                 rhs = builder.relativeAnchor(static_cast<int>(config.indentWidth.get()), rhs);
             }
             else if (rhsNode && rhsNode->kind != SyntaxKind::ParenthesizedExpression &&
-                     !isListHandledExpression(rhsNode->kind)) {
+                     !isListHandledExpression(rhsNode->kind) &&
+                     !castRequiresOperandBreak(*rhsNode)) {
                 rhs = builder.relativeAnchor(0, rhs);
             }
             if (parameterAssignment && rhsNode &&
@@ -3068,6 +3213,7 @@ private:
         size_t begin = mark();
         bool ternaryTable = false;
         bool castWithOperandBreak = false;
+        bool castAssignmentRhs = false;
         bool addBinaryContinuationIndent = false;
         bool anchorBinaryContinuation = false;
         int binaryContinuationAnchorOffset = static_cast<int>(config.indentWidth.get());
@@ -3125,6 +3271,10 @@ private:
                 addBinaryContinuationIndent = true;
                 anchorBinaryContinuation = true;
                 binaryContinuationScope = true;
+            }
+            if (inAssignmentCastOperand) {
+                addBinaryContinuationIndent = false;
+                anchorBinaryContinuation = false;
             }
             if (!node.children.empty() && childContainsMacro(node.children.front()))
                 addBinaryContinuationIndent = false;
@@ -3210,9 +3360,11 @@ private:
         else if (node.kind == SyntaxKind::ConditionalExpression)
             ternaryTable = lowerTernary(node);
         else if (node.kind == SyntaxKind::CastExpression &&
-                 (currentMemberKind == SyntaxKind::NamedPortConnection ||
+                 (castRequiresOperandBreak(node) ||
+                  currentMemberKind == SyntaxKind::NamedPortConnection ||
                   currentMemberKind == SyntaxKind::NamedParamAssignment ||
                   currentMemberKind == SyntaxKind::NamedArgument)) {
+            castAssignmentRhs = assignmentRhsRoot == &node;
             for (const auto& child : node.children) {
                 auto nested = childNode(child);
                 if (!nested || nested->kind != SyntaxKind::ParenthesizedExpression) {
@@ -3221,12 +3373,28 @@ private:
                 }
 
                 castWithOperandBreak = true;
+                size_t operandBegin = SIZE_MAX;
+                bool savedAssignmentCastOperand = inAssignmentCastOperand;
                 for (size_t i = 0; i < nested->children.size(); i++) {
                     lowerChild(nested->children[i], nested->kind);
                     if (i == 0) {
-                        append(builder.softLine(0, ""));
-                        spacingProvided = true;
+                        if (castRequiresOperandBreak(node)) {
+                            operandBegin = mark();
+                            hardLine(1, !castAssignmentRhs);
+                            inAssignmentCastOperand = castAssignmentRhs;
+                        }
+                        else {
+                            append(builder.softLine(0, ""));
+                            spacingProvided = true;
+                        }
                     }
+                }
+                inAssignmentCastOperand = savedAssignmentCastOperand;
+                if (operandBegin != SIZE_MAX && castAssignmentRhs) {
+                    auto operand = capture(operandBegin);
+                    append(builder.indentIfBreak(
+                        assignmentRhsLine, static_cast<int>(config.indentWidth.get()), operand
+                    ));
                 }
             }
         }
@@ -3242,7 +3410,7 @@ private:
             contents = builder.relativeAnchor(breakMacroDimensionAfterPlus ? 2 : -2, contents);
         }
 
-        if (castWithOperandBreak)
+        if (castWithOperandBreak && !castAssignmentRhs)
             contents = builder.relativeAnchor(static_cast<int>(config.indentWidth.get()), contents);
 
         if (node.kind == SyntaxKind::AssignmentPatternExpression &&
@@ -3292,6 +3460,7 @@ private:
 
     const NormalizedFormatDocument& normalized;
     const Config& config;
+    FormatStage stage;
     DocumentBuilder builder;
     std::vector<DocId> output;
     const NormalizedToken* lastToken = nullptr;
@@ -3342,6 +3511,8 @@ private:
     bool noNameCallStyle = false;
     size_t instanceOpenParenPadding = 0;
     const NormalizedNode* assignmentRhsRoot = nullptr;
+    DocId assignmentRhsLine = 0;
+    bool inAssignmentCastOperand = false;
     const NormalizedNode* verticallyWrappedImplication = nullptr;
     bool binaryContinuationScope = false;
     int binaryContinuationIndent = 0;
@@ -3365,9 +3536,10 @@ private:
 
 FormatDocument buildLayoutDocument(
     const NormalizedFormatDocument& normalized,
-    const Config& config
+    const Config& config,
+    FormatStage stage
 ) {
-    return Lowerer(normalized, config).build();
+    return Lowerer(normalized, config, stage).build();
 }
 
 } // namespace format

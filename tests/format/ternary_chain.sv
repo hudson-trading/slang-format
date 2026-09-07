@@ -4,9 +4,8 @@
 // conditions are padded so all `?` operators line up. The final-else value
 // sits on its own line at the value column. Reads as an if-else-if cascade.
 //
-// Pairs with the always-prefer-normal-mode rule for ternary RHS so the
-// chain lands at block + 1 (under `localparam x =`) instead of hanging
-// from the equal-aligned column.
+// The first row stays after the assignment when it fits; otherwise the
+// table starts at the normal continuation indent.
 
 package test_pkg;
     // Chain of 2 ternaries with parenthesized predicates and short trues.

@@ -5,7 +5,7 @@ package example_pkg;
         logic [maximum(
                1,
                `ITEM_COUNT
-           ) - 1 : 0][7:0] items;
-        logic [127:0]      tag;
+           )-1:0][7:0] items;
+        logic [127:0]  tag;
     } record_t;
 endpackage

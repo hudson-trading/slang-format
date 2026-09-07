@@ -1,6 +1,6 @@
 `ifdef FEATURE_A
     module feature_a (
-        input logic clk,
+        input  logic clk,
         output logic out
     );
         assign out = 1'b1;

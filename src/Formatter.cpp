@@ -29,7 +29,7 @@ Formatter::Formatter(
 
 std::string Formatter::format(const slang::syntax::SyntaxNode& root) {
     auto normalized = NormalizedFormatDocument::build(root, sourceManager_);
-    auto document = buildLayoutDocument(normalized, config_);
+    auto document = buildLayoutDocument(normalized, config_, stage_);
     DocumentRenderer renderer(config_);
     auto layout = renderer.renderLayout(document);
     if (stage_ == FormatStage::Layout)

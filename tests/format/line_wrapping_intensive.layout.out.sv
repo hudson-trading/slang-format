@@ -32,12 +32,12 @@ module line_wrapping_intensive;
     end
 
     // Dec with newline
-    wire a =
-        bbbbbbbbbb && ccccccccccccccccccccccc && (dddddddddddddddddddddd || eeeeeeeeeeeeeeeeeeeee);
+    wire a = bbbbbbbbbb && ccccccccccccccccccccccc
+                 && (dddddddddddddddddddddd || eeeeeeeeeeeeeeeeeeeee);
 
     // Dec with more newlines
-    wire a =
-        bbbbbbbbbb && ccccccccccccccccccccccc && (dddddddddddddddddddddd || eeeeeeeeeeeeeeeeeeeee);
+    wire a = bbbbbbbbbb && ccccccccccccccccccccccc
+                 && (dddddddddddddddddddddd || eeeeeeeeeeeeeeeeeeeee);
 
     // Long expression
     always_ff @(posedge clk) begin

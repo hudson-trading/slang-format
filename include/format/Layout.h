@@ -9,13 +9,15 @@
 
 #include "format/FormatConfig.h"
 #include "format/FormatDocument.h"
+#include "format/FormatStage.h"
 #include "format/NormalizedFormat.h"
 
 namespace format {
 
 FormatDocument buildLayoutDocument(
     const NormalizedFormatDocument& normalized,
-    const Config& config
+    const Config& config,
+    FormatStage stage
 );
 
 } // namespace format

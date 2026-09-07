@@ -114,6 +114,7 @@ private:
 struct RenderedBreak {
     BreakId id = 0;
     size_t outputOffset = 0;
+    MemberId member = 0;
 };
 
 struct RenderedAlignmentAnchor {

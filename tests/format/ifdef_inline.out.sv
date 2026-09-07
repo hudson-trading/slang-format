@@ -16,7 +16,7 @@ module inline_ifdef (
     // Block-level ifdef inside a parameter (should stay block-level)
     parameter int DEPTH =
     `ifdef CUSTOM_DEPTH
-        `CUSTOM_DEPTH ;
+        `CUSTOM_DEPTH;
     `else
         16;
     `endif
