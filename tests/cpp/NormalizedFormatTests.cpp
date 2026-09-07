@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Hudson River Trading
 // SPDX-License-Identifier: MIT
 
+#include "format/FormatterUtils.h"
 #include "format/NormalizedFormat.h"
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
@@ -67,6 +68,17 @@ bool hasVerbatimNode(const format::NormalizedNode& node, std::string_view text) 
 }
 
 } // namespace
+
+TEST_CASE("protected line starts include block comment trivia at EOF") {
+    for (std::string_view suffix : {"", "\nlogic a;\n"}) {
+        std::string input = "logic b;\r\n/* first\r\n  second\n*/";
+        input += suffix;
+        auto offsets = format::protectedLineStarts(input);
+        CHECK(offsets.size() == 2);
+        CHECK(offsets.contains(input.find("  second")));
+        CHECK(offsets.contains(input.find("*/")));
+    }
+}
 
 TEST_CASE("normalized comments have explicit trailing and standalone owners") {
     auto tree = parse(R"(
@@ -245,36 +257,11 @@ endclass
 )");
     auto document = format::NormalizedFormatDocument::build(tree->root(), &sourceManager);
 
-    const format::NormalizedTrivia* recovered = nullptr;
-    auto findRecovered = [&](const auto& self, const format::NormalizedNode& node) -> void {
-        auto found = std::ranges::find_if(node.leading, [](const auto& trivia) {
-            return trivia.text == "`REGISTER_TYPE(example)";
-        });
-        if (found != node.leading.end()) {
-            recovered = &*found;
-            return;
-        }
-        for (const auto& child : node.children) {
-            if (auto nested = std::get_if<std::unique_ptr<format::NormalizedNode>>(&child.value)) {
-                self(self, **nested);
-            }
-            else if (auto list =
-                         std::get_if<std::unique_ptr<format::NormalizedList>>(&child.value)) {
-                for (const auto& item : (*list)->children) {
-                    if (auto nested =
-                            std::get_if<std::unique_ptr<format::NormalizedNode>>(&item.value)) {
-                        self(self, **nested);
-                    }
-                }
-            }
-            if (recovered)
-                return;
-        }
-    };
-    findRecovered(findRecovered, document.root());
-    REQUIRE(recovered);
-    CHECK(recovered->kind == format::NormalizedTriviaKind::Verbatim);
-    CHECK(recovered->placement == format::TriviaPlacement::Standalone);
+    auto macro = findTrivia(document, "`REGISTER_TYPE(example)", false);
+    REQUIRE(macro);
+    CHECK(macro->text == "`REGISTER_TYPE(example)");
+    CHECK(macro->kind == format::NormalizedTriviaKind::MacroUsage);
+    CHECK(macro->placement == format::TriviaPlacement::Standalone);
 }
 
 TEST_CASE("slang-format skip marks one normalized member verbatim") {

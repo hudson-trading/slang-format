@@ -13,6 +13,7 @@
 #include <optional>
 #include <string_view>
 
+#include "slang/parsing/Lexer.h"
 #include "slang/syntax/AllSyntax.h"
 #include "slang/syntax/SyntaxFacts.h"
 #include "slang/syntax/SyntaxListInfo.h"
@@ -42,6 +43,13 @@ std::string syntaxText(const SyntaxNode& syntax, const SourceManager* sourceMana
             if (!token || token.isMissing())
                 continue;
             result.push_back(' ');
+            for (const auto& trivia : token.trivia()) {
+                if (trivia.kind == TriviaKind::LineComment ||
+                    trivia.kind == TriviaKind::BlockComment) {
+                    result.append(trivia.getRawText());
+                    result.push_back(trivia.kind == TriviaKind::LineComment ? '\n' : ' ');
+                }
+            }
             result.append(token.rawText());
         }
         return result;
@@ -133,6 +141,8 @@ std::optional<std::string> canonicalSkippedAssignment(const Trivia& trivia) {
     std::string result;
     bool pendingSpace = false;
     for (auto token : tokens) {
+        if (token.kind == TokenKind::Directive)
+            return std::nullopt;
         for (const auto& nested : token.trivia()) {
             if (nested.kind != TriviaKind::Whitespace && nested.kind != TriviaKind::EndOfLine)
                 return std::nullopt;
@@ -202,6 +212,105 @@ int recoveredConditionalDepthChange(std::string_view text) {
 
 } // namespace
 
+std::vector<ProtectedTextRange> protectedTextRanges(std::string_view text) {
+    SourceManager sourceManager;
+    BumpAllocator allocator;
+    Diagnostics diagnostics;
+    Lexer lexer(sourceManager.assignText(text), allocator, diagnostics, sourceManager);
+    std::vector<Token> tokens;
+    for (auto token = lexer.lex(); token.kind != TokenKind::EndOfFile; token = lexer.lex())
+        tokens.push_back(token);
+
+    std::vector<ProtectedTextRange> result;
+    for (size_t i = 0; i < tokens.size(); i++) {
+        auto token = tokens[i];
+        size_t last = i;
+        if (token.kind == TokenKind::Directive &&
+            token.directiveKind() == SyntaxKind::DefineDirective) {
+            while (last + 1 < tokens.size()) {
+                bool continuation = tokens[last].kind == TokenKind::LineContinuation;
+                bool done = false;
+                for (const auto& trivia : tokens[last + 1].trivia()) {
+                    if (trivia.kind == TriviaKind::EndOfLine) {
+                        if (!continuation) {
+                            done = true;
+                            break;
+                        }
+                        continuation = false;
+                    }
+                    else if (trivia.kind == TriviaKind::LineComment) {
+                        continuation = trivia.getRawText().ends_with('\\');
+                    }
+                    else {
+                        continuation = false;
+                    }
+                }
+                if (done)
+                    break;
+                last++;
+            }
+        }
+        else if (token.kind == TokenKind::Directive &&
+                 token.directiveKind() == SyntaxKind::MacroUsage) {
+            if (last + 1 < tokens.size() && tokens[last + 1].kind == TokenKind::OpenParenthesis) {
+                int depth = 0;
+                do {
+                    last++;
+                    if (tokens[last].kind == TokenKind::OpenParenthesis)
+                        depth++;
+                    else if (tokens[last].kind == TokenKind::CloseParenthesis)
+                        depth--;
+                } while (depth && last + 1 < tokens.size());
+            }
+        }
+        else if (token.kind != TokenKind::StringLiteral) {
+            continue;
+        }
+        result.push_back(
+            {token.location().offset(),
+             tokens[last].location().offset() + tokens[last].rawText().size()}
+        );
+        i = last;
+    }
+    return result;
+}
+
+std::unordered_set<size_t> protectedLineStarts(std::string_view text) {
+    std::unordered_set<size_t> result;
+    if (text.find('\n') == std::string_view::npos)
+        return result;
+    for (auto range : protectedTextRanges(text)) {
+        for (size_t pos = text.find('\n', range.begin); pos < range.end;
+             pos = text.find('\n', pos + 1)) {
+            result.insert(pos + 1);
+        }
+    }
+    // Inactive-branch comments are DisabledText, whose interior bytes must
+    // survive reindentation just like opaque macro arguments.
+    SourceManager sm;
+    BumpAllocator allocator;
+    Diagnostics diagnostics;
+    Lexer lexer(sm.assignText(text), allocator, diagnostics, sm);
+    while (true) {
+        auto token = lexer.lex();
+        size_t offset = token.location().offset();
+        for (const auto& trivia : token.trivia())
+            offset -= trivia.getRawText().size();
+        for (const auto& trivia : token.trivia()) {
+            auto raw = trivia.getRawText();
+            if (trivia.kind == TriviaKind::BlockComment) {
+                for (size_t pos = raw.find('\n'); pos != std::string_view::npos;
+                     pos = raw.find('\n', pos + 1))
+                    result.insert(offset + pos + 1);
+            }
+            offset += raw.size();
+        }
+        if (token.kind == TokenKind::EndOfFile)
+            break;
+    }
+    return result;
+}
+
 class NormalizedDocumentBuilder {
 public:
     NormalizedDocumentBuilder(const SyntaxNode& root, const SourceManager* sourceManager)
@@ -214,13 +323,33 @@ public:
         classifyTrivia();
         hoistStandaloneRecovery(*result.root_);
         bool foreignTemplate = false;
+        bool incompleteConfig = false;
+        // Unsupported config paths can spill into later compilation-unit
+        // members during recovery, so preserving just the config is insufficient.
+        auto inspectConfig = [&](const NormalizedChild& item) {
+            if (auto node = std::get_if<std::unique_ptr<NormalizedNode>>(&item.value);
+                node && (*node)->kind == SyntaxKind::ConfigDeclaration) {
+                incompleteConfig =
+                    incompleteConfig ||
+                    (*node)->syntax->as<ConfigDeclarationSyntax>().endconfig.isMissing();
+            }
+        };
+        for (const auto& child : result.root_->children) {
+            if (auto list = std::get_if<std::unique_ptr<NormalizedList>>(&child.value)) {
+                for (const auto& item : (*list)->children)
+                    inspectConfig(item);
+            }
+            else {
+                inspectConfig(child);
+            }
+        }
         if (sourceManager) {
             auto location = root.getFirstToken().location();
             if (location)
                 foreignTemplate =
                     hasForeignTemplateDirective(sourceManager->getSourceText(location.buffer()));
         }
-        if (foreignTemplate) {
+        if (foreignTemplate || incompleteConfig) {
             result.root_->verbatim = true;
             result.root_->verbatimText = syntaxText(root, sourceManager);
         }
@@ -620,6 +749,7 @@ private:
     void classifyTrivia() {
         NormalizedToken* previous = nullptr;
         std::optional<TriviaOwner> previousMacro;
+        std::vector<TriviaPlacement> conditionalPlacements;
         for (auto& current : tokens) {
             size_t lineBreaks = 0;
             std::vector<NormalizedTrivia>* lastDirectiveOwner = nullptr;
@@ -642,6 +772,15 @@ private:
                 }
 
                 if (isCommentTrivia(trivia)) {
+                    if (lineBreaks == 0 && !current.leading.empty() &&
+                        current.leading.back().kind == NormalizedTriviaKind::Comment &&
+                        current.leading.back().placement == TriviaPlacement::Standalone) {
+                        auto& comment = current.leading.back();
+                        comment.text.append(" ");
+                        comment.text.append(trivia.getRawText());
+                        comment.lineComment = comment.lineComment || isLineCommentTrivia(trivia);
+                        continue;
+                    }
                     if (lineBreaks == 0 && previousMacro) {
                         auto& macro = previousMacro->get();
                         macro.joinsFollowingToken = true;
@@ -656,7 +795,6 @@ private:
                         auto& directive = lastDirectiveOwner->at(lastDirectiveIndex);
                         directive.text.append("  ");
                         directive.text.append(trivia.getRawText());
-                        lastDirectiveOwner = nullptr;
                         continue;
                     }
                     NormalizedTrivia item{
@@ -682,7 +820,12 @@ private:
                                                  SyntaxFacts::getBinaryExpression(
                                                      current.token.kind
                                                  ) != SyntaxKind::Unknown;
-                        item.placement = endsLine && !inlineBeforeElse && !blockBeforeBinary
+                        bool beforeListDelimiter = current.token.kind == TokenKind::Comma ||
+                                                   current.token.kind ==
+                                                       TokenKind::CloseParenthesis ||
+                                                   current.token.kind == TokenKind::CloseBrace;
+                        item.placement = (endsLine || beforeListDelimiter) && !inlineBeforeElse &&
+                                                 !blockBeforeBinary
                                              ? TriviaPlacement::Trailing
                                              : TriviaPlacement::Inline;
                         previous->trailing.push_back(std::move(item));
@@ -744,6 +887,19 @@ private:
                     TriviaPlacement placement = !hadLineBreak && lineBreaks == 0 && previous
                                                     ? TriviaPlacement::Inline
                                                     : TriviaPlacement::Standalone;
+                    if (isConditionalDirective(syntax.kind)) {
+                        // Keep the whole conditional in the opening directive's
+                        // context even when its body introduces line breaks.
+                        if (syntax.kind == SyntaxKind::IfDefDirective ||
+                            syntax.kind == SyntaxKind::IfNDefDirective) {
+                            conditionalPlacements.push_back(placement);
+                        }
+                        else if (!conditionalPlacements.empty()) {
+                            placement = conditionalPlacements.back();
+                            if (syntax.kind == SyntaxKind::EndIfDirective)
+                                conditionalPlacements.pop_back();
+                        }
+                    }
                     NormalizedTrivia item{
                         kind, placement, syntaxText(syntax, sourceManager), &syntax, false
                     };
@@ -830,7 +986,12 @@ private:
                                     std::string(text).substr(0, lineEnd), nullptr, false
                                 };
                                 prefix.endsLine = true;
-                                previous->trailing.push_back(std::move(prefix));
+                                if (previousMacro) {
+                                    previousMacro->get().text.append(prefix.text);
+                                }
+                                else {
+                                    previous->trailing.push_back(std::move(prefix));
+                                }
 
                                 size_t nextLine = lineEnd + 1;
                                 if (text[lineEnd] == '\r' && nextLine < text.size() &&

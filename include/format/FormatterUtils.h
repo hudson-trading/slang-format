@@ -7,9 +7,27 @@
 //------------------------------------------------------------------------------
 #pragma once
 
+#include <string_view>
+#include <unordered_set>
+#include <vector>
+
 #include "slang/parsing/Token.h"
 
 namespace format {
+
+/// Byte interval occupied by a macro or a literal whose internal text is opaque.
+struct ProtectedTextRange {
+    /// First byte of the source token or macro.
+    size_t begin;
+    /// One past the last byte, excluding surrounding trivia.
+    size_t end;
+};
+
+/// Lex source without preprocessing so inactive macros receive the same protection.
+std::vector<ProtectedTextRange> protectedTextRanges(std::string_view text);
+
+/// Line-start offsets inside tokens, macros, or block comments with preserved whitespace.
+std::unordered_set<size_t> protectedLineStarts(std::string_view text);
 
 // The slang preprocessor rewrites LineComment/BlockComment trivia to DisabledText
 // on directive tokens in untaken branches. These helpers detect comment text

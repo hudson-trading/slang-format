@@ -7,6 +7,6 @@
 // The body is intentionally multiline.
 `ifndef HELPER
     `define HELPER(VALUE) \
-        VALUE = 1; \
-        VALUE += 2;
+    VALUE = 1; \
+    VALUE += 2;
 `endif

@@ -9,6 +9,7 @@
 #include "format/FormatDocument.h"
 
 #include "format/FormatConstants.h"
+#include "format/FormatterUtils.h"
 #include <algorithm>
 #include <array>
 #include <limits>
@@ -240,6 +241,8 @@ struct Delimiter {
     size_t column;
     size_t contentIndent;
     bool aligned;
+
+    bool operator==(const Delimiter&) const = default;
 };
 
 struct RenderCursor {
@@ -251,6 +254,8 @@ struct RenderCursor {
     std::vector<std::pair<AnchorId, std::optional<size_t>>> anchorStack;
     std::vector<Delimiter> delimiters;
     bool pendingAlignedDelimiter = false;
+
+    bool operator==(const RenderCursor&) const = default;
 };
 
 struct RenderMetadata {
@@ -264,6 +269,7 @@ struct RenderSlice {
     const RenderCursor* initialCursor = nullptr;
     const std::unordered_map<size_t, std::vector<MemberId>>* capturePoints = nullptr;
     std::unordered_map<MemberId, RenderCursor>* capturedCursors = nullptr;
+    RenderCursor* finalCursor = nullptr;
     bool finish = true;
 };
 
@@ -567,6 +573,8 @@ RenderResult renderAtoms(
     }
     if (slice.finish)
         run.finish();
+    if (slice.finalCursor)
+        *slice.finalCursor = run.cursor;
     return std::move(run.result);
 }
 
@@ -675,6 +683,21 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
 
     auto metadata = collectRenderMetadata(atoms);
     auto memberRanges = collectMemberRanges(atoms, actions);
+    std::vector<std::pair<size_t, MemberId>> orderedRanges;
+    for (const auto& [member, range] : memberRanges)
+        orderedRanges.emplace_back(range.begin, member);
+    std::ranges::sort(orderedRanges);
+    std::unordered_set<MemberId> isolatedMembers;
+    size_t precedingEnd = 0;
+    for (size_t i = 0; i < orderedRanges.size(); i++) {
+        auto [begin, member] = orderedRanges[i];
+        auto end = memberRanges.at(member).end;
+        if (precedingEnd <= begin &&
+            (i + 1 == orderedRanges.size() || end <= orderedRanges[i + 1].first)) {
+            isolatedMembers.insert(member);
+        }
+        precedingEnd = std::max(precedingEnd, end);
+    }
     std::unordered_map<size_t, std::vector<MemberId>> capturePoints;
     for (const auto& [member, range] : memberRanges) {
         if (range.begin != std::numeric_limits<size_t>::max())
@@ -703,6 +726,38 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
         bool renderLocally = member && range != memberRanges.end() &&
                              initialCursor != memberCursors.end() &&
                              range->second.begin != std::numeric_limits<size_t>::max();
+        bool independent = renderLocally && isolatedMembers.contains(member) &&
+                           initialCursor->second.atLineStart;
+        if (independent) {
+            for (size_t i = range->second.begin; i < range->second.end; i++) {
+                if ((atoms[i].memberId && atoms[i].memberId != member &&
+                     atoms[i].kind != FlatAtom::Kind::HardLine) ||
+                    (i != range->second.begin && capturePoints.contains(i))) {
+                    independent = false;
+                    break;
+                }
+            }
+        }
+        RenderOptions localBase;
+        RenderCursor originalEnd;
+        RenderSlice localSlice;
+        if (independent) {
+            localSlice.begin = range->second.begin;
+            localSlice.end = range->second.end;
+            localSlice.initialCursor = &initialCursor->second;
+            localSlice.finalCursor = &originalEnd;
+            localSlice.finish = localSlice.end == atoms.size();
+            for (size_t i = localSlice.begin; i < localSlice.end; i++) {
+                const auto& atom = atoms[i];
+                if (atom.breakId && base.breaks.contains(atom.breakId))
+                    localBase.breaks.insert(atom.breakId);
+                if (auto it = base.padding.find(atom.alignmentId); it != base.padding.end())
+                    localBase.padding.insert(*it);
+                if (base.alignedContinuations.contains(atom.alignmentId))
+                    localBase.alignedContinuations.insert(atom.alignmentId);
+            }
+            renderAtoms(atoms, config, localBase, false, &metadata, localSlice);
+        }
         size_t renderAtomCount = atoms.size();
         if (renderLocally)
             renderAtomCount = range->second.end - range->second.begin;
@@ -724,7 +779,7 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
             RenderOptions options;
             Cost cost;
         };
-        std::vector<State> states{{base, baseline}};
+        std::vector<State> states{{independent ? localBase : base, baseline}};
         constexpr size_t maxCandidateRenders = 4096;
         constexpr size_t maxCandidateAtomVisits = 4 * 1024 * 1024;
         size_t candidateBudget = std::min(
@@ -796,9 +851,25 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
             tierBegin = tierEnd;
         }
 
-        base = std::move(states.front().options);
-        memberCursors.clear();
-        baselineRender = renderAtoms(atoms, config, base, false, &metadata, baselineSlice);
+        bool refresh = true;
+        if (independent) {
+            RenderCursor updatedEnd;
+            localSlice.finalCursor = &updatedEnd;
+            renderAtoms(atoms, config, states.front().options, false, &metadata, localSlice);
+            base.breaks.insert(
+                states.front().options.breaks.begin(), states.front().options.breaks.end()
+            );
+            // Subsequent members keep their cached costs when this complete line
+            // leaves the renderer in exactly the same state.
+            refresh = originalEnd != updatedEnd;
+        }
+        else {
+            base = std::move(states.front().options);
+        }
+        if (refresh) {
+            memberCursors.clear();
+            baselineRender = renderAtoms(atoms, config, base, false, &metadata, baselineSlice);
+        }
         memberBegin = memberEnd;
     }
     return base;
@@ -945,7 +1016,18 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 continue;
             }
             size_t sectionBegin = groupBegin;
+            size_t minimumColumn = rows[groupBegin]->column + rowShifts[rows[groupBegin]->line];
+            size_t maximumColumn = minimumColumn;
+            const auto& maxSpaces = config.alignment.get().maxSpaces.get();
             while (groupEnd < rows.size()) {
+                size_t nextColumn = rows[groupEnd]->column + rowShifts[rows[groupEnd]->line];
+                size_t nextMinimum = std::min(minimumColumn, nextColumn);
+                size_t nextMaximum = std::max(maximumColumn, nextColumn);
+                if (maxSpaces && *maxSpaces > 0 &&
+                    nextMaximum - nextMinimum >= static_cast<size_t>(*maxSpaces))
+                    break;
+                minimumColumn = nextMinimum;
+                maximumColumn = nextMaximum;
                 auto nextLine = lines[rows[groupEnd]->line];
                 while (!nextLine.empty() && (nextLine.front() == ' ' || nextLine.front() == '\t')) {
                     nextLine.remove_prefix(1);
@@ -1193,6 +1275,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
 }
 
 void normalizeRenderedDocument(RenderedDocument& rendered) {
+    auto protectedLines = protectedLineStarts(rendered.text);
     struct OffsetRef {
         size_t original;
         size_t* normalized;
@@ -1214,7 +1297,8 @@ void normalizeRenderedDocument(RenderedDocument& rendered) {
         if (end == std::string::npos)
             end = rendered.text.size();
         size_t contentEnd = end;
-        while (contentEnd > pos && slang::isTabOrSpace(rendered.text[contentEnd - 1]))
+        while (!protectedLines.contains(end + 1) && contentEnd > pos &&
+               slang::isTabOrSpace(rendered.text[contentEnd - 1]))
             contentEnd--;
         size_t normalizedLineStart = normalized.size();
         while (offsetIndex < offsets.size() && offsets[offsetIndex].original <= end) {

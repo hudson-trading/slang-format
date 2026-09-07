@@ -16,6 +16,7 @@
 #include <fmt/color.h>
 #include <fmt/format.h>
 #include <iostream>
+#include <iterator>
 #include <rfl/json.hpp>
 #include <string>
 #include <vector>
@@ -84,6 +85,7 @@ void collectSourceFiles(
 
 struct FileFormatResult {
     std::string path;
+    std::string input;
     format::FormatResult result;
     bool fileReadError = false;
 };
@@ -103,21 +105,10 @@ FileFormatResult formatFile(
         return result;
     }
 
-    result.result = format::format(path, std::string(buffer.data(), buffer.size()), config, stage);
+    // OS::readFile appends a sentinel that is not part of the file.
+    result.input.assign(buffer.data(), buffer.size() - 1);
+    result.result = format::format(path, result.input, config, stage);
     return result;
-}
-
-// Format from stdin
-format::FormatResult formatStdin(const format::Config& config, format::FormatStage stage) {
-
-    // Read all of stdin
-    std::string input;
-    std::string line;
-    while (std::getline(std::cin, line)) {
-        input += line;
-        input += '\n';
-    }
-    return format::format("stdin", std::move(input), config, stage);
 }
 
 // Render a colored `kind:` prefix, matching slang's diagnostic palette:
@@ -364,6 +355,19 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    auto outputResult = [&](const format::FormatResult& result, std::string_view input,
+                            std::string_view path) {
+        bool ok = interpretResult(result, path);
+        bool skipped = !ok && !force.value_or(false) &&
+                       (result.cstMismatch || result.notIdempotent || result.structuralImbalance) &&
+                       result.internalError.empty() && !result.failedReparse;
+        if (!ok && !skipped && !force.value_or(false))
+            return 1;
+        if (dryRun != true)
+            OS::print(skipped ? input : std::string_view(result.formatted));
+        return ok || skipped ? 0 : 1;
+    };
+
     // If no files specified, read from stdin and write to stdout
     if (positional.empty()) {
         if (inplace == true) {
@@ -371,20 +375,8 @@ int main(int argc, char** argv) {
             return 1;
         }
 
-        auto result = formatStdin(config, stage);
-        bool ok = interpretResult(result, "<stdin>");
-        // CST/idempotency caught ourselves before writing harmful output —
-        // still emit the (unchanged) input to stdout and exit 0 so that
-        // pipelines aren't broken by self-detected hiccups. Same for
-        // parse-error skips. Real failures (--force-with-issues, internal
-        // error) still exit 1.
-        bool selfCaught = result.cstMismatch || result.notIdempotent || result.structuralImbalance;
-        if (!ok && !force.value_or(false)) {
-            if (!selfCaught)
-                return 1;
-        }
-        OS::print(result.formatted);
-        return ok || selfCaught ? 0 : 1;
+        std::string input(std::istreambuf_iterator<char>(std::cin), {});
+        return outputResult(format::format("stdin", input, config, stage), input, "<stdin>");
     }
 
     // Validate files exist. Directory args expand to all .sv/.svh/.v/.vh
@@ -442,21 +434,11 @@ int main(int argc, char** argv) {
     // Single file without -i: output to stdout
     if (files.size() == 1 && inplace != true) {
         auto result = formatFile(files[0], config, stage);
-        if (result.result.excluded)
-            return 0;
         if (result.fileReadError) {
             OS::printE(fmt::format("error: failed to read file '{}'\n", files[0]));
             return 1;
         }
-        bool ok = interpretResult(result.result, result.path);
-        bool selfCaught = result.result.cstMismatch || result.result.notIdempotent ||
-                          result.result.structuralImbalance;
-        if (!ok && !force.value_or(false)) {
-            if (!selfCaught)
-                return 1;
-        }
-        OS::print(result.result.formatted);
-        return ok || selfCaught ? 0 : 1;
+        return outputResult(result.result, result.input, result.path);
     }
 
     // Multiple files require -i (or --dry-run, which doesn't write)

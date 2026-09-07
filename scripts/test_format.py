@@ -123,7 +123,12 @@ def check_stage(
             print(f"           {stderr.strip()}", file=sys.stderr)
         return False
 
-    if rc != 0:
+    # Recovery fixtures deliberately contain parse errors. --force emits their
+    # output with failure status; still check goldens and preservation below.
+    forced_parse_error = (
+        rc == 1 and "parse errors (formatted output may be unsafe" in stderr
+    )
+    if rc != 0 and not forced_parse_error:
         print(f"  FAIL     {case} [{label}]: slang-format exited with code {rc}")
         if stderr:
             print(f"           {stderr.strip()}", file=sys.stderr)

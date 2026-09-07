@@ -96,3 +96,25 @@ TEST_CASE("member verbatim text resets nested indentation") {
     auto rendered = format::DocumentRenderer(config).renderLayout(document);
     CHECK(rendered.text == "        recovered\n");
 }
+
+TEST_CASE("wrapping independent members preserves the following member cursor") {
+    format::DocumentBuilder builder;
+    std::vector<format::DocId> lines;
+    std::string expected;
+    for (size_t i = 0; i < 4096; i++) {
+        auto member = builder.concat(
+            {builder.text("assign value ="),
+             builder.indent(4, builder.concat({builder.softLine(1), builder.text("source;")}))}
+        );
+        lines.push_back(builder.member(member, slang::syntax::SyntaxKind::ContinuousAssign));
+        lines.push_back(builder.hardLine());
+        expected += "assign value =\n    source;\n";
+    }
+    format::Config config;
+    config.columnLimit = 20;
+    auto root = builder.concat(std::move(lines));
+    auto document = std::move(builder).finish(root);
+    auto rendered = format::DocumentRenderer(config).renderLayout(document);
+    CHECK(rendered.text == expected);
+    CHECK(rendered.breaks.size() == 4096);
+}

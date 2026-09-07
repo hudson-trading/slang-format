@@ -7,12 +7,14 @@
 //------------------------------------------------------------------------------
 
 #include "format/FormatValidation.h"
+#include "format/FormatterUtils.h"
 #include <algorithm>
 #include <fmt/format.h>
 #include <ranges>
 
 #include "slang/parsing/Token.h"
 #include "slang/syntax/SyntaxNode.h"
+#include "slang/syntax/SyntaxPrinter.h"
 #include "slang/text/CharInfo.h"
 
 using namespace slang;
@@ -294,69 +296,91 @@ void forEachRealToken(const SyntaxNode& node, F&& f) {
 
 } // namespace
 
-bool isTokenEquivalentTo(const SyntaxNode& a, const SyntaxNode& b) {
-    enum class ItemKind { Token, LineComment, BlockComment, DisabledText };
-    struct Item {
-        ItemKind kind;
-        TokenKind tokenKind = TokenKind::Unknown;
-        std::string text;
+// Reconstruct unexpanded source so byte-sensitive regions include inactive branches.
+static std::vector<std::string> protectedSourceText(const SyntaxNode& root) {
+    auto source = SyntaxPrinter()
+                      .setIncludeDirectives(true)
+                      .setIncludeSkipped(true)
+                      .setExpandMacros(false)
+                      .setIncludeMissing(false)
+                      .setSquashNewlines(false)
+                      .print(root)
+                      .str();
+    std::vector<std::string> result;
+    for (auto range : protectedTextRanges(source))
+        result.push_back(source.substr(range.begin, range.end - range.begin));
+    return result;
+}
 
-        bool operator==(const Item&) const = default;
-    };
+namespace {
 
-    auto flatten = [](const SyntaxNode& root) {
-        std::vector<Item> result;
-        auto appendNode = [&](const auto& self, const SyntaxNode& node) -> void {
-            auto appendToken = [&](const auto& tokenSelf, const Token& token) -> void {
-                if (!token)
-                    return;
-                for (const auto& trivia : token.trivia()) {
-                    switch (trivia.kind) {
-                        case TriviaKind::LineComment:
+enum class ItemKind { Token, LineComment, BlockComment, DisabledText, MacroText };
+struct Item {
+    ItemKind kind;
+    TokenKind tokenKind = TokenKind::Unknown;
+    std::string text;
+
+    bool operator==(const Item&) const = default;
+};
+
+std::vector<Item> flattenSourceItems(const SyntaxNode& root) {
+    std::vector<Item> result;
+    for (auto& text : protectedSourceText(root))
+        result.push_back({ItemKind::MacroText, TokenKind::Unknown, std::move(text)});
+    auto appendNode = [&](const auto& self, const SyntaxNode& node) -> void {
+        auto appendToken = [&](const auto& tokenSelf, const Token& token) -> void {
+            if (!token)
+                return;
+            for (const auto& trivia : token.trivia()) {
+                switch (trivia.kind) {
+                    case TriviaKind::LineComment:
+                        result.push_back(
+                            {ItemKind::LineComment, TokenKind::Unknown,
+                             canonicalizeComment(trivia.getRawText(), false)}
+                        );
+                        break;
+                    case TriviaKind::BlockComment:
+                        result.push_back(
+                            {ItemKind::BlockComment, TokenKind::Unknown,
+                             canonicalizeComment(trivia.getRawText(), true)}
+                        );
+                        break;
+                    case TriviaKind::DisabledText:
+                        if (!std::ranges::all_of(trivia.getRawText(), isWhitespace)) {
                             result.push_back(
-                                {ItemKind::LineComment, TokenKind::Unknown,
-                                 canonicalizeComment(trivia.getRawText(), false)}
+                                {ItemKind::DisabledText, TokenKind::Unknown,
+                                 std::string(trivia.getRawText())}
                             );
-                            break;
-                        case TriviaKind::BlockComment:
-                            result.push_back(
-                                {ItemKind::BlockComment, TokenKind::Unknown,
-                                 canonicalizeComment(trivia.getRawText(), true)}
-                            );
-                            break;
-                        case TriviaKind::DisabledText:
-                            if (!std::ranges::all_of(trivia.getRawText(), isWhitespace)) {
-                                result.push_back(
-                                    {ItemKind::DisabledText, TokenKind::Unknown,
-                                     std::string(trivia.getRawText())}
-                                );
-                            }
-                            break;
-                        case TriviaKind::Directive:
-                        case TriviaKind::SkippedSyntax:
-                            self(self, *trivia.syntax());
-                            break;
-                        case TriviaKind::SkippedTokens:
-                            for (const auto& skipped : trivia.getSkippedTokens())
-                                tokenSelf(tokenSelf, skipped);
-                            break;
-                        default:
-                            break;
-                    }
+                        }
+                        break;
+                    case TriviaKind::Directive:
+                    case TriviaKind::SkippedSyntax:
+                        self(self, *trivia.syntax());
+                        break;
+                    case TriviaKind::SkippedTokens:
+                        for (const auto& skipped : trivia.getSkippedTokens())
+                            tokenSelf(tokenSelf, skipped);
+                        break;
+                    default:
+                        break;
                 }
-                if (isRealToken(token)) {
-                    result.push_back({ItemKind::Token, token.kind, std::string(token.valueText())});
-                }
-            };
-
-            for (auto it = node.tokens_begin(); it != node.tokens_end(); ++it)
-                appendToken(appendToken, *it);
+            }
+            if (isRealToken(token)) {
+                result.push_back({ItemKind::Token, token.kind, std::string(token.valueText())});
+            }
         };
-        appendNode(appendNode, root);
-        return result;
-    };
 
-    return flatten(a) == flatten(b);
+        for (auto it = node.tokens_begin(); it != node.tokens_end(); ++it)
+            appendToken(appendToken, *it);
+    };
+    appendNode(appendNode, root);
+    return result;
+}
+
+} // namespace
+
+bool isTokenEquivalentTo(const SyntaxNode& a, const SyntaxNode& b) {
+    return flattenSourceItems(a) == flattenSourceItems(b);
 }
 
 // Short single-line summary of a trivia item for the side-by-side view.
@@ -443,6 +467,33 @@ static std::vector<Trivia> flattenRelevantTriviaForDiff(const SyntaxNode& root) 
 }
 
 std::string describeTokenDiff(const SyntaxNode& a, const SyntaxNode& b) {
+    auto formattedText = protectedSourceText(a);
+    auto originalText = protectedSourceText(b);
+    if (formattedText.size() != originalText.size()) {
+        return fmt::format(
+            "protected region count differs: original {}, formatted {}", originalText.size(),
+            formattedText.size()
+        );
+    }
+    for (size_t i = 0; i < originalText.size(); i++) {
+        if (originalText[i] != formattedText[i]) {
+            return fmt::format(
+                "protected region[{}] differs: {}", i,
+                describeTextDiff(originalText[i], formattedText[i])
+            );
+        }
+    }
+    auto formattedItems = flattenSourceItems(a);
+    auto originalItems = flattenSourceItems(b);
+    for (size_t i = 0; i < std::min(formattedItems.size(), originalItems.size()); i++) {
+        if (formattedItems[i] != originalItems[i]) {
+            return fmt::format(
+                "source item[{}] differs:\n  original: {} '{}'\n  formatted: {} '{}'", i,
+                toString(originalItems[i].tokenKind), truncate(originalItems[i].text),
+                toString(formattedItems[i].tokenKind), truncate(formattedItems[i].text)
+            );
+        }
+    }
     constexpr size_t leadSize = 4;
     constexpr size_t trailSize = 4;
 

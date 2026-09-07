@@ -130,6 +130,7 @@ FormatResult format(
                 continue;
             if (trivia.getRawText().find("@generated") != std::string_view::npos) {
                 result.excluded = true;
+                result.formatted = input;
                 return result;
             }
         }
@@ -220,7 +221,7 @@ FormatResult format(
 
         // Idempotency check: format(format(x)) == format(x)
         if (!result.cstMismatch && !result.failedReparse) {
-            auto formatted2 = runPipeline(newTree->root(), config, stage, sm).text;
+            auto formatted2 = Formatter(config, &sm, stage).format(newTree->root());
             if (formatted2 != result.formatted) {
                 result.notIdempotent = true;
                 result.idempotencyDiff = describeTextDiff(result.formatted, formatted2);

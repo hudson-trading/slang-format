@@ -1,6 +1,6 @@
 `define LOG_FIELDS \
-    logic [7:0] index; // 8 \
-    logic [1:0] reason;
+        logic [7:0] index; // 8 \
+        logic [1:0] reason;
 
 module m;
     typedef struct packed {

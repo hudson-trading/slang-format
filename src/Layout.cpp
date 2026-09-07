@@ -11,10 +11,13 @@
 #include "format/FormatConstants.h"
 #include "format/FormatStyle.h"
 #include "format/FormatValidation.h"
+#include "format/FormatterUtils.h"
 #include <algorithm>
 #include <optional>
 
 #include "slang/diagnostics/ParserDiags.h"
+#include "slang/parsing/Lexer.h"
+#include "slang/parsing/LexerFacts.h"
 #include "slang/parsing/Preprocessor.h"
 #include "slang/parsing/TokenKind.h"
 #include "slang/syntax/AllSyntax.h"
@@ -79,7 +82,23 @@ bool tokenNeedsSeparation(Token left, Token right) {
         return true;
     if (a.empty() || b.empty())
         return false;
-    return slang::isValidCIdChar(a.back()) && slang::isValidCIdChar(b.front());
+    if (slang::isValidCIdChar(a.back()) && slang::isValidCIdChar(b.front()))
+        return true;
+
+    // A style rule may remove spaces only if the lexer still sees both tokens.
+    static const auto punctuation = [] {
+        std::vector<std::string_view> result{"//", "/*"};
+        for (auto kind : TokenKind_traits::values) {
+            auto text = LexerFacts::getTokenKindText(kind);
+            if (text.size() > 1 && !slang::isValidCIdChar(text.front()))
+                result.push_back(text);
+        }
+        return result;
+    }();
+    return std::ranges::any_of(punctuation, [&](std::string_view text) {
+        return text.size() > a.size() && text.starts_with(a) &&
+               b.starts_with(text.substr(a.size()));
+    });
 }
 
 class Lowerer {
@@ -154,58 +173,6 @@ private:
         ));
     }
 
-    void emitDirectiveVerbatim(const NormalizedTrivia& trivia) {
-        if (!trivia.syntax || trivia.syntax->kind != SyntaxKind::DefineDirective ||
-            trivia.text.find('\n') == std::string::npos) {
-            append(builder.verbatim(trivia.text));
-            return;
-        }
-
-        std::vector<std::string_view> lines;
-        size_t pos = 0;
-        while (pos <= trivia.text.size()) {
-            size_t end = trivia.text.find('\n', pos);
-            if (end == std::string::npos)
-                end = trivia.text.size();
-            auto line = std::string_view(trivia.text).substr(pos, end - pos);
-            if (!line.empty() && line.back() == '\r')
-                line.remove_suffix(1);
-            lines.push_back(line);
-            if (end == trivia.text.size())
-                break;
-            pos = end + 1;
-        }
-
-        append(builder.verbatim(lines.front()));
-        size_t baseline = SIZE_MAX;
-        for (size_t i = 1; i < lines.size(); i++) {
-            size_t indent = 0;
-            while (indent < lines[i].size() && slang::isTabOrSpace(lines[i][indent])) {
-                indent++;
-            }
-            if (indent < lines[i].size())
-                baseline = std::min(baseline, indent);
-        }
-        if (baseline == SIZE_MAX)
-            baseline = 0;
-
-        std::vector<DocId> continuation;
-        for (size_t i = 1; i < lines.size(); i++) {
-            continuation.push_back(builder.hardLine());
-            size_t indent = 0;
-            while (indent < lines[i].size() && slang::isTabOrSpace(lines[i][indent])) {
-                indent++;
-            }
-            size_t relative = indent >= baseline ? indent - baseline : indent;
-            continuation.push_back(
-                builder.text(std::string(relative, ' ') + std::string(lines[i].substr(indent)))
-            );
-        }
-        append(builder.indent(
-            static_cast<int>(config.indentWidth.get()), builder.concat(std::move(continuation))
-        ));
-    }
-
     void emitConditionalVerbatim(
         std::string_view text,
         bool memberOwned = false,
@@ -219,6 +186,7 @@ private:
                 leadingLineBreaks++;
         }
 
+        auto protectedLines = protectedLineStarts(text);
         size_t subparseBaseline = SIZE_MAX;
         size_t lineStartOffset = 0;
         while (lineStartOffset < text.size()) {
@@ -232,7 +200,7 @@ private:
             }
             bool hasContent = lineStartOffset + indent < lineEnd &&
                               text[lineStartOffset + indent] != '\r';
-            if (hasContent)
+            if (hasContent && !protectedLines.contains(lineStartOffset))
                 subparseBaseline = std::min(subparseBaseline, indent);
             lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
         }
@@ -247,7 +215,8 @@ private:
             if (lineEnd == std::string_view::npos)
                 lineEnd = text.size();
             size_t indent = 0;
-            while (lineStartOffset + indent < lineEnd && indent < subparseBaseline &&
+            while (!protectedLines.contains(lineStartOffset) &&
+                   lineStartOffset + indent < lineEnd && indent < subparseBaseline &&
                    slang::isTabOrSpace(text[lineStartOffset + indent])) {
                 indent++;
             }
@@ -289,6 +258,7 @@ private:
                 options
             );
             if (formattedTree && isTokenEquivalentTo(tree->root(), formattedTree->root())) {
+                subparsedText.erase(0, subparsedText.find_first_not_of("\r\n"));
                 subparsedText.insert(0, leadingLineBreaks, '\n');
                 text = subparsedText;
             }
@@ -307,6 +277,7 @@ private:
         while (!text.empty() && slang::isWhitespace(text.back())) {
             text.remove_suffix(1);
         }
+        protectedLines = protectedLineStarts(text);
 
         size_t baseline = 0;
         lineStartOffset = 0;
@@ -338,6 +309,13 @@ private:
             size_t lineEnd = text.find('\n', lineStartOffset);
             if (lineEnd == std::string_view::npos)
                 lineEnd = text.size();
+            if (protectedLines.contains(lineStartOffset)) {
+                append(builder.verbatim(
+                    "\n" + std::string(text.substr(lineStartOffset, lineEnd - lineStartOffset))
+                ));
+                lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
+                continue;
+            }
             size_t indent = 0;
             while (lineStartOffset + indent < lineEnd &&
                    slang::isTabOrSpace(text[lineStartOffset + indent])) {
@@ -405,7 +383,28 @@ private:
     }
 
     void emitRecoveredAssignment(std::string_view text) {
-        size_t equals = text.find('=');
+        while (!text.empty() && slang::isTabOrSpace(text.front()))
+            text.remove_prefix(1);
+        if (!lineStart && !spacingProvided)
+            append(builder.text(" "));
+        slang::SourceManager sm;
+        slang::BumpAllocator allocator;
+        slang::Diagnostics diagnostics;
+        Lexer lexer(sm.assignText(text), allocator, diagnostics, sm);
+        size_t equals = std::string_view::npos;
+        for (auto token = lexer.lex(); token.kind != TokenKind::EndOfFile; token = lexer.lex()) {
+            if (token.kind == TokenKind::Equals) {
+                equals = token.location().offset();
+                break;
+            }
+        }
+        if (equals == std::string_view::npos) {
+            append(builder.verbatim(text));
+            lineStart = false;
+            spacingProvided = false;
+            lastWasMacro = false;
+            return;
+        }
         auto rhs = text.substr(equals + 1);
         int assignmentPriority = rhs.find(" && ") == std::string_view::npos ? 1 : 3;
         append(builder.verbatim(text.substr(0, equals + 1)));
@@ -417,7 +416,10 @@ private:
         while (!rhs.empty() && slang::isWhitespace(rhs.front()))
             rhs.remove_prefix(1);
 
-        if (size_t logicalAnd = rhs.find(" && "); logicalAnd != std::string_view::npos) {
+        if (!protectedTextRanges(rhs).empty()) {
+            append(builder.verbatim(rhs));
+        }
+        else if (size_t logicalAnd = rhs.find(" && "); logicalAnd != std::string_view::npos) {
             append(builder.verbatim(rhs.substr(0, logicalAnd)));
             append(builder.indent(
                 static_cast<int>(config.indentWidth.get()), builder.softLine(2, " ", 0, true)
@@ -558,7 +560,7 @@ private:
                 {
                     size_t begin = mark();
                     append(builder.hardLine());
-                    emitDirectiveVerbatim(trivia);
+                    append(builder.verbatim(trivia.text));
                     auto directive = capture(begin);
                     int relativeDepth = static_cast<int>(conditionalDepth) -
                                         static_cast<int>(itemFinalConditionalDepth);
@@ -913,6 +915,7 @@ private:
             if (token.kind == TokenKind::OpenBracket && normalizedToken.inDataType &&
                 (rowKind == SyntaxKind::DataDeclaration ||
                  rowKind == SyntaxKind::ImplicitAnsiPort ||
+                 rowKind == SyntaxKind::StructUnionMember ||
                  rowKind == SyntaxKind::TypedefDeclaration) &&
                 !packedDimensionAnchorEmitted) {
                 uint32_t column = rowKind == SyntaxKind::ImplicitAnsiPort ? 1 : 0;
@@ -2066,9 +2069,11 @@ private:
     }
 
     void lowerControlledStatement(const NormalizedNode& node) {
+        bool macroJoinsStatement = false;
         for (const auto& child : node.children) {
             auto nested = childNode(child);
-            if (nested && StatementSyntax::isKind(nested->kind) && !isBlock(*nested)) {
+            if (nested && StatementSyntax::isKind(nested->kind) && !isBlock(*nested) &&
+                !macroJoinsStatement) {
                 auto savedAlignmentGroup = currentAlignmentGroup;
                 currentAlignmentGroup = builder.createAlignmentGroup();
                 lowerIndentedChild(child);
@@ -2077,6 +2082,7 @@ private:
             else {
                 lowerChild(child);
             }
+            macroJoinsStatement = childMacroJoinsFollowing(child);
         }
     }
 
@@ -3180,6 +3186,24 @@ private:
         int savedBinaryContinuationIndent = binaryContinuationIndent;
         bool savedMultipleConcatenation = inMultipleConcatenation;
         bool savedForceTernaryBranches = forceTernaryBranches;
+        bool savedForceInlineLists = forceInlineLists;
+        if (node.kind == SyntaxKind::ArgumentList) {
+            // Breaking before an inline directive changes its classification
+            // when the formatted text is parsed again.
+            for (const auto& child : node.children) {
+                if (auto index = std::get_if<size_t>(&child.value)) {
+                    forceInlineLists =
+                        forceInlineLists ||
+                        std::ranges::any_of(
+                            normalized.tokens().at(*index).leading,
+                            [](const NormalizedTrivia& trivia) {
+                                return trivia.kind == NormalizedTriviaKind::ConditionalDirective &&
+                                       trivia.placement == TriviaPlacement::Inline;
+                            }
+                        );
+                }
+            }
+        }
         bool commentedPatternConditional =
             node.kind == SyntaxKind::AssignmentPatternItem &&
             containsKind(node, SyntaxKind::ConditionalExpression) &&
@@ -3450,6 +3474,7 @@ private:
         binaryContinuationIndent = savedBinaryContinuationIndent;
         inMultipleConcatenation = savedMultipleConcatenation;
         forceTernaryBranches = savedForceTernaryBranches;
+        forceInlineLists = savedForceInlineLists;
         currentDeclaratorAlignmentColumn = savedCurrentDeclaratorAlignmentColumn;
         suppressTypedefAlignment = savedSuppressTypedefAlignment;
         if (entersClass)

@@ -7,7 +7,7 @@ module m;
     `ASSERT_PROLOGUE(clk, rst);
 
     `define HELPER_MACRO(A) \
-        foo bar(.x(A))
+    foo bar(.x(A))
 
 
     logic [7:0] reg_a `KEEP_ATTR(preserve);

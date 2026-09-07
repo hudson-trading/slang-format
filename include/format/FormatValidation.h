@@ -38,6 +38,7 @@ struct FormatDiagnostic {
 };
 
 struct FormatResult {
+    /// Formatted source, or unchanged input when excluded; consult isUsable() before applying.
     std::string formatted;
 
     // Pre-rendered diagnostic messages from the parse, one per diagnostic
