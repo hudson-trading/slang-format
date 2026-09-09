@@ -1,4 +1,4 @@
-# slang-format Command Reference
+# Command Line Reference
 
 ## Usage
 
@@ -11,7 +11,7 @@ If files are specified without `-i`, prints formatted output to stdout.
 With `-i`, modifies files in-place. Multiple files require `-i`.
 
 See [validation](format-validation.md) for checks, rejected files, and exit statuses,
-and [formatting markers](format-markers.md) for preserving source formatting.
+and [disabling formatting](format-markers.md) for preserving source formatting.
 
 ## Options
 
@@ -55,7 +55,7 @@ used with multiple files and combined with `--force` to check forced formatting.
 
 Path to a JSON config file. If not specified, `slang-format` searches upward from the target path, then from the current directory, for `.slang/format.json`.
 
-See [format configuration](format-config.md) for config file options.
+See [Configuration](format-config.md) for config file options.
 
 ---
 

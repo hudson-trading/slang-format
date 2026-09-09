@@ -4,21 +4,21 @@
 
 Some things are preserved from the original source:
 
-- **Macro definitions and Macro args** — these are emitted verbatim since their body is not parsed into a syntax tree.
+- **Macro definitions and Macro args** — these are emitted verbatim since their body is not parsed into a syntax tree, and modifying these could break functionality.
 - **Blank lines within lists** — blank lines between module members, port declarations, etc. are kept as authored to respect logical groupings.
-- **Expressions with existing line breaks** — when `respectUserFormatting` is enabled, an existing layout is retained as one all-or-nothing choice if it fits the column limit.
+- **Expressions with existing line breaks** — when `respectUserFormatting` is enabled (default), an existing long line split  is retained as one all-or-nothing choice if it fits the column limit.
 
 ## Formatter Passes
 
 Formatting is split into three conceptual passes:
 
 1. **Normalize** wraps source tokens in formatter-owned nodes, attaches same-line comments to the token they trail, separates standalone comments and blank lines, and materializes nested preprocessor conditionals as synthetic branch nodes. Inactive branches are reparsed and formatted recursively only when the complete token stream survives; an unsafe branch alone falls back to opaque, re-indented text.
-2. **Layout** applies token spacing and solves member-local soft-line choices. This output is available with `--stage layout` and is independently validated and idempotent.
+2. **Layout** applies token spacing and solves member-local soft-line choices. This output is available with `--stage layout` and is independently validated.
 3. **Align** groups compatible first-line anchors and adds padding. Alignment is split-only relative to layout: it may retain or add line breaks, but cannot join a member that the layout pass split.
 
 ## Lists
 
-Lists are either always vertical, always inline (like array dimensions), or dynamic based on heuristics like children count or length.
+Lists are either always vertical, always inline (like array dimensions), or dynamic based on heuristics like children count or length. Bin packing (adding tokens until line limit is hit) is generally avoided, since it is less readable and creates bad diffs when the list is modified.
 
 ## Ifdef Indentation
 
@@ -38,7 +38,9 @@ module top;
 endmodule
 ```
 
-This is because these behave nearly identically to generate blocks, which follow normal indenting.
+This is done for a few reasons:
+ - these behave nearly identically to generate blocks, which follow normal indenting.
+ - Preprocessor branches can be nested, so indents help identify the branch ranges.
 
 In non-member lists like port lists or case items, ifdefs are dedented one level so that the list items across branches stay aligned. In these contexts, ifdefs tend to act as feature flags toggling individual entries rather than introducing structural blocks:
 
@@ -56,6 +58,30 @@ module top (
 ## Line Wrapping
 
 Long binary, property, and sequence-expression chains are lowered to hierarchical formatter IR and solved with dynamic programming. Every soft line receives a priority from its normalized IR depth: outer boundaries are admitted before boundaries close to leaf expressions. Same-precedence binary chains share one tier.
+
+### Why Break Before Operators?
+
+When an expression wraps at a binary operator, the operator starts the
+continuation line. This puts the operation and the operand it introduces together:
+
+```systemverilog
+assign available = capacity
+    - reserved_slots
+    - occupied_slots;
+```
+
+The left edge becomes a useful guide when scanning a long expression. In a
+condition, `&&` and `||` are visible where each continuation begins; in arithmetic,
+`+` and `-` make it clear how the following term contributes. Operators at the
+ends of lines can be harder to compare when operand lengths vary. Breaking before
+`?` and `:` gives conditional expressions the same visual convention.
+
+There is a tradeoff: a trailing operator tells the reader that a line continues
+before they move to the next line, and that style is familiar in many codebases.
+We prefer making the relationships between wrapped terms easy to scan. This is
+a readability choice, not a claim that the alternative is incorrect. Operator
+precedence and parentheses still determine grouping; line breaks only help expose
+that structure.
 
 ### Algorithm
 

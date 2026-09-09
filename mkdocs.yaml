@@ -47,15 +47,12 @@ validation:
 
 nav:
     - index.md
-    - Getting Started:
-          - start/installing.md
-          - start/building.md
-    - Formatter:
-          - features/format-philosophy.md
-          - features/format-args.md
-          - features/format-validation.md
-          - features/format-markers.md
-          - features/format-config.md
+    - start/installing.md
+    - features/format-philosophy.md
+    - features/format-args.md
+    - features/format-validation.md
+    - features/format-markers.md
+    - Configuration: features/format-config.md
 
 markdown_extensions:
     - tables

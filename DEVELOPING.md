@@ -19,6 +19,22 @@ ctest --test-dir build --output-on-failure
 The main outputs are `build/bin/slang-format`, the `slang_format_lib` CMake
 target, and its public `slang::format` alias.
 
+## Python environment and documentation
+
+Use one project environment for development tools and documentation:
+
+```sh
+uv sync --locked
+source .venv/bin/activate
+mkdocs serve
+```
+
+The formatter test scripts and code generators use only the Python standard
+library. The project dependencies provide MkDocs, its Material theme, HTML link
+validation, and the `pre-commit` runner used in CI. Run the configured hooks
+locally with `prek run --all-files`; it reads `.pre-commit-config.yaml` and caches
+each hook's tools separately from the project environment.
+
 ## Architecture
 
 The formatter uses the concrete syntax tree (CST) from slang so that comments,
@@ -134,7 +150,7 @@ Configuration loading and discovery are part of the formatter library, so
 embedded and standalone callers share the same behavior.
 
 `format::format()` returns a `FormatResult` whose `diagnostics` collection owns
-each validation failure's kind, message, and optional input line. Use `isUsable()`
+each diagnostic's kind, message, and optional input line. Use `isUsable()`
 to check validation and `outputAction(force)` to choose formatted output,
 unchanged input, or an abort. Force overrides every validation diagnostic, including
 merge conflicts. Formatting still produces a candidate when diagnostics are present;
@@ -142,5 +158,8 @@ callers must check the output action before applying it.
 `generated` identifies files skipped because of an `@generated` comment;
 `parseErrorCount` separately counts parser errors, which can be safely recovered
 without producing a validation failure.
+Unmatched `on` markers are reported as warnings; `isUsable()` and
+`outputAction()` allow output when these are the only diagnostics.
+An unmatched `off` silently preserves the rest of its list scope.
 
 See [validation](docs/features/format-validation.md) for CLI output and exit status behavior.
