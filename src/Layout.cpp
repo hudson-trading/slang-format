@@ -3367,6 +3367,22 @@ private:
             lowerProceduralBlock(node);
         else if (node.kind == SyntaxKind::TimingControlStatement)
             lowerTimingControlStatement(node);
+        else if (node.kind == SyntaxKind::ActionBlock &&
+                 std::ranges::any_of(node.children, [&](const auto& child) {
+                     auto statement = childNode(child);
+                     return statement && statement->kind == SyntaxKind::EmptyStatement &&
+                            childContainsMacro(child);
+                 })) {
+            for (const auto& child : node.children) {
+                auto statement = childNode(child);
+                if (statement && statement->kind == SyntaxKind::EmptyStatement)
+                    lowerIndentedChild(child);
+                else {
+                    hardLine();
+                    lowerChild(child);
+                }
+            }
+        }
         else if (node.kind == SyntaxKind::AssertPropertyStatement ||
                  node.kind == SyntaxKind::AssumePropertyStatement)
             lowerConcurrentAssertion(node);
