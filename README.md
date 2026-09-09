@@ -13,7 +13,7 @@ while users can independently install a newer `slang-format` binary.
 ```sh
 git clone --recurse-submodules https://github.com/hudson-trading/slang-format.git
 cd slang-format
-cmake -B build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
 ctest --test-dir build --output-on-failure
 ```
@@ -54,5 +54,8 @@ target_link_libraries(my_tool PRIVATE slang::format)
 Otherwise, the formatter uses its vendored `slang` and `reflect-cpp`
 submodules. Config discovery and JSON parsing are part of the same formatter
 library, so embedded and standalone callers use identical behavior.
+
+See [DEVELOPING.md](DEVELOPING.md) for development setup and
+[CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 Licensed under the [MIT License](LICENSE).

@@ -22,8 +22,8 @@ jobs:
                   version: "0.8.17"
             - name: Set up Python
               run: uv python install
-            - name: Install dependencies
-              run: uv sync --locked --all-extras --dev
+            - name: Install prek
+              run: uv tool install prek
 
-            - name: Run pre-commit hooks
-              run: uv run pre-commit run --all-files
+            - name: Run prek hooks
+              run: prek run --all-files

@@ -8,8 +8,9 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-_version.py
-__init__.pyi
+
+# Documentation output.
+/site/
 
 # C and CMake ignores.
 build/

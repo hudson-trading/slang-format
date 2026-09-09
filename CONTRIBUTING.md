@@ -20,19 +20,16 @@ Submit formatter behavior changes as two stacked pull requests, or two commits i
 Generate or update goldens with:
 
 ```sh
-python3 scripts/test_format.py --build --update name_filter
+scripts/test_format.py --build --update name_filter
 ```
 
 Before submitting each pull request, run:
 
 ```sh
-python3 scripts/test_format.py --build
+scripts/test_format.py --build
 ctest --test-dir build --output-on-failure
 prek run --all-files
 ```
-
-Keep commits focused and do not include proprietary source in regression
-tests. Reduce real-world failures to small examples with generic identifiers.
 
 By contributing, you agree that your contributions will be licensed under the
 project's [MIT License](LICENSE).

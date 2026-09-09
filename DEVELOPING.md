@@ -30,10 +30,17 @@ mkdocs serve
 ```
 
 The formatter test scripts and code generators use only the Python standard
-library. The project dependencies provide MkDocs, its Material theme, HTML link
-validation, and the `pre-commit` runner used in CI. Run the configured hooks
-locally with `prek run --all-files`; it reads `.pre-commit-config.yaml` and caches
-each hook's tools separately from the project environment.
+library. The project dependencies provide MkDocs, its Material theme, and HTML
+link validation. Local checks and CI use `prek`, installed separately:
+
+```sh
+uv tool install prek
+prek run --all-files
+```
+
+It reads `.pre-commit-config.yaml` and caches each hook's tools separately from
+the project environment. Run `prek install` to run the hooks automatically on
+each commit.
 
 Docs deployments use `scripts/ci/publish-docs.sh` to update `gh-pages`. Main
 deployments preserve `previews/`; PR deployments replace only their own

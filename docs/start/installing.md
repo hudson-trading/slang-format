@@ -17,7 +17,7 @@ Requirements:
 ```sh
 git clone --recurse-submodules https://github.com/hudson-trading/slang-format.git
 cd slang-format
-cmake -B build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
 ctest --test-dir build --output-on-failure
 ```

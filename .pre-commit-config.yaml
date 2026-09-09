@@ -1,22 +1,20 @@
 # To use:
 #
-#     pre-commit run -a
+#     prek run --all-files
 #
 # Or:
 #
-#     pre-commit install  # (runs every time you commit in git)
+#     prek install  # (runs every time you commit in git)
 #
 # To update this file:
 #
-#     pre-commit autoupdate
+#     prek autoupdate
 #
-# See https://github.com/pre-commit/pre-commit
+# See https://prek.j178.dev/
 
 ci:
     autoupdate_commit_msg: "chore: update pre-commit hooks"
     autofix_commit_msg: "style: pre-commit fixes"
-
-exclude: grammar.md
 
 repos:
     # Standard hooks
