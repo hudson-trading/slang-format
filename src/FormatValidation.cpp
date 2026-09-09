@@ -11,6 +11,7 @@
 #include "format/FormatValidation.h"
 
 #include "format/Formatter.h"
+#include "format/FormatterUtils.h"
 #include <algorithm>
 #include <fmt/format.h>
 
@@ -152,12 +153,12 @@ FormatResult format(
         size_t width = markerEnd - offset;
         auto location = SourceLocation(buf.id, offset);
         if (width >= 7 && (offset == firstColumn || sm.getColumnNumber(location) == 1)) {
-            size_t end = input.find_first_of("\r\n", markerEnd);
+            size_t end = findNewline(input, markerEnd);
             auto suffix =
                 input.substr(markerEnd, end == std::string_view::npos ? end : end - markerEnd);
-            bool validSuffix = suffix.empty() || (marker == '=' ? suffix.find_first_not_of(" \t") ==
-                                                                      std::string_view::npos
-                                                                : isTabOrSpace(suffix.front()));
+            bool validSuffix = suffix.empty() ||
+                               (marker == '=' ? std::ranges::all_of(suffix, isTabOrSpace)
+                                              : isTabOrSpace(suffix.front()));
             if (validSuffix) {
                 if (marker == '=') {
                     separatorOffset = offset;

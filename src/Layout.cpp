@@ -179,11 +179,14 @@ private:
         int conditionalDepthChange = 0
     ) {
         size_t leadingLineBreaks = 0;
-        for (char c : text) {
-            if (!slang::isWhitespace(c))
-                break;
-            if (c == '\n')
+        for (size_t pos = 0; pos < text.size() && slang::isWhitespace(text[pos]);) {
+            if (slang::isNewline(text[pos])) {
                 leadingLineBreaks++;
+                pos = skipNewline(text, pos);
+            }
+            else {
+                pos++;
+            }
         }
 
         auto protectedLines = protectedLineStarts(text);
@@ -199,7 +202,7 @@ private:
                 indent++;
             }
             bool hasContent = lineStartOffset + indent < lineEnd &&
-                              text[lineStartOffset + indent] != '\r';
+                              !slang::isNewline(text[lineStartOffset + indent]);
             if (hasContent && !protectedLines.contains(lineStartOffset))
                 subparseBaseline = std::min(subparseBaseline, indent);
             lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
@@ -258,7 +261,9 @@ private:
                 options
             );
             if (formattedTree && isTokenEquivalentTo(tree->root(), formattedTree->root())) {
-                subparsedText.erase(0, subparsedText.find_first_not_of("\r\n"));
+                subparsedText.erase(
+                    subparsedText.begin(), std::ranges::find_if_not(subparsedText, slang::isNewline)
+                );
                 subparsedText.insert(0, leadingLineBreaks, '\n');
                 text = subparsedText;
             }
@@ -269,14 +274,10 @@ private:
                 text.remove_prefix(1);
         }
         else if (lineStart) {
-            auto firstContent = text.find_first_not_of(" \t");
-            if (firstContent != std::string_view::npos &&
-                (text[firstContent] == '\r' || text[firstContent] == '\n'))
-                text.remove_prefix(firstContent);
-            if (text.starts_with("\r\n"))
-                text.remove_prefix(2);
-            else if (text.starts_with('\n'))
-                text.remove_prefix(1);
+            auto firstContent = std::ranges::find_if_not(text, slang::isTabOrSpace);
+            if (firstContent != text.end() && slang::isNewline(*firstContent))
+                text.remove_prefix(size_t(firstContent - text.begin()));
+            text.remove_prefix(skipNewline(text, 0));
         }
         while (!text.empty() && slang::isWhitespace(text.back())) {
             text.remove_suffix(1);
@@ -460,10 +461,8 @@ private:
                 auto text = std::string_view(trivia.text);
                 if (trivia.endsLine && !lineStart)
                     hardLine();
-                if (lineStart && text.starts_with("\r\n"))
-                    text.remove_prefix(2);
-                else if (lineStart && text.starts_with('\n'))
-                    text.remove_prefix(1);
+                if (lineStart)
+                    text.remove_prefix(skipNewline(text, 0));
                 append(lineStart ? builder.absoluteText(text) : builder.verbatim(text));
                 lineStart = text.ends_with('\n');
                 if (trivia.endsLine && !lineStart)
@@ -512,7 +511,7 @@ private:
                                         : config.spacesBeforeTrailingComment.get();
                     append(builder.text(std::string(spaces, ' ')));
                     if (!inDynamicList && !ternaryComment &&
-                        commentText.find_first_of("\r\n") == std::string_view::npos) {
+                        std::ranges::none_of(commentText, slang::isNewline)) {
                         uint32_t separatorColumn =
                             currentMemberKind == SyntaxKind::NamedPortConnection ||
                                     currentMemberKind == SyntaxKind::NamedParamAssignment
@@ -672,7 +671,7 @@ private:
                 break;
             case NormalizedTriviaKind::Verbatim:
                 if (trivia.placement == TriviaPlacement::Standalone && lastWasMacro &&
-                    trivia.text.find_first_of("\r\n") != std::string::npos) {
+                    std::ranges::any_of(trivia.text, slang::isNewline)) {
                     auto text = std::string_view(trivia.text);
                     while (!text.empty() && slang::isWhitespace(text.front()))
                         text.remove_prefix(1);
@@ -2428,7 +2427,7 @@ private:
                         return false;
                     auto text = std::string_view(trivia.text);
                     while (!text.empty()) {
-                        auto lineEnd = text.find_first_of("\r\n");
+                        auto lineEnd = findNewline(text);
                         auto line = text.substr(0, lineEnd);
                         while (!line.empty() && slang::isTabOrSpace(line.front()))
                             line.remove_prefix(1);
@@ -2436,12 +2435,7 @@ private:
                             return true;
                         if (lineEnd == std::string_view::npos)
                             break;
-                        size_t nextLine = lineEnd + 1;
-                        if (text[lineEnd] == '\r' && nextLine < text.size() &&
-                            text[nextLine] == '\n') {
-                            nextLine++;
-                        }
-                        text.remove_prefix(nextLine);
+                        text.remove_prefix(skipNewline(text, lineEnd));
                     }
                     return false;
                 });

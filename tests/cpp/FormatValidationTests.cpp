@@ -264,6 +264,21 @@ endmodule
     CHECK(!format::isTokenEquivalentTo(tree1->root(), tree2->root()));
 }
 
+TEST_CASE("comment equivalence normalizes line endings without dropping blank lines") {
+    auto expected = parse("module m; /* first\n\n  last */ endmodule");
+    auto missingBlank = parse("module m; /* first\n  last */ endmodule");
+    for (std::string_view newline : {"\n", "\r\n", "\r"}) {
+        auto tree = parse(
+            "module m; /* first" + std::string(newline) + std::string(newline) +
+            "  last */ endmodule"
+        );
+        CHECK(format::isCommentEquivalentTo(tree->root(), expected->root()));
+        CHECK(format::isTokenEquivalentTo(tree->root(), expected->root()));
+        CHECK_FALSE(format::isCommentEquivalentTo(tree->root(), missingBlank->root()));
+        CHECK_FALSE(format::isTokenEquivalentTo(tree->root(), missingBlank->root()));
+    }
+}
+
 TEST_CASE("token equivalence ignores disabled branch indentation") {
     auto tree1 = parse(R"(
 module m;

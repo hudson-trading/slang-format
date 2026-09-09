@@ -180,8 +180,11 @@ bool hasForeignTemplateDirective(std::string_view text) {
                 if (trivia.kind != TriviaKind::LineComment)
                     continue;
                 auto raw = trivia.getRawText();
-                auto last = raw.find_last_not_of(" \t\r");
-                if (last != std::string_view::npos && raw[last] == '\\' && last + 1 < raw.size())
+                auto content = raw;
+                while (!content.empty() &&
+                       (isTabOrSpace(content.back()) || isNewline(content.back())))
+                    content.remove_suffix(1);
+                if (content.ends_with('\\') && content.size() < raw.size())
                     return true;
             }
             if (token.kind == TokenKind::EndOfFile)
@@ -199,8 +202,7 @@ bool hasForeignTemplateDirective(std::string_view text) {
                 size_t spaces = 0;
                 while (spaces < rest.size() && isTabOrSpace(rest[spaces]))
                     spaces++;
-                if (spaces &&
-                    (spaces == rest.size() || rest[spaces] == '\r' || rest[spaces] == '\n'))
+                if (spaces && (spaces == rest.size() || isNewline(rest[spaces])))
                     return true;
             }
         }
@@ -239,7 +241,7 @@ int recoveredConditionalDepthChange(std::string_view text) {
 
     int result = 0;
     while (!text.empty()) {
-        size_t lineEnd = text.find_first_of("\r\n");
+        size_t lineEnd = findNewline(text);
         auto line = text.substr(0, lineEnd);
         while (!line.empty() && isTabOrSpace(line.front()))
             line.remove_prefix(1);
@@ -250,15 +252,19 @@ int recoveredConditionalDepthChange(std::string_view text) {
 
         if (lineEnd == std::string_view::npos)
             break;
-        size_t nextLine = lineEnd + 1;
-        if (text[lineEnd] == '\r' && nextLine < text.size() && text[nextLine] == '\n')
-            nextLine++;
-        text.remove_prefix(nextLine);
+        text.remove_prefix(skipNewline(text, lineEnd));
     }
     return result;
 }
 
 } // namespace
+
+size_t findNewline(std::string_view text, size_t offset) {
+    if (offset >= text.size())
+        return std::string_view::npos;
+    auto it = std::find_if(text.begin() + offset, text.end(), isNewline);
+    return it == text.end() ? std::string_view::npos : size_t(it - text.begin());
+}
 
 std::vector<ProtectedTextRange> protectedTextRanges(std::string_view text) {
     SourceManager sourceManager;
@@ -929,7 +935,7 @@ private:
                     if (begin <= end && end <= source.size()) {
                         auto gap = source.substr(begin, end - begin);
                         size_t comment = gap.find(trivia.getRawText());
-                        size_t newline = gap.find_first_of("\r\n");
+                        size_t newline = findNewline(gap);
                         trailsPreviousDirective = comment != std::string_view::npos &&
                                                   (newline == std::string_view::npos ||
                                                    comment < newline);
@@ -1068,7 +1074,9 @@ private:
                             if (directiveTrivia.kind == TriviaKind::DisabledText)
                                 suffix.append(directiveTrivia.getRawText());
                         }
-                        if (suffix.find_first_not_of(" \t\r\n") != std::string::npos) {
+                        if (std::ranges::any_of(suffix, [](char c) {
+                                return !isTabOrSpace(c) && !isNewline(c);
+                            })) {
                             absorbedConditionalSuffix = true;
                             current.leading.back().text.append(suffix);
                         }
@@ -1155,10 +1163,11 @@ private:
                         if (!disabled.empty()) {
                             size_t lineEnd = disabled.find('\n');
                             auto firstLine = std::string_view(disabled).substr(0, lineEnd);
-                            size_t content = firstLine.find_first_not_of(" \t");
-                            if (content != std::string_view::npos) {
+                            while (!firstLine.empty() && isTabOrSpace(firstLine.front()))
+                                firstLine.remove_prefix(1);
+                            if (!firstLine.empty()) {
                                 auto& directive = lastDirectiveOwner->at(lastDirectiveIndex);
-                                auto inlineText = firstLine.substr(content);
+                                auto inlineText = firstLine;
                                 if (inlineText.starts_with("//") || inlineText.starts_with("/*")) {
                                     directive.text.append("  ");
                                 }
@@ -1194,7 +1203,7 @@ private:
                 if (!text.empty()) {
                     if (trivia.kind == TriviaKind::SkippedTokens) {
                         if (lineBreaks == 0 && previous) {
-                            size_t lineEnd = text.find_first_of("\r\n");
+                            size_t lineEnd = findNewline(text);
                             auto firstLine = std::string_view(text).substr(0, lineEnd);
                             while (!firstLine.empty() && isTabOrSpace(firstLine.front()))
                                 firstLine.remove_prefix(1);
@@ -1213,12 +1222,7 @@ private:
                                     previous->trailing.push_back(std::move(prefix));
                                 }
 
-                                size_t nextLine = lineEnd + 1;
-                                if (text[lineEnd] == '\r' && nextLine < text.size() &&
-                                    text[nextLine] == '\n') {
-                                    nextLine++;
-                                }
-                                text.erase(0, nextLine);
+                                text.erase(0, skipNewline(text, lineEnd));
                                 lineBreaks++;
                             }
                         }
@@ -1227,13 +1231,13 @@ private:
                         size_t leadingLineBreaks = 0;
                         size_t afterLastNewline = 0;
                         while (content < text.size() && isWhitespace(text[content])) {
-                            if (text[content] == '\n' ||
-                                (text[content] == '\r' &&
-                                 (content + 1 == text.size() || text[content + 1] != '\n'))) {
+                            if (isNewline(text[content])) {
                                 leadingLineBreaks++;
-                                afterLastNewline = content + 1;
+                                content = skipNewline(text, content);
+                                afterLastNewline = content;
                             }
-                            content++;
+                            else
+                                content++;
                         }
                         if (leadingLineBreaks) {
                             lineBreaks += leadingLineBreaks;
@@ -1368,7 +1372,7 @@ private:
                                 following.remove_prefix(1);
                             if (following.starts_with(','))
                                 trivia.joinsFollowingToken = true;
-                            size_t lineEnd = restOfLine.find_first_of("\r\n");
+                            size_t lineEnd = findNewline(restOfLine);
                             if (lineEnd != std::string_view::npos)
                                 restOfLine = restOfLine.substr(0, lineEnd);
                             trivia.joinsFollowingToken =
@@ -1413,8 +1417,7 @@ private:
                     auto source = sourceManager->getSourceText(end.buffer());
                     auto between = source.substr(end.offset(), start.offset() - end.offset());
                     trivia.joinsFollowingToken = trivia.joinsFollowingToken ||
-                                                 between.find_first_of("\r\n") ==
-                                                     std::string_view::npos;
+                                                 std::ranges::none_of(between, isNewline);
                 }
             };
             classify(tokens[tokenIndex].leading, true);
@@ -1442,8 +1445,7 @@ private:
                         auto source = sourceManager->getSourceText(currentStart.buffer());
                         auto between =
                             source.substr(previousEnd, currentStart.offset() - previousEnd);
-                        current.lineBreakBefore = between.find_first_of("\r\n") !=
-                                                  std::string_view::npos;
+                        current.lineBreakBefore = std::ranges::any_of(between, isNewline);
                     }
                 }
             }

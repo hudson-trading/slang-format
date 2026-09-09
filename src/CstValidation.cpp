@@ -54,7 +54,7 @@ std::string canonicalizeComment(std::string_view text, bool blockComment) {
     result.reserve(text.size());
     size_t lineStart = 0;
     while (lineStart < text.size()) {
-        size_t lineEnd = text.find_first_of("\r\n", lineStart);
+        size_t lineEnd = findNewline(text, lineStart);
         if (lineEnd == std::string_view::npos)
             lineEnd = text.size();
         size_t contentStart = lineStart;
@@ -69,9 +69,7 @@ std::string canonicalizeComment(std::string_view text, bool blockComment) {
         if (lineEnd == text.size())
             break;
         result.push_back('\n');
-        lineStart = lineEnd + 1;
-        if (text[lineEnd] == '\r' && lineStart < text.size() && text[lineStart] == '\n')
-            lineStart++;
+        lineStart = skipNewline(text, lineEnd);
     }
     return result;
 }
@@ -392,7 +390,7 @@ static std::string describeTriviaShort(const Trivia& tr) {
     auto truncate1 = [](std::string s, size_t n = 60) {
         // Collapse newlines so multi-line content stays on one row.
         for (auto& c : s)
-            if (c == '\n')
+            if (isNewline(c))
                 c = ' ';
         if (s.size() > n)
             s = s.substr(0, n) + "...";

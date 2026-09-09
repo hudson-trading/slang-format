@@ -347,6 +347,7 @@ struct RenderRun {
     void append(std::string_view text, MemberId member) {
         if (text.empty())
             return;
+        // Only LF advances rendered lines; CR bytes in opaque source text are preserved.
         if (text.front() != '\n')
             applyIndent();
         for (char c : text) {
@@ -921,7 +922,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
         };
         for (size_t line = previousLine + 1; line < nextLine && line < lines.size(); line++) {
             auto text = lines[line];
-            while (!text.empty() && (text.front() == ' ' || text.front() == '\t'))
+            while (!text.empty() && slang::isTabOrSpace(text.front()))
                 text.remove_prefix(1);
             if (text.empty()) {
                 finishComment();
@@ -942,7 +943,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
     auto leadingIndent = [&](size_t line) {
         size_t indent = 0;
         while (line < lines.size() && indent < lines[line].size() &&
-               (lines[line][indent] == ' ' || lines[line][indent] == '\t')) {
+               slang::isTabOrSpace(lines[line][indent])) {
             indent++;
         }
         return indent;
@@ -955,7 +956,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
             end = layout.text.size();
         auto suffix =
             std::string_view(layout.text).substr(anchor.outputOffset, end - anchor.outputOffset);
-        while (!suffix.empty() && (suffix.back() == ' ' || suffix.back() == '\t'))
+        while (!suffix.empty() && slang::isTabOrSpace(suffix.back()))
             suffix.remove_suffix(1);
         return suffix == "=" || suffix == "<=" ||
                (suffix.find('=') != std::string_view::npos && suffix.ends_with('{'));
@@ -1001,7 +1002,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 continue;
             }
             auto line = lines[anchor->line];
-            while (!line.empty() && (line.front() == ' ' || line.front() == '\t'))
+            while (!line.empty() && slang::isTabOrSpace(line.front()))
                 line.remove_prefix(1);
             if (line.starts_with('`'))
                 continue;
@@ -1035,7 +1036,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 minimumColumn = nextMinimum;
                 maximumColumn = nextMaximum;
                 auto nextLine = lines[rows[groupEnd]->line];
-                while (!nextLine.empty() && (nextLine.front() == ' ' || nextLine.front() == '\t')) {
+                while (!nextLine.empty() && slang::isTabOrSpace(nextLine.front())) {
                     nextLine.remove_prefix(1);
                 }
                 bool multilineRow = nextLine.starts_with('}') ||
@@ -1195,11 +1196,10 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
             if (groupEnd - groupBegin == 1) {
                 const auto* row = rows[groupBegin];
                 auto line = lines[row->line];
-                while (!line.empty() && (line.front() == ' ' || line.front() == '\t'))
+                while (!line.empty() && slang::isTabOrSpace(line.front()))
                     line.remove_prefix(1);
                 bool hasSeparator = row->outputOffset > 0 &&
-                                    (layout.text[row->outputOffset - 1] == ' ' ||
-                                     layout.text[row->outputOffset - 1] == '\t');
+                                    slang::isTabOrSpace(layout.text[row->outputOffset - 1]);
                 if (row->minimumPadding &&
                     key.kind == slang::syntax::SyntaxKind::NamedParamAssignment &&
                     key.column == 1 && line.starts_with('.') && !hasSeparator) {
@@ -1235,7 +1235,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 }
                 if (key.column == 0 && key.kind == slang::syntax::SyntaxKind::ImplicitAnsiPort) {
                     auto text = lines[line];
-                    while (!text.empty() && (text.front() == ' ' || text.front() == '\t')) {
+                    while (!text.empty() && slang::isTabOrSpace(text.front())) {
                         text.remove_prefix(1);
                     }
                     bool hasDirection = text.starts_with("input ") || text.starts_with("output ") ||

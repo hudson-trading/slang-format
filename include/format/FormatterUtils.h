@@ -12,8 +12,19 @@
 #include <vector>
 
 #include "slang/parsing/Token.h"
+#include "slang/text/CharInfo.h"
 
 namespace format {
+
+/// Find the next newline character, or return string_view::npos if none remains.
+size_t findNewline(std::string_view text, size_t offset = 0);
+
+/// Advance past one logical newline, treating CRLF as a single line ending.
+inline size_t skipNewline(std::string_view text, size_t offset) {
+    if (offset >= text.size() || !slang::isNewline(text[offset]))
+        return offset;
+    return offset + (text.substr(offset).starts_with("\r\n") ? 2 : 1);
+}
 
 /// Byte interval occupied by a macro or a literal whose internal text is opaque.
 struct ProtectedTextRange {
