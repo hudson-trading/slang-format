@@ -35,6 +35,16 @@ validation, and the `pre-commit` runner used in CI. Run the configured hooks
 locally with `prek run --all-files`; it reads `.pre-commit-config.yaml` and caches
 each hook's tools separately from the project environment.
 
+Docs deployments use `scripts/ci/publish-docs.sh` to update `gh-pages`. Main
+deployments preserve `previews/`; PR deployments replace only their own
+`previews/pr-N` directory. Concurrent pushes retry against the latest branch
+without force-pushing. The `gh-pages` branch must already exist.
+
+Run `tests/ci/test_publish_docs.py` to exercise publishing against temporary local
+Git repositories. It requires Git, Bash, and rsync. Both docs workflows run it
+before publishing. Manual preview runs require a PR number and publish the selected
+ref without posting a PR comment.
+
 ## Architecture
 
 The formatter uses the concrete syntax tree (CST) from slang so that comments,
