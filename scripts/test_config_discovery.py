@@ -107,23 +107,23 @@ def main() -> None:
         with open(override, "w") as f:
             f.write('{"columnLimit": 55}\n')
 
-        # 1. Target a file under proj, from an unrelated CWD → discovers proj config.
+        # 1. Target a file under proj, from an unrelated CWD -> discovers proj config.
         check(
             "target file walks up to config",
             dump_column_limit(binary, [target_file], cwd=elsewhere),
             40,
         )
 
-        # 2. Target a directory under proj, from an unrelated CWD → discovers config.
+        # 2. Target a directory under proj, from an unrelated CWD -> discovers config.
         check(
             "target dir walks up to config",
             dump_column_limit(binary, [os.path.join(proj, "src")], cwd=elsewhere),
             40,
         )
 
-        # 3. Target a file with no config in its tree → default (100).
+        # 3. Target a file with no config in its tree -> default (100).
         check(
-            "no config in tree → default",
+            "no config in tree -> default",
             dump_column_limit(binary, [bare], cwd=elsewhere),
             100,
         )
@@ -147,7 +147,7 @@ def main() -> None:
         )
 
         # 5b. Target file outside any config tree, but CWD is under a config
-        #     root → falls back to CWD discovery. This is the lint-runner case:
+        #     root -> falls back to CWD discovery. This is the lint-runner case:
         #     the tool formats a throwaway tempfile (in /tmp, no config above
         #     it) while running inside the project, so only CWD reflects the
         #     real config. `bare` lives under `elsewhere/` (no config); run it
@@ -218,7 +218,7 @@ def main() -> None:
         with open(os.path.join(droot, ".slang", "format.json"), "w") as f:
             f.write("{}\n")
         check(
-            "no dirs → format whole tree",
+            "no dirs -> format whole tree",
             formatted_files(binary, [droot], cwd=tmp),
             {"a.sv", "a2.sv", "b.sv", "b2.sv"},
         )

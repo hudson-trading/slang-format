@@ -22,7 +22,7 @@ TEST_CASE("formatter config loading and discovery are shared") {
 
     auto found = format::findConfigFile(root / "src" / "nested");
     REQUIRE(found);
-    CHECK(*found == configPath);
+    CHECK(fs::equivalent(*found, configPath));
 
     std::string error = "stale error";
     auto config = format::loadConfigFile(*found, error);

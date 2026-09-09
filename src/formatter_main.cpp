@@ -25,6 +25,11 @@
 #include "slang/util/OS.h"
 #include "slang/util/SmallVector.h"
 
+#if defined(_WIN32)
+#    include <fcntl.h>
+#    include <io.h>
+#endif
+
 using namespace slang;
 using namespace slang::syntax;
 namespace fs = std::filesystem;
@@ -209,6 +214,12 @@ bool writeFile(const std::string& path, const std::string& content) {
 
 int main(int argc, char** argv) {
     OS::setupConsole();
+#if defined(_WIN32)
+    // Source text can contain preserved CRLF sequences. Disable CRT newline
+    // translation so stdin and stdout remain byte-for-byte lossless.
+    _setmode(_fileno(stdin), _O_BINARY);
+    _setmode(_fileno(stdout), _O_BINARY);
+#endif
 
     CommandLine cmdline;
 
