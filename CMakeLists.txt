@@ -134,6 +134,11 @@ if(NOT TARGET reflectcpp::reflectcpp)
       OFF
       CACHE BOOL "Do not install reflect-cpp separately" FORCE)
   add_subdirectory(external/reflect-cpp EXCLUDE_FROM_ALL)
+  # Keep third-party header warnings out of consumers' strict warning checks.
+  get_target_property(reflectcpp_include_dirs reflectcpp
+                      INTERFACE_INCLUDE_DIRECTORIES)
+  target_include_directories(reflectcpp SYSTEM
+                             INTERFACE ${reflectcpp_include_dirs})
 endif()
 
 find_package(Git QUIET)
