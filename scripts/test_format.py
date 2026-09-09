@@ -95,9 +95,8 @@ def run_formatter(
     result = subprocess.run(
         [slang_format, "--force", "--stage", stage, path],
         capture_output=True,
-        text=True,
     )
-    return result.stdout, result.stderr, result.returncode
+    return result.stdout.decode(), result.stderr.decode(), result.returncode
 
 
 def check_stage(
@@ -196,8 +195,8 @@ def check_stage(
     if not have_slang:
         return True
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp:
-        tmp.write(formatted)
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".sv", delete=False) as tmp:
+        tmp.write(formatted.encode())
         tmp_path = tmp.name
     try:
         orig_json = get_cst_json(input_path, slang, "no-whitespace", quiet=True)
@@ -313,8 +312,8 @@ def main():
         golden_path = f"{stem}.out.sv"
 
         formatted, stderr, rc = run_formatter(input_path, args.slang_format)
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".sv", delete=False) as tmp:
-            tmp.write(formatted)
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".sv", delete=False) as tmp:
+            tmp.write(formatted.encode())
             tmp_path = tmp.name
 
         try:

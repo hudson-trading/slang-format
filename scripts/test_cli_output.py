@@ -144,9 +144,11 @@ def main():
                             assert result.stdout == b"", result
                         assert b"Git merge conflict marker" in result.stderr
                         location = (
-                            b"<stdin>" if mode == "stdin" else bytes(conflict_path)
+                            b"<stdin>"
+                            if mode == "stdin"
+                            else conflict_path.name.encode()
                         )
-                        assert location + b":2" in result.stderr
+                        assert location + b":2" in result.stderr, result.stderr
                         if force and not dry_run and mode == "inplace":
                             assert conflict_path.read_bytes() != conflict
                             assert conflict_path.read_bytes()
