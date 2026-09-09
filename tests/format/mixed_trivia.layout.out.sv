@@ -3,7 +3,7 @@
     /* Block comment inside ifdef */
     module mixed_trivia (
         input logic clk,  // clock
-        input logic rst_n  /* reset */
+        input logic rst_n /* reset */
     );
         // Comment before ifdef inside module
         `ifdef DEBUG

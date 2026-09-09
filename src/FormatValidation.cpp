@@ -41,14 +41,15 @@ PipelineRender runPipeline(
     const SyntaxNode& root,
     const Config& config,
     FormatStage stage,
-    SourceManager& sourceManager
+    SourceManager& sourceManager,
+    std::vector<FormatDiagnostic>& diagnostics
 ) {
     // Both public stages start from the same normalized syntax. The aligned
     // formatter internally consumes the layout document and its selected
     // breaks; it does not reparse layout text as a formatting input.
     Formatter layoutPass(config, &sourceManager, FormatStage::Layout);
     PipelineRender rendered;
-    rendered.layoutText = layoutPass.format(root);
+    rendered.layoutText = layoutPass.format(root, &diagnostics);
     rendered.text = rendered.layoutText;
     if (stage == FormatStage::Layout)
         return rendered;
@@ -64,12 +65,20 @@ bool FormatResult::hasDiagnostic(FormatDiagnosticKind kind) const {
     return std::ranges::any_of(diagnostics, [kind](const auto& diag) { return diag.kind == kind; });
 }
 
+bool FormatResult::isUsable() const {
+    return std::ranges::all_of(diagnostics, [](const auto& diag) {
+        return diag.kind == FormatDiagnosticKind::UnmatchedFormatOn;
+    });
+}
+
 FormatOutputAction FormatResult::outputAction(bool force) const {
     auto action = generated ? FormatOutputAction::KeepOriginal : FormatOutputAction::UseFormatted;
     if (force)
         return action;
     for (const auto& diag : diagnostics) {
         switch (diag.kind) {
+            case FormatDiagnosticKind::UnmatchedFormatOn:
+                break;
             case FormatDiagnosticKind::MergeConflict:
             case FormatDiagnosticKind::InternalError:
             case FormatDiagnosticKind::FailedReparse:
@@ -127,46 +136,50 @@ FormatResult format(
 
     FormatResult result = {};
 
-    // Git inserts markers at the start of a line, even inside comments and
-    // inactive preprocessor branches. Check raw source before parsing recovery
-    // can treat them as ordinary tokens or trivia.
-    auto remaining = input;
-    if (remaining.starts_with("\xef\xbb\xbf"))
-        remaining.remove_prefix(3);
-    for (size_t lineNumber = 1; !remaining.empty(); lineNumber++) {
-        auto end = remaining.find_first_of("\r\n");
-        auto line = remaining.substr(0, end);
-        if (line.size() >= 7 &&
-            (line[0] == '<' || line[0] == '=' || line[0] == '>' || line[0] == '|')) {
-            auto markerEnd = line.find_first_not_of(line[0]);
-            if (markerEnd == std::string_view::npos)
-                markerEnd = line.size();
-            auto suffix = line.substr(markerEnd);
-            bool validSuffix = suffix.empty() ||
-                               (line[0] == '='
-                                    ? suffix.find_first_not_of(" \t") == std::string_view::npos
-                                    : isTabOrSpace(suffix.front()));
-            if (markerEnd >= 7 && validSuffix) {
-                result.diagnostics.push_back(
-                    {FormatDiagnosticKind::MergeConflict,
-                     "Git merge conflict marker; resolve conflicts before formatting", lineNumber}
-                );
-                break;
+    SourceManager sm;
+    auto buf = sm.assignText(filename, input);
+
+    // Git inserts markers even inside comments and inactive branches. An equals-only
+    // line can also underline a heading, so it needs a matching closing marker.
+    size_t separatorOffset = 0;
+    size_t separatorWidth = 0;
+    size_t firstColumn = input.starts_with("\xef\xbb\xbf") ? 3 : 0;
+    for (size_t offset = input.find_first_of("<=>|"); offset != std::string_view::npos;) {
+        char marker = input[offset];
+        size_t markerEnd = input.find_first_not_of(marker, offset);
+        if (markerEnd == std::string_view::npos)
+            markerEnd = input.size();
+        size_t width = markerEnd - offset;
+        auto location = SourceLocation(buf.id, offset);
+        if (width >= 7 && (offset == firstColumn || sm.getColumnNumber(location) == 1)) {
+            size_t end = input.find_first_of("\r\n", markerEnd);
+            auto suffix =
+                input.substr(markerEnd, end == std::string_view::npos ? end : end - markerEnd);
+            bool validSuffix = suffix.empty() || (marker == '=' ? suffix.find_first_not_of(" \t") ==
+                                                                      std::string_view::npos
+                                                                : isTabOrSpace(suffix.front()));
+            if (validSuffix) {
+                if (marker == '=') {
+                    separatorOffset = offset;
+                    separatorWidth = width;
+                }
+                else {
+                    if (marker == '>' && separatorWidth == width)
+                        location = SourceLocation(buf.id, separatorOffset);
+                    result.diagnostics.push_back(
+                        {FormatDiagnosticKind::MergeConflict,
+                         "Git merge conflict marker; resolve conflicts before formatting",
+                         sm.getLineNumber(location)}
+                    );
+                    break;
+                }
             }
         }
-        if (end == std::string_view::npos)
-            break;
-        size_t newlineSize = remaining[end] == '\r' && end + 1 < remaining.size() &&
-                                     remaining[end + 1] == '\n'
-                                 ? 2
-                                 : 1;
-        remaining.remove_prefix(end + newlineSize);
+        offset = input.find_first_of("<=>|", markerEnd);
     }
 
     // Parse the source ourselves (mirroring SyntaxTree::create) so we can
     // inspect the parser's delimiter stack before it is destroyed.
-    SourceManager sm;
-    auto buf = sm.assignText(filename, input);
     if (!filename.empty())
         sm.addLineDirective(SourceLocation(buf.id, 0), 2, filename, 0);
 
@@ -244,7 +257,7 @@ FormatResult format(
 
     // Run Formatter and validate CST
     try {
-        auto rendered = runPipeline(root, config, stage, sm);
+        auto rendered = runPipeline(root, config, stage, sm, result.diagnostics);
         result.formatted = std::move(rendered.text);
 
         // The layout pass is an independently meaningful output, even when

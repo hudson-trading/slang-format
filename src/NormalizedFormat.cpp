@@ -18,6 +18,7 @@
 #include "slang/syntax/SyntaxFacts.h"
 #include "slang/syntax/SyntaxListInfo.h"
 #include "slang/syntax/SyntaxNode.h"
+#include "slang/syntax/SyntaxPrinter.h"
 #include "slang/text/CharInfo.h"
 #include "slang/text/SourceManager.h"
 #include "slang/util/SmallVector.h"
@@ -56,6 +57,15 @@ std::string syntaxText(const SyntaxNode& syntax, const SourceManager* sourceMana
     }
     if (UnconditionalBranchDirectiveSyntax::isKind(syntax.kind)) {
         return std::string(syntax.as<UnconditionalBranchDirectiveSyntax>().directive.rawText());
+    }
+
+    if (DirectiveSyntax::isKind(syntax.kind)) {
+        return SyntaxPrinter()
+            .setIncludeDirectives(true)
+            .setIncludeSkipped(true)
+            .setSquashNewlines(false)
+            .printExcludingLeadingComments(syntax)
+            .str();
     }
 
     if (sourceManager) {
@@ -157,6 +167,44 @@ std::optional<std::string> canonicalSkippedAssignment(const Trivia& trivia) {
 }
 
 bool hasForeignTemplateDirective(std::string_view text) {
+    if (text.find("${") != std::string_view::npos ||
+        text.find("`systemc_header") != std::string_view::npos ||
+        text.find("`systemc_interface") != std::string_view::npos ||
+        text.find('\\') != std::string_view::npos) {
+        SourceManager sm;
+        BumpAllocator allocator;
+        Diagnostics diagnostics;
+        Lexer lexer(sm.assignText(text), allocator, diagnostics, sm);
+        for (auto token = lexer.lex();; token = lexer.lex()) {
+            for (const auto& trivia : token.trivia()) {
+                if (trivia.kind != TriviaKind::LineComment)
+                    continue;
+                auto raw = trivia.getRawText();
+                auto last = raw.find_last_not_of(" \t\r");
+                if (last != std::string_view::npos && raw[last] == '\\' && last + 1 < raw.size())
+                    return true;
+            }
+            if (token.kind == TokenKind::EndOfFile)
+                break;
+            if (token.kind == TokenKind::StringLiteral)
+                continue;
+            auto raw = token.rawText();
+            auto offset = token.location().offset();
+            auto spelling = text.substr(offset, raw.size() + 1);
+            if (spelling.find("${") != std::string_view::npos || raw == "`systemc_header" ||
+                raw == "`systemc_interface")
+                return true;
+            if (raw == "\\") {
+                auto rest = text.substr(offset + raw.size());
+                size_t spaces = 0;
+                while (spaces < rest.size() && isTabOrSpace(rest[spaces]))
+                    spaces++;
+                if (spaces &&
+                    (spaces == rest.size() || rest[spaces] == '\r' || rest[spaces] == '\n'))
+                    return true;
+            }
+        }
+    }
     while (!text.empty()) {
         size_t lineEnd = text.find('\n');
         auto line = text.substr(0, lineEnd);
@@ -324,6 +372,43 @@ public:
         hoistStandaloneRecovery(*result.root_);
         bool foreignTemplate = false;
         bool incompleteConfig = false;
+        bool incompleteDirective = false;
+        bool recoveredContainer = false;
+        bool recoveredParenthesizedType = false;
+        for (const auto& token : tokens) {
+            auto parsed = token.token;
+            recoveredContainer = recoveredContainer ||
+                                 (parsed.isMissing() &&
+                                  (parsed.kind == TokenKind::ModuleKeyword ||
+                                   parsed.kind == TokenKind::InterfaceKeyword ||
+                                   parsed.kind == TokenKind::ProgramKeyword));
+            auto inspect = [&](const auto& self, const SyntaxNode& node) -> void {
+                for (auto it = node.tokens_begin(); it != node.tokens_end(); ++it) {
+                    auto parsed = *it;
+                    incompleteDirective = incompleteDirective || parsed.isMissing();
+                    for (const auto& trivia : parsed.trivia()) {
+                        if (trivia.kind == TriviaKind::Directive && trivia.syntax())
+                            self(self, *trivia.syntax());
+                    }
+                }
+            };
+            for (const auto& trivia : token.token.trivia()) {
+                if (trivia.kind == TriviaKind::Directive && trivia.syntax())
+                    inspect(inspect, *trivia.syntax());
+                if (token.inDataType && trivia.kind == TriviaKind::SkippedTokens) {
+                    auto skipped = trivia.getSkippedTokens();
+                    // Unsupported parenthesized types spill into separate declarations,
+                    // so the recovered members cannot be formatted independently.
+                    if (skipped.size() >= 3 && skipped.front().kind == TokenKind::OpenParenthesis &&
+                        skipped.back().kind == TokenKind::CloseParenthesis &&
+                        std::ranges::all_of(skipped.subspan(1, skipped.size() - 2), [](Token t) {
+                            return t.kind == TokenKind::Identifier ||
+                                   t.kind == TokenKind::DoubleColon;
+                        }))
+                        recoveredParenthesizedType = true;
+                }
+            }
+        }
         // Unsupported config paths can spill into later compilation-unit
         // members during recovery, so preserving just the config is insufficient.
         auto inspectConfig = [&](const NormalizedChild& item) {
@@ -349,12 +434,23 @@ public:
                 foreignTemplate =
                     hasForeignTemplateDirective(sourceManager->getSourceText(location.buffer()));
         }
-        if (foreignTemplate || incompleteConfig) {
+        if (foreignTemplate || incompleteConfig || incompleteDirective || recoveredContainer ||
+            recoveredParenthesizedType) {
             result.root_->verbatim = true;
-            result.root_->verbatimText = syntaxText(root, sourceManager);
+            auto location = root.getFirstToken().location();
+            result.root_->verbatimText =
+                sourceManager && location
+                    ? std::string(sourceManager->getSourceText(location.buffer()))
+                    : syntaxText(root, sourceManager);
+            if (result.root_->verbatimText.ends_with('\0'))
+                result.root_->verbatimText.pop_back();
+            result.root_->leading.clear();
+            for (auto& token : tokens)
+                token.leading.clear();
         }
         else {
             markVerbatimNodes(*result.root_);
+            markFormatRegions(*result.root_, result.unmatchedFormatOnCount_);
         }
         classifyTokenLines();
         classifyMacroContinuations();
@@ -444,6 +540,124 @@ private:
                     if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&item.value))
                         hoistStandaloneRecovery(**nested);
                 }
+            }
+        }
+    }
+
+    void markFormatRegions(NormalizedNode& node, size_t& unmatchedCount) {
+        for (auto& child : node.children) {
+            if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&child.value)) {
+                markFormatRegions(**nested, unmatchedCount);
+                continue;
+            }
+            auto listPtr = std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
+            if (!listPtr)
+                continue;
+            auto& list = **listPtr;
+            for (auto& item : list.children) {
+                if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&item.value))
+                    markFormatRegions(**nested, unmatchedCount);
+            }
+            if (list.style == ListStyle::Inline)
+                continue;
+
+            std::optional<size_t> off;
+            std::vector<std::pair<size_t, size_t>> regions;
+            for (size_t i = 0; i <= list.children.size(); i++) {
+                auto index = i == list.children.size() ? std::optional(list.endTokenIndex)
+                                                       : firstRealToken(list.children[i]);
+                if (!index || *index >= tokens.size())
+                    continue;
+                for (auto& trivia : tokens[*index].leading) {
+                    if (off && (trivia.kind == NormalizedTriviaKind::ConditionalBranch ||
+                                trivia.kind == NormalizedTriviaKind::ConditionalDirective ||
+                                trivia.kind == NormalizedTriviaKind::Directive ||
+                                trivia.kind == NormalizedTriviaKind::MacroUsage ||
+                                trivia.kind == NormalizedTriviaKind::Verbatim)) {
+                        trivia.endsLine = trivia.kind != NormalizedTriviaKind::ConditionalBranch;
+                        trivia.kind = NormalizedTriviaKind::Unformatted;
+                    }
+                    if (trivia.kind != NormalizedTriviaKind::Comment)
+                        continue;
+                    auto text = std::string_view(trivia.text);
+                    for (size_t pos = text.find("slang-format: "); pos != std::string_view::npos;
+                         pos = text.find("slang-format: ", pos + 1)) {
+                        auto directive =
+                            text.substr(pos + std::string_view("slang-format: ").size());
+                        auto matches = [&](std::string_view word) {
+                            return directive.starts_with(word) &&
+                                   (directive.size() == word.size() ||
+                                    !isValidCIdChar(directive[word.size()]));
+                        };
+                        if (matches("off")) {
+                            if (!off)
+                                off = i;
+                        }
+                        else if (matches("on")) {
+                            if (off) {
+                                if (*off < i)
+                                    regions.emplace_back(*off, i);
+                                off.reset();
+                            }
+                            else {
+                                unmatchedCount++;
+                            }
+                        }
+                    }
+                }
+            }
+            if (off && *off < list.children.size())
+                regions.emplace_back(*off, list.children.size());
+
+            // Collapse each disabled run into one verbatim node so the whitespace
+            // between its list items is preserved as well as the items themselves.
+            for (auto [begin, end] : std::views::reverse(regions)) {
+                // Keep the final separator in the list so layout can resume normal
+                // comma and continuation handling after the preserved run.
+                if (auto separator = std::get_if<size_t>(&list.children[end - 1].value);
+                    separator && tokens[*separator].token.kind == TokenKind::Comma)
+                    end--;
+                if (begin == end)
+                    continue;
+                auto first = firstRealToken(list.children[begin]);
+                auto after = end == list.children.size() ? std::optional(list.endTokenIndex)
+                                                         : firstRealToken(list.children[end]);
+                if (!first || !after || *after <= *first)
+                    continue;
+                size_t last = *after - 1;
+                while (last > *first && (!tokens[last].token || tokens[last].token.isMissing()))
+                    last--;
+                auto preserved = std::make_unique<NormalizedNode>();
+                preserved->verbatim = true;
+                preserved->verbatimFirstToken = first;
+                preserved->verbatimLastToken = last;
+                if (auto firstNode =
+                        std::get_if<std::unique_ptr<NormalizedNode>>(&list.children[begin].value)) {
+                    preserved->kind = (*firstNode)->kind;
+                    preserved->leading = std::move((*firstNode)->leading);
+                }
+                auto startLoc = tokens[*first].token.location();
+                auto endLoc = tokens[last].token.range().end();
+                if (sourceManager && startLoc && endLoc && startLoc.buffer() == endLoc.buffer()) {
+                    auto source = sourceManager->getSourceText(startLoc.buffer());
+                    preserved->verbatimText =
+                        source.substr(startLoc.offset(), endLoc.offset() - startLoc.offset());
+                }
+                else {
+                    for (size_t t = *first; t <= last; t++) {
+                        if (t != *first) {
+                            for (const auto& trivia : tokens[t].token.trivia())
+                                preserved->verbatimText += trivia.getRawText();
+                        }
+                        preserved->verbatimText += tokens[t].token.rawText();
+                    }
+                }
+                for (size_t i = begin; i < end; i++)
+                    preserved->children.push_back(std::move(list.children[i]));
+                list.children.erase(list.children.begin() + begin, list.children.begin() + end);
+                list.children.insert(
+                    list.children.begin() + begin, NormalizedChild(std::move(preserved))
+                );
             }
         }
     }
@@ -541,6 +755,7 @@ private:
                     }
                     list->children.push_back(std::move(child));
                 }
+                list->endTokenIndex = tokens.size();
                 result->children.emplace_back(std::move(list));
                 followsPreservedList = preservesBlankLines;
                 nextList++;
@@ -912,7 +1127,12 @@ private:
                     }
                     if (placement == TriviaPlacement::Inline && previous &&
                         kind == NormalizedTriviaKind::MacroUsage && !previousMacro &&
-                        current.token.rawText().empty()) {
+                        current.token.rawText().empty() && current.leading.empty() &&
+                        (previous->parentKind != SyntaxKind::HierarchicalInstance ||
+                         previous->token.kind != TokenKind::OpenParenthesis) &&
+                        (previous->parentKind != SyntaxKind::FunctionPortList ||
+                         previous->token.kind != TokenKind::OpenParenthesis ||
+                         !current.inDataType)) {
                         previous->trailing.push_back(std::move(item));
                         lastDirectiveOwner = &previous->trailing;
                         lastDirectiveIndex = previous->trailing.size() - 1;
@@ -1005,17 +1225,19 @@ private:
 
                         size_t content = 0;
                         size_t leadingLineBreaks = 0;
+                        size_t afterLastNewline = 0;
                         while (content < text.size() && isWhitespace(text[content])) {
                             if (text[content] == '\n' ||
                                 (text[content] == '\r' &&
                                  (content + 1 == text.size() || text[content + 1] != '\n'))) {
                                 leadingLineBreaks++;
+                                afterLastNewline = content + 1;
                             }
                             content++;
                         }
                         if (leadingLineBreaks) {
                             lineBreaks += leadingLineBreaks;
-                            text.erase(0, content);
+                            text.erase(0, afterLastNewline);
                         }
 
                         bool followedByLineBreak = false;
@@ -1078,7 +1300,14 @@ private:
                         }
                         item.preserveSingleSpace = !item.endsLine && hasHorizontalSeparator &&
                                                    boundary == triviaView.size();
-                        current.leading.push_back(std::move(item));
+                        if (previous && previous->parentKind == SyntaxKind::NamedBlockClause &&
+                            previous->token.kind == TokenKind::Colon && lineBreaks == 0 &&
+                            !multiline) {
+                            previous->trailing.push_back(std::move(item));
+                        }
+                        else {
+                            current.leading.push_back(std::move(item));
+                        }
                         lineBreaks = 0;
                         continue;
                     }
@@ -1171,7 +1400,8 @@ private:
                         SyntaxFacts::getBinarySequenceExpr(next->token.kind) !=
                             SyntaxKind::Unknown ||
                         SyntaxFacts::getBinaryPropertyExpr(next->token.kind) != SyntaxKind::Unknown;
-                    if (binaryOperator || next->token.kind == TokenKind::Dot) {
+                    if (binaryOperator || next->token.kind == TokenKind::Dot ||
+                        next->token.kind == TokenKind::OpenBracket) {
                         trivia.joinsFollowingToken = true;
                         continue;
                     }

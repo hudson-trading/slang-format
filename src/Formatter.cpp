@@ -9,6 +9,7 @@
 #include "format/Formatter.h"
 
 #include "format/FormatDocument.h"
+#include "format/FormatValidation.h"
 #include "format/Layout.h"
 #include "format/NormalizedFormat.h"
 #include <stdexcept>
@@ -27,8 +28,21 @@ Formatter::Formatter(
       stage_(stage) {
 }
 
-std::string Formatter::format(const slang::syntax::SyntaxNode& root) {
+std::string Formatter::format(
+    const slang::syntax::SyntaxNode& root,
+    std::vector<FormatDiagnostic>* diagnostics
+) {
     auto normalized = NormalizedFormatDocument::build(root, sourceManager_);
+    if (diagnostics) {
+        for (size_t i = 0; i < normalized.unmatchedFormatOnCount(); i++) {
+            diagnostics->push_back(
+                {FormatDiagnosticKind::UnmatchedFormatOn,
+                 "slang-format: on has no preceding off in the same list scope. "
+                 "Did you put the off directive in the wrong scope?",
+                 std::nullopt}
+            );
+        }
+    }
     auto document = buildLayoutDocument(normalized, config_, stage_);
     DocumentRenderer renderer(config_);
     auto layout = renderer.renderLayout(document);

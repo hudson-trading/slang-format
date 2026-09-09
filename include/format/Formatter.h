@@ -10,6 +10,7 @@
 #include "format/FormatConfig.h"
 #include "format/FormatStage.h"
 #include <string>
+#include <vector>
 
 namespace slang {
 class SourceManager;
@@ -21,6 +22,8 @@ class SyntaxNode;
 
 namespace format {
 
+struct FormatDiagnostic;
+
 class Formatter {
 public:
     explicit Formatter(
@@ -29,7 +32,11 @@ public:
         FormatStage stage = FormatStage::Aligned
     );
 
-    std::string format(const slang::syntax::SyntaxNode& root);
+    /// Render source and optionally collect formatting directive warnings.
+    std::string format(
+        const slang::syntax::SyntaxNode& root,
+        std::vector<FormatDiagnostic>* diagnostics = nullptr
+    );
 
 private:
     Config config_;

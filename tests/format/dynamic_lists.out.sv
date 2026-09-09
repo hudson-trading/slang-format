@@ -25,7 +25,7 @@ endmodule
 
 // Port list with block comment goes vertical
 module block_comment_ports (
-    input  logic a,  /* first input */
+    input  logic a, /* first input */
     output logic b
 );
     assign b = a;

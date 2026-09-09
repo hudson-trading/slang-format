@@ -19,6 +19,7 @@ def main():
         command = [binary, "--config", str(config)]
         sources = {
             "generated": b"// @generated\r\nmodule foo; endmodule",
+            "off": b"// slang-format: off\nmodule foo;logic a;endmodule\nmodule bar;logic b;endmodule\n",
             "rejected": (
                 b"module foo;\r\nnested_in_if: always @(posedge clk) "
                 b"assert property (a |-> b); endmodule"
@@ -38,6 +39,8 @@ def main():
                     )
                     assert result.returncode == 0, result.stderr
                     assert result.stdout == source, (name, stage, stdin, result)
+                    if name == "off":
+                        assert b"warning:" not in result.stderr
                     dry_run = subprocess.run(
                         invocation + ["--dry-run"],
                         input=source if stdin else None,
@@ -61,6 +64,47 @@ def main():
                 assert inplace.returncode == 0, inplace.stderr
                 assert path.read_bytes() == source
                 checks += 1
+
+        unmatched_on = b"// slang-format: on\nmodule foo;logic a;endmodule\n"
+        on_path = root / "on.sv"
+        for stage in ("layout", "aligned"):
+            for force in (False, True):
+                for mode in ("stdin", "stdout", "inplace"):
+                    for dry_run in (False, True):
+                        on_path.write_bytes(unmatched_on)
+                        invocation = command + ["--stage", stage]
+                        if force:
+                            invocation += ["--force"]
+                        if dry_run:
+                            invocation += ["--dry-run"]
+                        if mode != "stdin":
+                            invocation += [str(on_path)]
+                        if mode == "inplace":
+                            invocation += ["-i"]
+                        result = subprocess.run(
+                            invocation,
+                            input=unmatched_on if mode == "stdin" else None,
+                            capture_output=True,
+                        )
+                        assert result.returncode == 0, result
+                        assert result.stderr.count(b"warning:") == 1, result.stderr
+                        assert (
+                            b"slang-format: on has no preceding off in the same list scope."
+                            in result.stderr
+                        )
+                        assert (
+                            b"Did you put the off directive in the wrong scope?"
+                            in result.stderr
+                        )
+                        if not dry_run and mode != "inplace":
+                            assert b"    logic a;\n" in result.stdout, result
+                        else:
+                            assert result.stdout == b"", result
+                        if not dry_run and mode == "inplace":
+                            assert b"    logic a;\n" in on_path.read_bytes()
+                        else:
+                            assert on_path.read_bytes() == unmatched_on
+                        checks += 1
 
         conflict = (
             b"module foo;\r\n"

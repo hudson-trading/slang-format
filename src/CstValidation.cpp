@@ -280,7 +280,7 @@ namespace {
 /// i.e., it has actual raw text. Missing/synthetic placeholder tokens are
 /// skipped because they're artifacts of the CST shape, not source content.
 bool isRealToken(const Token& t) {
-    return t && !t.rawText().empty();
+    return t && !t.isMissing() && !t.rawText().empty();
 }
 
 /// Iterate all real tokens in a subtree via tokens_begin()/end(), skipping
@@ -347,9 +347,12 @@ std::vector<Item> flattenSourceItems(const SyntaxNode& root) {
                         break;
                     case TriviaKind::DisabledText:
                         if (!std::ranges::all_of(trivia.getRawText(), isWhitespace)) {
+                            auto text = trivia.getRawText();
                             result.push_back(
                                 {ItemKind::DisabledText, TokenKind::Unknown,
-                                 std::string(trivia.getRawText())}
+                                 text.starts_with("//") || text.starts_with("/*")
+                                     ? canonicalizeComment(text, text.starts_with("/*"))
+                                     : std::string(text)}
                             );
                         }
                         break;

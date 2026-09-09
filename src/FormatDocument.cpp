@@ -687,17 +687,19 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
     for (const auto& [member, range] : memberRanges)
         orderedRanges.emplace_back(range.begin, member);
     std::ranges::sort(orderedRanges);
-    std::unordered_set<MemberId> isolatedMembers;
-    size_t precedingEnd = 0;
-    for (size_t i = 0; i < orderedRanges.size(); i++) {
-        auto [begin, member] = orderedRanges[i];
-        auto end = memberRanges.at(member).end;
-        if (precedingEnd <= begin &&
-            (i + 1 == orderedRanges.size() || end <= orderedRanges[i + 1].first)) {
-            isolatedMembers.insert(member);
+    std::vector<MemberId> activeRanges;
+    std::unordered_map<MemberId, std::vector<MemberId>> overlappingMembers;
+    for (auto [begin, member] : orderedRanges) {
+        std::erase_if(activeRanges, [&](MemberId active) {
+            return memberRanges.at(active).end <= begin;
+        });
+        for (auto active : activeRanges) {
+            overlappingMembers[member].push_back(active);
+            overlappingMembers[active].push_back(member);
         }
-        precedingEnd = std::max(precedingEnd, end);
+        activeRanges.push_back(member);
     }
+    std::unordered_set<MemberId> staleCosts;
     std::unordered_map<size_t, std::vector<MemberId>> capturePoints;
     for (const auto& [member, range] : memberRanges) {
         if (range.begin != std::numeric_limits<size_t>::max())
@@ -716,7 +718,7 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
             memberEnd++;
 
         auto baseline = memberCost(baselineRender, member);
-        if (baseline.worstOverflow == 0) {
+        if (baseline.worstOverflow == 0 && !staleCosts.contains(member)) {
             memberBegin = memberEnd;
             continue;
         }
@@ -726,22 +728,10 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
         bool renderLocally = member && range != memberRanges.end() &&
                              initialCursor != memberCursors.end() &&
                              range->second.begin != std::numeric_limits<size_t>::max();
-        bool independent = renderLocally && isolatedMembers.contains(member) &&
-                           initialCursor->second.atLineStart;
-        if (independent) {
-            for (size_t i = range->second.begin; i < range->second.end; i++) {
-                if ((atoms[i].memberId && atoms[i].memberId != member &&
-                     atoms[i].kind != FlatAtom::Kind::HardLine) ||
-                    (i != range->second.begin && capturePoints.contains(i))) {
-                    independent = false;
-                    break;
-                }
-            }
-        }
         RenderOptions localBase;
         RenderCursor originalEnd;
         RenderSlice localSlice;
-        if (independent) {
+        if (renderLocally) {
             localSlice.begin = range->second.begin;
             localSlice.end = range->second.end;
             localSlice.initialCursor = &initialCursor->second;
@@ -751,6 +741,9 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
                 const auto& atom = atoms[i];
                 if (atom.breakId && base.breaks.contains(atom.breakId))
                     localBase.breaks.insert(atom.breakId);
+                if (atom.conditionalIndentBreak &&
+                    base.breaks.contains(atom.conditionalIndentBreak))
+                    localBase.breaks.insert(atom.conditionalIndentBreak);
                 if (auto it = base.padding.find(atom.alignmentId); it != base.padding.end())
                     localBase.padding.insert(*it);
                 if (base.alignedContinuations.contains(atom.alignmentId))
@@ -774,12 +767,18 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
                 renderAtoms(atoms, config, options, false, &metadata, memberSlice), member
             );
         };
+        if (staleCosts.erase(member))
+            baseline = renderCost(renderLocally ? localBase : base);
+        if (baseline.worstOverflow == 0) {
+            memberBegin = memberEnd;
+            continue;
+        }
 
         struct State {
             RenderOptions options;
             Cost cost;
         };
-        std::vector<State> states{{independent ? localBase : base, baseline}};
+        std::vector<State> states{{renderLocally ? localBase : base, baseline}};
         constexpr size_t maxCandidateRenders = 4096;
         constexpr size_t maxCandidateAtomVisits = 4 * 1024 * 1024;
         size_t candidateBudget = std::min(
@@ -852,21 +851,28 @@ RenderOptions solve(const std::vector<FlatAtom>& atoms, const Config& config, Re
         }
 
         bool refresh = true;
-        if (independent) {
+        if (renderLocally) {
             RenderCursor updatedEnd;
             localSlice.finalCursor = &updatedEnd;
+            localSlice.capturePoints = &capturePoints;
+            localSlice.capturedCursors = &memberCursors;
             renderAtoms(atoms, config, states.front().options, false, &metadata, localSlice);
             base.breaks.insert(
                 states.front().options.breaks.begin(), states.front().options.breaks.end()
             );
-            // Subsequent members keep their cached costs when this complete line
-            // leaves the renderer in exactly the same state.
+            // An unchanged end cursor keeps later slices valid, but nested and
+            // enclosing members still need fresh costs for the changed atoms.
             refresh = originalEnd != updatedEnd;
+            if (!refresh) {
+                for (auto overlapping : overlappingMembers[member])
+                    staleCosts.insert(overlapping);
+            }
         }
         else {
             base = std::move(states.front().options);
         }
         if (refresh) {
+            staleCosts.clear();
             memberCursors.clear();
             baselineRender = renderAtoms(atoms, config, base, false, &metadata, baselineSlice);
         }
@@ -1300,6 +1306,8 @@ void normalizeRenderedDocument(RenderedDocument& rendered) {
         while (!protectedLines.contains(end + 1) && contentEnd > pos &&
                slang::isTabOrSpace(rendered.text[contentEnd - 1]))
             contentEnd--;
+        if (contentEnd > pos && rendered.text[contentEnd - 1] == '\\')
+            contentEnd = end;
         size_t normalizedLineStart = normalized.size();
         while (offsetIndex < offsets.size() && offsets[offsetIndex].original <= end) {
             size_t sourceOffset = std::clamp(offsets[offsetIndex].original, pos, contentEnd);

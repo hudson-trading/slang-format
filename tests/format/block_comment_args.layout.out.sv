@@ -2,7 +2,7 @@ module test;
 
     // Block comments as arg names — short args stay inline
     always_comb begin
-        result = compute_hash( /* key */input_key, /* seed */ hash_seed, /* rounds */ num_rounds);
+        result = compute_hash( /* key */ input_key, /* seed */ hash_seed, /* rounds */ num_rounds);
     end
 
     // A long sole-RHS call moves one indent past the assignment line due to

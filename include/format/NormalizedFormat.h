@@ -10,6 +10,7 @@
 #include "format/FormatStyle.h"
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -37,6 +38,8 @@ enum class NormalizedTriviaKind {
     ConditionalBranch,
     MacroUsage,
     Verbatim,
+    /// Source inside an off region that must not be reparsed or reformatted.
+    Unformatted,
 };
 
 enum class TriviaPlacement {
@@ -99,6 +102,10 @@ struct NormalizedNode {
     size_t depth = 0;
     bool verbatim = false;
     std::string verbatimText;
+    /// First real token of a preserved off/on region, bypassing empty attributes.
+    std::optional<size_t> verbatimFirstToken;
+    /// Last token whose trailing trivia follows a preserved off/on region.
+    std::optional<size_t> verbatimLastToken;
     std::vector<NormalizedTrivia> leading;
     std::vector<NormalizedChild> children;
 };
@@ -107,6 +114,8 @@ struct NormalizedList {
     slang::syntax::SyntaxKind parentKind = slang::syntax::SyntaxKind::Unknown;
     size_t listIndex = 0;
     ListStyle style = ListStyle::Inline;
+    /// Token immediately after this list; its leading comments can close an off region.
+    size_t endTokenIndex = 0;
     std::vector<NormalizedChild> children;
 };
 
@@ -136,6 +145,8 @@ public:
 
     const NormalizedNode& root() const { return *root_; }
     const std::vector<NormalizedToken>& tokens() const { return tokens_; }
+    /// Number of on markers without a preceding off in the same list scope.
+    size_t unmatchedFormatOnCount() const { return unmatchedFormatOnCount_; }
     const std::vector<std::unique_ptr<NormalizedConditional>>& conditionals() const {
         return conditionals_;
     }
@@ -146,6 +157,8 @@ private:
 
     std::unique_ptr<NormalizedNode> root_;
     std::vector<NormalizedToken> tokens_;
+    /// Unmatched on markers found while applying list-scoped formatting regions.
+    size_t unmatchedFormatOnCount_ = 0;
     std::vector<std::unique_ptr<NormalizedConditional>> conditionals_;
 };
 

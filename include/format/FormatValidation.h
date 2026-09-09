@@ -23,7 +23,7 @@ class SyntaxNode;
 
 namespace format {
 
-/// The validation failure described by a formatter diagnostic.
+/// The failure or warning described by a formatter diagnostic.
 enum class FormatDiagnosticKind {
     InternalError,
     StructuralImbalance,
@@ -31,9 +31,10 @@ enum class FormatDiagnosticKind {
     CstMismatch,
     NotIdempotent,
     MergeConflict,
+    UnmatchedFormatOn,
 };
 
-/// A validation failure and its eagerly rendered details.
+/// A formatter diagnostic and its eagerly rendered details.
 struct FormatDiagnostic {
     /// Determines output policy and how the diagnostic is displayed.
     FormatDiagnosticKind kind;
@@ -56,7 +57,7 @@ struct FormatResult {
     std::string formatted;
     /// The leading comments mark this file as @generated.
     bool generated = false;
-    /// Validation failures, each owning its message and optional location.
+    /// Failures and warnings, each owning its message and optional location.
     std::vector<FormatDiagnostic> diagnostics;
     /// Parser errors after filtering; recovered errors do not necessarily prevent formatting.
     size_t parseErrorCount = 0;
@@ -65,7 +66,7 @@ struct FormatResult {
     bool hasDiagnostic(FormatDiagnosticKind kind) const;
 
     /// Returns true if the formatted output is safe to use without forcing.
-    bool isUsable() const { return diagnostics.empty(); }
+    bool isUsable() const;
 
     /// Chooses output handling; force overrides all validation failures, preserving generated
     /// files.

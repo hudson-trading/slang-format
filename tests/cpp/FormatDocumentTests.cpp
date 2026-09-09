@@ -118,3 +118,28 @@ TEST_CASE("wrapping independent members preserves the following member cursor") 
     CHECK(rendered.text == expected);
     CHECK(rendered.breaks.size() == 4096);
 }
+
+TEST_CASE("nested members reuse costs after wrapping at a case label") {
+    format::DocumentBuilder builder;
+    std::vector<format::DocId> rows;
+    std::string expected;
+    for (size_t i = 0; i < 4096; i++) {
+        auto assignment = builder.member(
+            builder.concat({builder.text("value ="), builder.softLine(1), builder.text("source;")}),
+            slang::syntax::SyntaxKind::ExpressionStatement
+        );
+        rows.push_back(builder.member(
+            builder.concat({builder.text("label: "), assignment, builder.hardLine()}),
+            slang::syntax::SyntaxKind::StandardCaseItem
+        ));
+        expected += "label: value =\nsource;\n";
+    }
+    auto root =
+        builder.member(builder.concat(std::move(rows)), slang::syntax::SyntaxKind::CaseStatement);
+    auto document = std::move(builder).finish(root);
+    format::Config config;
+    config.columnLimit = 15;
+    auto rendered = format::DocumentRenderer(config).renderLayout(document);
+    CHECK(rendered.text == expected);
+    CHECK(rendered.breaks.size() == 4096);
+}

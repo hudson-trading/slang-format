@@ -146,6 +146,14 @@ void printDiagnostics(const format::FormatResult& result, std::string_view path)
         // the error kind first and then the file name so the kind is what
         // catches the eye when scanning a batch of warnings.
         switch (diag.kind) {
+            case format::FormatDiagnosticKind::UnmatchedFormatOn:
+                OS::printE(
+                    fmt::format(
+                        "{} {}: {}\n", kindPrefix("warning:", warnStyle), pathFmt(path),
+                        diag.message
+                    )
+                );
+                break;
             case format::FormatDiagnosticKind::MergeConflict:
                 OS::printE(
                     fmt::format(

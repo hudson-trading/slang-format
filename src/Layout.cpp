@@ -269,6 +269,10 @@ private:
                 text.remove_prefix(1);
         }
         else if (lineStart) {
+            auto firstContent = text.find_first_not_of(" \t");
+            if (firstContent != std::string_view::npos &&
+                (text[firstContent] == '\r' || text[firstContent] == '\n'))
+                text.remove_prefix(firstContent);
             if (text.starts_with("\r\n"))
                 text.remove_prefix(2);
             else if (text.starts_with('\n'))
@@ -342,6 +346,10 @@ private:
             else if (firstLine) {
                 size_t firstLineIndent = blankLineRun ? 0 : relativeIndent;
                 blankLineRun = 0;
+                if (!memberOwned && lineStart) {
+                    append(builder.indent(static_cast<int>(relativeIndent), builder.hardLine()));
+                    firstLineIndent = 0;
+                }
                 append(
                     memberOwned
                         ? builder.memberVerbatim(line, static_cast<int>(relativeIndent))
@@ -448,10 +456,29 @@ private:
 
     void emitTrivia(const NormalizedTrivia& trivia, bool trailing, bool memberOwned = false) {
         switch (trivia.kind) {
+            case NormalizedTriviaKind::Unformatted: {
+                auto text = std::string_view(trivia.text);
+                if (trivia.endsLine && !lineStart)
+                    hardLine();
+                if (lineStart && text.starts_with("\r\n"))
+                    text.remove_prefix(2);
+                else if (lineStart && text.starts_with('\n'))
+                    text.remove_prefix(1);
+                append(lineStart ? builder.absoluteText(text) : builder.verbatim(text));
+                lineStart = text.ends_with('\n');
+                if (trivia.endsLine && !lineStart)
+                    hardLine();
+                spacingProvided = false;
+                lastWasMacro = false;
+                break;
+            }
             case NormalizedTriviaKind::BlankLine:
                 hardLine(static_cast<int>(trivia.lineBreakCount));
                 break;
             case NormalizedTriviaKind::Comment: {
+                auto commentText = std::string_view(trivia.text);
+                while (!commentText.empty() && slang::isTabOrSpace(commentText.back()))
+                    commentText.remove_suffix(1);
                 if (trivia.placement == TriviaPlacement::Inline && !trivia.lineComment)
                     inlineBlockCommentOnLine = true;
                 bool afterMacro = lastWasMacro;
@@ -462,13 +489,11 @@ private:
                     !trivia.lineComment) {
                     if (!spacingProvided && !lineStart)
                         append(builder.text(" "));
-                    append(builder.verbatim(trivia.text));
-                    std::string_view flat =
-                        lastToken && lastToken->token.kind != TokenKind::OpenParenthesis ? " " : "";
+                    append(builder.verbatim(commentText));
                     if (trivia.endsLine || (inDynamicList && dynamicListLikelyVertical))
                         hardLine(1, true);
                     else {
-                        append(builder.softLine(20, flat, currentDynamicGroup));
+                        append(builder.text(" "));
                         spacingProvided = true;
                     }
                     break;
@@ -489,7 +514,9 @@ private:
                             ));
                         }
                     }
-                    size_t spaces = afterMacro ||
+                    size_t spaces = (!trivia.lineComment && !inDynamicList && lastToken &&
+                                     lastToken->token.kind != TokenKind::Semicolon) ||
+                                            afterMacro ||
                                             (trivia.preserveSingleSpace &&
                                              currentMemberKind != SyntaxKind::ImplicitAnsiPort) ||
                                             currentMemberContainsMacro
@@ -498,7 +525,8 @@ private:
                     append(builder.text(std::string(spaces, ' ')));
                 }
                 else if (trailing) {
-                    size_t spaces = dynamicListLikelyVertical
+                    size_t spaces = (lastToken && lastToken->token.kind == TokenKind::Semicolon) ||
+                                            dynamicListLikelyVertical
                                         ? config.spacesBeforeTrailingComment.get()
                                         : 1;
                     append(builder.text(std::string(spaces, ' ')));
@@ -507,7 +535,7 @@ private:
                          (!inDynamicList || trivia.placement == TriviaPlacement::Standalone)) {
                     hardLine();
                 }
-                append(builder.verbatim(trivia.text));
+                append(builder.verbatim(commentText));
                 if (trivia.lineComment) {
                     hardLine(
                         1, !trailing || !emittingAssignmentOperator ||
@@ -516,6 +544,9 @@ private:
                 }
                 else if (!trailing) {
                     hardLine(1, true);
+                }
+                else {
+                    spacingProvided = false;
                 }
                 break;
             }
@@ -657,9 +688,7 @@ private:
                 }
                 lastWasMacro = false;
                 if (conditionalDepth > 0 && trivia.text.find('\n') != std::string::npos) {
-                    emitConditionalVerbatim(
-                        trivia.text, memberOwned, trivia.conditionalDepthChange
-                    );
+                    emitConditionalVerbatim(trivia.text, true, trivia.conditionalDepthChange);
                     break;
                 }
                 if (trivia.placement == TriviaPlacement::Inline &&
@@ -672,6 +701,13 @@ private:
                     hardLine();
                 {
                     std::string_view text = trivia.text;
+                    if (trivia.placement == TriviaPlacement::Inline) {
+                        bool separated = !text.empty() && slang::isTabOrSpace(text.front());
+                        while (!text.empty() && slang::isTabOrSpace(text.front()))
+                            text.remove_prefix(1);
+                        if (!text.empty() && !lineStart && !spacingProvided && separated)
+                            append(builder.text(" "));
+                    }
                     if (lineStart && text.starts_with('\n'))
                         text.remove_prefix(1);
                     if (lineStart) {
@@ -688,10 +724,11 @@ private:
                         }
                         lineStart = text.ends_with('\n');
                     }
-                    spacingProvided = trivia.preserveSingleSpace ||
-                                      (trivia.placement == TriviaPlacement::Inline &&
-                                       !trivia.endsLine && !text.ends_with('=') &&
-                                       (!text.ends_with(':') || text.ends_with("::")));
+                    spacingProvided =
+                        trivia.preserveSingleSpace ||
+                        (trivia.placement == TriviaPlacement::Inline && !trivia.endsLine &&
+                         !text.ends_with('=') && (!text.ends_with(':') || text.ends_with("::")) &&
+                         !text.ends_with('-') && !text.ends_with('+') && !text.ends_with('?'));
                     if (trivia.placement == TriviaPlacement::Inline && text.ends_with('=')) {
                         pendingAssignmentBreak = true;
                         pendingRecoveredAssignmentBreak = true;
@@ -873,10 +910,11 @@ private:
                 append(builder.text(" "));
             }
             else if (lastWasMacro) {
-                if (!compact && shouldInsertWhitespace(
-                                    TokenKind::Identifier, token.kind, SyntaxKind::Unknown,
-                                    normalizedToken.parentKind, tokenInDataType
-                                )) {
+                if (token.kind == TokenKind::Identifier ||
+                    (!compact && shouldInsertWhitespace(
+                                     TokenKind::Identifier, token.kind, SyntaxKind::Unknown,
+                                     normalizedToken.parentKind, tokenInDataType
+                                 ))) {
                     append(builder.text(" "));
                 }
             }
@@ -1663,10 +1701,7 @@ private:
             lowerChildren(*segment, segmentParts.question + 1, segmentParts.colon);
             inTernaryTableValue = savedTableValue;
             auto value = capture(valueBegin);
-            bool valueHasComment = false;
-            for (size_t i = segmentParts.question + 1; i < segmentParts.colon; i++)
-                valueHasComment = valueHasComment || childHasForcingComment(segment->children[i]);
-            append(valueHasComment ? value : builder.relativeAnchor(1, value));
+            append(hasComment ? value : builder.relativeAnchor(1, value));
             lowerChild(segment->children[segmentParts.colon], segment->kind);
             if (segmentIndex + 1 < segments.size()) {
                 const auto& [nextSegment, nextParts] = segments[segmentIndex + 1];
@@ -3120,7 +3155,13 @@ private:
                 lowerVerticalList(list, rootList);
                 break;
             case ListStyle::Dynamic:
-                lowerDynamicList(list);
+                if (std::ranges::any_of(list.children, [](const auto& child) {
+                        auto node = childNode(child);
+                        return node && node->verbatimFirstToken.has_value();
+                    }))
+                    lowerVerticalList(list, false);
+                else
+                    lowerDynamicList(list);
                 break;
             case ListStyle::Inline:
                 for (const auto& child : list.children)
@@ -3137,12 +3178,19 @@ private:
             emitTrivia(trivia, false, true);
         if (node.verbatim) {
             size_t begin = mark();
-            if (auto token = firstTokenIndex(node, 0, node.children.size())) {
+            if (auto token = node.verbatimFirstToken
+                                 ? node.verbatimFirstToken
+                                 : firstTokenIndex(node, 0, node.children.size())) {
                 for (const auto& trivia : normalized.tokens().at(*token).leading)
                     emitTrivia(trivia, false);
             }
             append(builder.verbatim(node.verbatimText));
             lineStart = node.verbatimText.ends_with('\n');
+            if (node.verbatimLastToken) {
+                lastToken = &normalized.tokens().at(*node.verbatimLastToken);
+                for (const auto& trivia : normalized.tokens().at(*node.verbatimLastToken).trailing)
+                    emitTrivia(trivia, true);
+            }
             spacingProvided = false;
             auto contents = capture(begin);
             if (!isRoot &&
