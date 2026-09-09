@@ -502,18 +502,6 @@ private:
                     bool ternaryComment = lastToken &&
                                           (lastToken->token.kind == TokenKind::Question ||
                                            lastToken->token.kind == TokenKind::Colon);
-                    if (!inDynamicList && !ternaryComment) {
-                        uint32_t separatorColumn =
-                            currentMemberKind == SyntaxKind::NamedPortConnection ||
-                                    currentMemberKind == SyntaxKind::NamedParamAssignment
-                                ? 1
-                                : 0;
-                        if (trivia.lineComment) {
-                            append(builder.alignmentAnchor(
-                                100, currentMemberKind, currentAlignmentGroup, separatorColumn
-                            ));
-                        }
-                    }
                     size_t spaces = (!trivia.lineComment && !inDynamicList && lastToken &&
                                      lastToken->token.kind != TokenKind::Semicolon) ||
                                             afterMacro ||
@@ -523,6 +511,17 @@ private:
                                         ? 1
                                         : config.spacesBeforeTrailingComment.get();
                     append(builder.text(std::string(spaces, ' ')));
+                    if (!inDynamicList && !ternaryComment &&
+                        commentText.find_first_of("\r\n") == std::string_view::npos) {
+                        uint32_t separatorColumn =
+                            currentMemberKind == SyntaxKind::NamedPortConnection ||
+                                    currentMemberKind == SyntaxKind::NamedParamAssignment
+                                ? 1
+                                : 0;
+                        append(builder.alignmentAnchor(
+                            100, currentMemberKind, currentAlignmentGroup, separatorColumn
+                        ));
+                    }
                 }
                 else if (trailing) {
                     size_t spaces = (lastToken && lastToken->token.kind == TokenKind::Semicolon) ||

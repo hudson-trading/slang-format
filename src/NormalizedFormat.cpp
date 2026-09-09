@@ -1035,11 +1035,11 @@ private:
                                                  SyntaxFacts::getBinaryExpression(
                                                      current.token.kind
                                                  ) != SyntaxKind::Unknown;
-                        bool beforeListDelimiter = current.token.kind == TokenKind::Comma ||
-                                                   current.token.kind ==
-                                                       TokenKind::CloseParenthesis ||
-                                                   current.token.kind == TokenKind::CloseBrace;
-                        item.placement = (endsLine || beforeListDelimiter) && !inlineBeforeElse &&
+                        bool beforeDelimiter = current.token.kind == TokenKind::Comma ||
+                                               current.token.kind == TokenKind::Semicolon ||
+                                               current.token.kind == TokenKind::CloseParenthesis ||
+                                               current.token.kind == TokenKind::CloseBrace;
+                        item.placement = (endsLine || beforeDelimiter) && !inlineBeforeElse &&
                                                  !blockBeforeBinary
                                              ? TriviaPlacement::Trailing
                                              : TriviaPlacement::Inline;
