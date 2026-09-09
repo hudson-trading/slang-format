@@ -22,10 +22,11 @@ for attempt in {1..10}; do
     base=$(git -C "$publish_dir" rev-parse HEAD)
     target="$publish_dir/$destination"
     mkdir -p "$target"
+    # Fresh checkouts can share timestamps and sizes with changed build output.
     if [[ "$destination" == . ]]; then
-        rsync -a --delete --exclude=/.git --exclude=/previews/ "$site_dir/" "$target/"
+        rsync -a --checksum --delete --exclude=/.git --exclude=/previews/ "$site_dir/" "$target/"
     else
-        rsync -a --delete "$site_dir/" "$target/"
+        rsync -a --checksum --delete "$site_dir/" "$target/"
     fi
     touch "$publish_dir/.nojekyll"
     git -C "$publish_dir" add --all

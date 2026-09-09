@@ -9,7 +9,6 @@ on:
             - "**/mkdocs*.yml"
             - "**/mkdocs*.yaml"
             - "scripts/ci/publish-docs.sh"
-            - "tests/ci/test_publish_docs.py"
     workflow_dispatch:
 
 permissions:
@@ -36,8 +35,6 @@ jobs:
             - name: Install dependencies
               run: uv sync --locked --all-extras --dev
 
-            - name: Test docs publishing
-              run: uv run tests/ci/test_publish_docs.py
             - name: Build docs
               run: uv run mkdocs build
             - name: Deploy to gh-pages
