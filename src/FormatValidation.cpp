@@ -11,6 +11,8 @@
 #include "format/FormatValidation.h"
 
 #include "format/Formatter.h"
+#include <algorithm>
+#include <fmt/format.h>
 
 #include "slang/diagnostics/DiagnosticEngine.h"
 #include "slang/diagnostics/Diagnostics.h"
@@ -57,6 +59,30 @@ PipelineRender runPipeline(
 }
 
 } // namespace
+
+bool FormatResult::hasDiagnostic(FormatDiagnosticKind kind) const {
+    return std::ranges::any_of(diagnostics, [kind](const auto& diag) { return diag.kind == kind; });
+}
+
+FormatOutputAction FormatResult::outputAction(bool force) const {
+    auto action = generated ? FormatOutputAction::KeepOriginal : FormatOutputAction::UseFormatted;
+    if (force)
+        return action;
+    for (const auto& diag : diagnostics) {
+        switch (diag.kind) {
+            case FormatDiagnosticKind::MergeConflict:
+            case FormatDiagnosticKind::InternalError:
+            case FormatDiagnosticKind::FailedReparse:
+                return FormatOutputAction::Abort;
+            case FormatDiagnosticKind::StructuralImbalance:
+            case FormatDiagnosticKind::CstMismatch:
+            case FormatDiagnosticKind::NotIdempotent:
+                action = FormatOutputAction::KeepOriginal;
+                break;
+        }
+    }
+    return action;
+}
 
 std::string describeTextDiff(std::string_view a, std::string_view b) {
     size_t lineNum = 1;
@@ -121,10 +147,11 @@ FormatResult format(
                                     ? suffix.find_first_not_of(" \t") == std::string_view::npos
                                     : isTabOrSpace(suffix.front()));
             if (markerEnd >= 7 && validSuffix) {
-                result.conflictMarkerLine = lineNumber;
-                result.errorCount = 1;
-                result.formatted = input;
-                return result;
+                result.diagnostics.push_back(
+                    {FormatDiagnosticKind::MergeConflict,
+                     "Git merge conflict marker; resolve conflicts before formatting", lineNumber}
+                );
+                break;
             }
         }
         if (end == std::string_view::npos)
@@ -165,7 +192,7 @@ FormatResult format(
             if (trivia.kind != TriviaKind::LineComment && trivia.kind != TriviaKind::BlockComment)
                 continue;
             if (trivia.getRawText().find("@generated") != std::string_view::npos) {
-                result.excluded = true;
+                result.generated = true;
                 result.formatted = input;
                 return result;
             }
@@ -190,28 +217,29 @@ FormatResult format(
         filteredDiags.push_back(diag);
     }
 
-    result.errorCount = filteredDiags.size();
+    result.parseErrorCount = filteredDiags.size();
     // Only flag structural imbalance when there are actual parse errors.
     // With dontExpandMacros, macros that provide closing keywords (e.g.
     // `END_MODULE -> endmodule) leave open delims but the parser suppresses
-    // the diagnostics near unexpanded macros, so errorCount == 0.
+    // the diagnostics near unexpanded macros, so parseErrorCount == 0.
     if (!unmatchedDelims.empty() && !filteredDiags.empty()) {
-        result.structuralImbalance = true;
-        // Render each diagnostic separately so callers can show only the
-        // first few (parse errors typically cascade — the first one is the
-        // useful signal, the rest is noise).
-        for (auto& diag : filteredDiags) {
-            std::span<const Diagnostic> single(&diag, 1);
-            result.diagnosticMessages.push_back(DiagnosticEngine::reportAll(sm, single));
+        // Parse errors cascade; later errors and unmatched openers are usually
+        // symptoms of the first few failures. Render while the SourceManager lives.
+        std::string message = "cannot reliably format source with parse errors";
+        size_t shown = std::min(filteredDiags.size(), size_t(3));
+        for (size_t i = 0; i < shown; i++) {
+            std::span<const Diagnostic> single(&filteredDiags[i], 1);
+            message += "\n" + DiagnosticEngine::reportAll(sm, single);
         }
-        for (auto& tok : unmatchedDelims) {
-            auto loc = sm.getFileName(tok.location());
-            auto line = sm.getLineNumber(tok.location());
-            auto col = sm.getColumnNumber(tok.location());
-            result.unmatchedDelims.push_back(
-                fmt::format("{}:{}:{}: unmatched '{}'", loc, line, col, tok.rawText())
+        if (filteredDiags.size() > shown) {
+            message += fmt::format(
+                "\n... and {} more error{}", filteredDiags.size() - shown,
+                filteredDiags.size() - shown == 1 ? "" : "s"
             );
         }
+        result.diagnostics.push_back(
+            {FormatDiagnosticKind::StructuralImbalance, std::move(message), std::nullopt}
+        );
     }
 
     // Run Formatter and validate CST
@@ -227,13 +255,19 @@ FormatResult format(
                 rendered.layoutText, sm, fmt::format("{} (layout)", filename), "", optionsBag
             );
             if (!layoutTree) {
-                result.failedReparse = true;
+                result.diagnostics.push_back(
+                    {FormatDiagnosticKind::FailedReparse, "formatted output failed to reparse",
+                     std::nullopt}
+                );
                 return result;
             }
             if (!isTokenEquivalentTo(layoutTree->root(), root)) {
-                result.cstMismatch = true;
-                result.cstDiffMessage = "layout pass: " +
-                                        describeTokenDiff(layoutTree->root(), root);
+                result.diagnostics.push_back(
+                    {FormatDiagnosticKind::CstMismatch,
+                     "formatting changed the syntax tree\n  diff: layout pass: " +
+                         describeTokenDiff(layoutTree->root(), root),
+                     std::nullopt}
+                );
                 return result;
             }
         }
@@ -242,30 +276,44 @@ FormatResult format(
         auto newTree =
             SyntaxTree::fromFileInMemory(result.formatted, sm, "formatted source", "", optionsBag);
         if (!newTree) {
-            result.failedReparse = true;
+            result.diagnostics.push_back(
+                {FormatDiagnosticKind::FailedReparse, "formatted output failed to reparse",
+                 std::nullopt}
+            );
+            return result;
         }
-        else if (!isTokenEquivalentTo(newTree->root(), root)) {
+        if (!isTokenEquivalentTo(newTree->root(), root)) {
             // Use token-level equivalence rather than CST-tree equivalence:
             // dontExpandMacros lets the unexpanded macros affect the recovered
             // CST shape in ways that don't change what the real compiler sees.
             // Token-level comparison catches the actual correctness signal
             // (kind/text/relevant-trivia preservation) without false positives
             // from CST-shape drift.
-            result.cstMismatch = true;
-            result.cstDiffMessage = describeTokenDiff(newTree->root(), root);
+            result.diagnostics.push_back(
+                {FormatDiagnosticKind::CstMismatch,
+                 "formatting changed the syntax tree\n  diff: " +
+                     describeTokenDiff(newTree->root(), root),
+                 std::nullopt}
+            );
+            return result;
         }
 
         // Idempotency check: format(format(x)) == format(x)
-        if (!result.cstMismatch && !result.failedReparse) {
-            auto formatted2 = Formatter(config, &sm, stage).format(newTree->root());
-            if (formatted2 != result.formatted) {
-                result.notIdempotent = true;
-                result.idempotencyDiff = describeTextDiff(result.formatted, formatted2);
-            }
+        auto formatted2 = Formatter(config, &sm, stage).format(newTree->root());
+        if (formatted2 != result.formatted) {
+            result.diagnostics.push_back(
+                {FormatDiagnosticKind::NotIdempotent,
+                 "formatting is not idempotent: format(format(x)) != format(x)\n  " +
+                     describeTextDiff(result.formatted, formatted2),
+                 std::nullopt}
+            );
         }
     }
     catch (const std::exception& e) {
-        result.internalError = e.what();
+        result.diagnostics.push_back({FormatDiagnosticKind::InternalError, e.what(), std::nullopt});
+        // An exception before rendering produced no replacement to apply, even with force.
+        if (result.formatted.empty())
+            result.formatted = input;
     }
 
     return result;

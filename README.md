@@ -34,6 +34,9 @@ Configuration is discovered from `.slang/format.json`. See the
 [command reference](docs/features/format-args.md),
 [configuration reference](docs/features/format-config.md), and
 [formatting philosophy](docs/features/format-philosophy.md).
+See [validation](docs/features/format-validation.md) for output checks and force
+behavior, and [formatting markers](docs/features/format-markers.md) for skipping
+individual declarations or statements.
 
 ## Embed
 

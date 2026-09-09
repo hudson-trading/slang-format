@@ -53,6 +53,8 @@ nav:
     - Formatter:
           - features/format-philosophy.md
           - features/format-args.md
+          - features/format-validation.md
+          - features/format-markers.md
           - features/format-config.md
 
 markdown_extensions:

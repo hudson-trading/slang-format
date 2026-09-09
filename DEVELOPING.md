@@ -132,3 +132,15 @@ When compatible `slang::slang` and `reflectcpp::reflectcpp` targets already
 exist, slang-format reuses them. Otherwise it adds its vendored submodules.
 Configuration loading and discovery are part of the formatter library, so
 embedded and standalone callers share the same behavior.
+
+`format::format()` returns a `FormatResult` whose `diagnostics` collection owns
+each validation failure's kind, message, and optional input line. Use `isUsable()`
+to check validation and `outputAction(force)` to choose formatted output,
+unchanged input, or an abort. Force overrides every validation diagnostic, including
+merge conflicts. Formatting still produces a candidate when diagnostics are present;
+callers must check the output action before applying it.
+`generated` identifies files skipped because of an `@generated` comment;
+`parseErrorCount` separately counts parser errors, which can be safely recovered
+without producing a validation failure.
+
+See [validation](docs/features/format-validation.md) for CLI output and exit status behavior.

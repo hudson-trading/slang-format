@@ -82,6 +82,7 @@ def main():
                 )
                 for mode in ("stdin", "stdout", "inplace"):
                     for dry_run in (False, True):
+                        conflict_path.write_bytes(conflict)
                         options = ["--dry-run"] if dry_run else []
                         if mode != "stdin":
                             options += [str(conflict_path)]
@@ -93,18 +94,26 @@ def main():
                             capture_output=True,
                         )
                         assert result.returncode == 1, result
-                        assert result.stdout == b"", result
-                        assert b"Git merge conflict marker at line 2" in result.stderr
+                        if force and not dry_run and mode != "inplace":
+                            assert result.stdout and result.stdout != conflict, result
+                        else:
+                            assert result.stdout == b"", result
+                        assert b"Git merge conflict marker" in result.stderr
                         location = (
                             b"<stdin>" if mode == "stdin" else bytes(conflict_path)
                         )
-                        assert location in result.stderr
-                        assert conflict_path.read_bytes() == conflict
+                        assert location + b":2" in result.stderr
+                        if force and not dry_run and mode == "inplace":
+                            assert conflict_path.read_bytes() != conflict
+                            assert conflict_path.read_bytes()
+                        else:
+                            assert conflict_path.read_bytes() == conflict
                         checks += 1
 
                 clean_path = root / "clean.sv"
                 clean = b"module bar;logic x;endmodule\n"
                 for dry_run in (False, True):
+                    conflict_path.write_bytes(conflict)
                     clean_path.write_bytes(clean)
                     result = subprocess.run(
                         invocation
@@ -115,13 +124,15 @@ def main():
                     assert result.returncode == 1, result
                     assert result.stdout == b"", result
                     assert b"Git merge conflict marker" in result.stderr
-                    assert (
-                        b"format 1 files" in result.stderr
-                        if dry_run
-                        else b"formatted 1 files" in result.stderr
-                    )
+                    count = 2 if force else 1
+                    verb = "would format" if dry_run else "formatted"
+                    assert f"{verb} {count} files".encode() in result.stderr
                     assert b"1 errors" in result.stderr
-                    assert conflict_path.read_bytes() == conflict
+                    if force and not dry_run:
+                        assert conflict_path.read_bytes() != conflict
+                        assert conflict_path.read_bytes()
+                    else:
+                        assert conflict_path.read_bytes() == conflict
                     if dry_run:
                         assert clean_path.read_bytes() == clean
                     else:

@@ -368,8 +368,8 @@ end
         config
     );
 
-    CHECK(result.errorCount == 0);
-    CHECK(!result.structuralImbalance);
+    CHECK(result.parseErrorCount == 0);
+    CHECK_FALSE(result.hasDiagnostic(format::FormatDiagnosticKind::StructuralImbalance));
     CHECK(result.isUsable());
     CHECK(result.formatted.find("    lhs = rhs;") != std::string::npos);
     CHECK(result.formatted.find("    registered <= lhs;") != std::string::npos);
@@ -386,15 +386,66 @@ lhs = ;
         config
     );
 
-    CHECK(result.errorCount > 0);
+    CHECK(result.parseErrorCount > 0);
 }
 
 TEST_CASE("generated source remains safe to apply unchanged") {
     std::string input = "// @generated\r\nmodule foo; endmodule";
     auto result = format::format("generated.sv", input, {});
-    CHECK(result.excluded);
+    CHECK(result.generated);
     CHECK(result.isUsable());
     CHECK(result.formatted == input);
+    CHECK(result.diagnostics.empty());
+    CHECK(result.outputAction() == format::FormatOutputAction::KeepOriginal);
+    CHECK(result.outputAction(true) == format::FormatOutputAction::KeepOriginal);
+}
+
+TEST_CASE("a top-level skip preserves the first module and formats later modules") {
+    std::string input = "// slang-format: skip\nmodule first;logic a;endmodule\n"
+                        "module second;logic b;endmodule\n";
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        auto result = format::format("skip.sv", input, {}, stage);
+        REQUIRE(result.isUsable());
+        CHECK_FALSE(result.generated);
+        CHECK(
+            result.formatted.starts_with("// slang-format: skip\nmodule first;logic a;endmodule\n")
+        );
+        CHECK(
+            result.formatted.find("module second;\n    logic b;\nendmodule") != std::string::npos
+        );
+    }
+}
+
+TEST_CASE("diagnostics determine output policy without separate failure flags") {
+    using Kind = format::FormatDiagnosticKind;
+    using Action = format::FormatOutputAction;
+    format::FormatResult result;
+    CHECK(result.isUsable());
+    CHECK(result.outputAction() == Action::UseFormatted);
+
+    for (auto kind :
+         {Kind::StructuralImbalance, Kind::CstMismatch, Kind::NotIdempotent, Kind::InternalError,
+          Kind::FailedReparse, Kind::MergeConflict}) {
+        result.diagnostics = {{kind, "", std::nullopt}};
+        CHECK(result.hasDiagnostic(kind));
+        CHECK_FALSE(result.isUsable());
+        bool skippable = kind == Kind::StructuralImbalance || kind == Kind::CstMismatch ||
+                         kind == Kind::NotIdempotent;
+        CHECK(result.outputAction() == (skippable ? Action::KeepOriginal : Action::Abort));
+        CHECK(result.outputAction(true) == Action::UseFormatted);
+
+        // A skippable diagnostic cannot hide an abort, regardless of insertion order.
+        for (bool first : {false, true}) {
+            result.diagnostics = {{kind, "", std::nullopt}};
+            auto pos = first ? result.diagnostics.begin() : result.diagnostics.end();
+            result.diagnostics.insert(
+                pos, {Kind::StructuralImbalance, "parse errors", std::nullopt}
+            );
+            CHECK(result.outputAction() == (skippable ? Action::KeepOriginal : Action::Abort));
+            result.diagnostics.push_back({Kind::MergeConflict, "conflict", 1});
+            CHECK(result.outputAction(true) == Action::UseFormatted);
+        }
+    }
 }
 
 TEST_CASE("Git conflict markers reject formatting in both stages") {
@@ -411,13 +462,19 @@ TEST_CASE("Git conflict markers reject formatting in both stages") {
                         input += "endmodule";
                         auto result = format::format("conflict.sv", input, {}, stage);
                         CHECK_FALSE(result.isUsable());
-                        CHECK(result.conflictMarkerLine == 2);
-                        CHECK(result.errorCount == 1);
-                        CHECK(result.formatted == input);
-                        auto diagnostics = result.diagnostics();
-                        REQUIRE(diagnostics.size() == 1);
+                        CHECK(result.outputAction() == format::FormatOutputAction::Abort);
+                        CHECK(
+                            result.outputAction(true) == format::FormatOutputAction::UseFormatted
+                        );
+                        CHECK_FALSE(result.formatted.empty());
+                        const auto& diagnostics = result.diagnostics;
+                        REQUIRE_FALSE(diagnostics.empty());
                         CHECK(diagnostics[0].kind == format::FormatDiagnosticKind::MergeConflict);
-                        CHECK(diagnostics[0].message.find("line 2") != std::string::npos);
+                        CHECK(diagnostics[0].line == 2);
+                        CHECK(
+                            diagnostics[0].message.find("Git merge conflict marker") !=
+                            std::string::npos
+                        );
                     }
                 }
             }
@@ -432,9 +489,11 @@ TEST_CASE("Git conflict detection includes trivia and incomplete conflicts") {
         std::string input = std::string(prefix) + std::string(7, '<') + " HEAD";
         auto result = format::format("conflict.sv", input, {});
         CHECK_FALSE(result.isUsable());
-        CHECK_FALSE(result.excluded);
-        CHECK(result.conflictMarkerLine == (prefix.find('\n') == std::string_view::npos ? 1 : 2));
-        CHECK(result.formatted == input);
+        CHECK_FALSE(result.generated);
+        REQUIRE_FALSE(result.diagnostics.empty());
+        CHECK(result.diagnostics[0].kind == format::FormatDiagnosticKind::MergeConflict);
+        CHECK(result.diagnostics[0].line == (prefix.find('\n') == std::string_view::npos ? 1 : 2));
+        CHECK(result.outputAction() == format::FormatOutputAction::Abort);
     }
 }
 
@@ -446,8 +505,8 @@ TEST_CASE("Git conflict detection leaves marker lookalikes formattable") {
                         "assign a = b <<< 2; assign c = d >>> 1; endmodule\n";
     for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
         auto result = format::format("lookalikes.sv", input, {}, stage);
-        CHECK(result.conflictMarkerLine == 0);
-        CHECK(result.errorCount == 0);
+        CHECK_FALSE(result.hasDiagnostic(format::FormatDiagnosticKind::MergeConflict));
+        CHECK(result.parseErrorCount == 0);
         CHECK(result.isUsable());
         CHECK(result.formatted != input);
     }
@@ -465,8 +524,8 @@ TEST_CASE("multiline string whitespace survives formatting in either branch") {
                 input += "`endif\n";
             input += "endmodule\n";
             auto result = format::format("literal.sv", input, {}, stage);
-            INFO(result.cstDiffMessage);
-            INFO(result.idempotencyDiff);
+            for (const auto& diag : result.diagnostics)
+                UNSCOPED_INFO(diag.message);
             CHECK(result.isUsable());
             CHECK(result.formatted.find(literal) != std::string::npos);
         }
@@ -536,7 +595,8 @@ TEST_CASE("alignment padding cap starts a new group for later short rows") {
         "alignment.sv", "module foo; initial begin long_name = 1; aa = 2; b = 3; end endmodule\n",
         config
     );
-    INFO(result.idempotencyDiff);
+    for (const auto& diag : result.diagnostics)
+        UNSCOPED_INFO(diag.message);
     CHECK(result.isUsable());
     CHECK(result.formatted.find("aa = 2;\n        b  = 3;") != std::string::npos);
     config.alignment.value().maxSpaces = std::nullopt;
@@ -573,10 +633,11 @@ TEST_CASE("malformed source keeps parser diagnostics") {
         INFO(invalid);
         for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
             auto malformed = format::format("invalid.sv", invalid, {}, stage);
-            CHECK(malformed.errorCount > 0);
+            CHECK(malformed.parseErrorCount > 0);
             auto accepted = format::format("valid.sv", valid, {}, stage);
-            INFO(accepted.cstDiffMessage);
-            CHECK(accepted.errorCount == 0);
+            for (const auto& diag : accepted.diagnostics)
+                UNSCOPED_INFO(diag.message);
+            CHECK(accepted.parseErrorCount == 0);
             CHECK(accepted.isUsable());
         }
     }
@@ -589,7 +650,7 @@ TEST_CASE("named packed array after a class macro") {
             "class foo extends base;\n`REGISTER(foo)\nbyte_t [6:0] data;\nbyte_t next;\nendclass\n",
             {}, stage
         );
-        CHECK(result.errorCount == 0);
+        CHECK(result.parseErrorCount == 0);
         CHECK(result.isUsable());
     }
 }
@@ -598,7 +659,7 @@ TEST_CASE("complete configs remain formattable") {
     std::string input = "config foo;design work.top;instance top.dut liblist impl;endconfig\n";
     for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
         auto result = format::format("config.sv", input, {}, stage);
-        CHECK(result.errorCount == 0);
+        CHECK(result.parseErrorCount == 0);
         CHECK(result.isUsable());
         CHECK(result.formatted != input);
     }

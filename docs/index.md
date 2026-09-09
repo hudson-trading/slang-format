@@ -14,4 +14,6 @@ Start with:
 - [Building from source](start/building.md)
 - [Formatting philosophy](features/format-philosophy.md)
 - [Command reference](features/format-args.md)
+- [Validation](features/format-validation.md)
+- [Formatting markers](features/format-markers.md)
 - [Configuration reference](features/format-config.md)

@@ -12,10 +12,9 @@
 #include "format/FormatStage.h"
 #include "format/Formatter.h"
 #include <cstddef>
-#include <fmt/format.h>
+#include <optional>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
 namespace slang::syntax {
@@ -24,6 +23,7 @@ class SyntaxNode;
 
 namespace format {
 
+/// The validation failure described by a formatter diagnostic.
 enum class FormatDiagnosticKind {
     InternalError,
     StructuralImbalance,
@@ -33,113 +33,43 @@ enum class FormatDiagnosticKind {
     MergeConflict,
 };
 
+/// A validation failure and its eagerly rendered details.
 struct FormatDiagnostic {
+    /// Determines output policy and how the diagnostic is displayed.
     FormatDiagnosticKind kind;
+    /// Human-readable explanation, including any syntax or text differences.
     std::string message;
+    /// One-based input line, when the diagnostic identifies a specific line.
+    std::optional<size_t> line;
 };
 
+/// How a caller should handle output after validation.
+enum class FormatOutputAction {
+    UseFormatted,
+    KeepOriginal,
+    Abort,
+};
+
+/// Formatted source and the diagnostics that determine whether it can be applied.
 struct FormatResult {
-    /// Formatted source, or unchanged input when excluded or conflicted; check isUsable().
+    /// Formatted source, or unchanged input for generated files or a rendering failure.
     std::string formatted;
+    /// The leading comments mark this file as @generated.
+    bool generated = false;
+    /// Validation failures, each owning its message and optional location.
+    std::vector<FormatDiagnostic> diagnostics;
+    /// Parser errors after filtering; recovered errors do not necessarily prevent formatting.
+    size_t parseErrorCount = 0;
 
-    /// First Git conflict marker's one-based line, or zero when none was found.
-    size_t conflictMarkerLine = 0;
+    /// Returns whether validation reported the given failure.
+    bool hasDiagnostic(FormatDiagnosticKind kind) const;
 
-    // Pre-rendered diagnostic messages from the parse, one per diagnostic
-    // (the SourceManager is local to format(), so we render them eagerly).
-    // Parse errors cascade, so display callers typically print only the
-    // first few entries.
-    std::vector<std::string> diagnosticMessages;
+    /// Returns true if the formatted output is safe to use without forcing.
+    bool isUsable() const { return diagnostics.empty(); }
 
-    // Orange flags based on just the original tree that tell us we maybe shouldn't use the
-    // formatted output.
-
-    size_t errorCount = 0;
-    bool structuralImbalance = false;         // unclosed begin/end, {/}, etc.
-    std::vector<std::string> unmatchedDelims; // location + text of each unmatched opener
-
-    // quite rare
-    bool failedReparse = false;
-
-    // Very bad - the CST was changed and the code will get interpreted differently
-    bool cstMismatch = false;
-
-    // Description of what differed in the CST (populated when cstMismatch is true)
-    std::string cstDiffMessage;
-
-    // Idempotency failure: format(format(x)) != format(x)
-    bool notIdempotent = false;
-
-    // Description of the first difference between format(x) and format(format(x))
-    std::string idempotencyDiff;
-
-    // Internal error (e.g. exception) during formatting
-    std::string internalError;
-
-    // File was excluded from formatting (eg, a generated-file marker (`@generated`).
-    bool excluded = false;
-
-    /// Returns true if the formatted output is safe to use.
-    bool isUsable() const {
-        return !conflictMarkerLine && internalError.empty() && !structuralImbalance &&
-               !failedReparse && !cstMismatch && !notIdempotent;
-    }
-
-    /// Build structured diagnostics from the result fields.
-    std::vector<FormatDiagnostic> diagnostics() const {
-        std::vector<FormatDiagnostic> diags;
-        if (conflictMarkerLine) {
-            diags.push_back(
-                {FormatDiagnosticKind::MergeConflict,
-                 fmt::format(
-                     "Git merge conflict marker at line {}; resolve conflicts before formatting",
-                     conflictMarkerLine
-                 )}
-            );
-        }
-        if (!internalError.empty()) {
-            diags.push_back(
-                {FormatDiagnosticKind::InternalError,
-                 fmt::format("internal error: {}", internalError)}
-            );
-        }
-        if (structuralImbalance) {
-            // Parse errors cascade — print only the first few. The
-            // "unclosed delimiter" entries that the parser reports here
-            // are usually a downstream symptom of these errors, not the
-            // real issue, so we omit them entirely.
-            constexpr size_t maxShown = 3;
-            std::string msg = "parse errors (formatted output may be unsafe; skipping)";
-            size_t shown = std::min(diagnosticMessages.size(), maxShown);
-            for (size_t i = 0; i < shown; i++)
-                msg += "\n" + diagnosticMessages[i];
-            if (diagnosticMessages.size() > shown) {
-                msg += fmt::format(
-                    "\n... and {} more error{}", diagnosticMessages.size() - shown,
-                    diagnosticMessages.size() - shown == 1 ? "" : "s"
-                );
-            }
-            diags.push_back({FormatDiagnosticKind::StructuralImbalance, std::move(msg)});
-        }
-        if (failedReparse) {
-            diags.push_back(
-                {FormatDiagnosticKind::FailedReparse, "formatted output failed to reparse"}
-            );
-        }
-        if (cstMismatch) {
-            std::string msg = "formatting changed the syntax tree";
-            if (!cstDiffMessage.empty())
-                msg += "\n  diff: " + cstDiffMessage;
-            diags.push_back({FormatDiagnosticKind::CstMismatch, std::move(msg)});
-        }
-        if (notIdempotent) {
-            std::string msg = "formatting is not idempotent: format(format(x)) != format(x)";
-            if (!idempotencyDiff.empty())
-                msg += "\n  " + idempotencyDiff;
-            diags.push_back({FormatDiagnosticKind::NotIdempotent, std::move(msg)});
-        }
-        return diags;
-    }
+    /// Chooses output handling; force overrides all validation failures, preserving generated
+    /// files.
+    FormatOutputAction outputAction(bool force = false) const;
 };
 
 /// Primary formatting method; Performs extra validation

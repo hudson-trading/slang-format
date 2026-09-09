@@ -10,16 +10,8 @@ If no files are specified, reads from stdin and writes to stdout.
 If files are specified without `-i`, prints formatted output to stdout.
 With `-i`, modifies files in-place. Multiple files require `-i`.
 
-Files containing Git merge conflict markers are rejected before parsing, including
-with `--force`. The formatter reports the first marker's line, leaves the file
-unchanged, emits no source on stdout, and exits with status 1. Batch runs continue
-formatting unaffected files. This also applies to `--dry-run` and stdin.
-
-Markers must start at column one and contain at least seven repeated `<`, `=`,
-`>`, or `|` characters (including diff3 base markers and larger custom marker
-sizes). Opening, closing, and base markers may have whitespace-separated labels;
-separator lines may have trailing spaces or tabs. Markers are checked even inside
-comments, strings, and inactive preprocessor branches.
+See [validation](format-validation.md) for checks, rejected files, and exit statuses,
+and [formatting markers](format-markers.md) for preserving source formatting.
 
 ## Options
 
@@ -43,8 +35,19 @@ Edit files in-place. Required when formatting multiple files. Cannot be used wit
 
 ### `-f`, `--force`
 
-Force output even if CST validation fails. Validation errors are downgraded to warnings but still printed to stderr.
-Git merge conflict markers always prevent formatting.
+Use the formatter's output despite any validation failure, including Git merge
+conflict markers. Diagnostics are still printed to stderr, and the command exits
+with status 1 when validation fails. See [validation](format-validation.md).
+
+`--force` overrides validation, while `--dry-run` still suppresses writes and
+explicit formatting markers remain respected.
+
+---
+
+### `-n`, `--dry-run`
+
+Run formatting and validation without writing files or source to stdout. Can be
+used with multiple files and combined with `--force` to check forced formatting.
 
 ---
 

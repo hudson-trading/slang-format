@@ -120,9 +120,8 @@ static std::string colorize(fmt::text_style style, std::string_view text) {
     return fmt::format(style, "{}", text);
 }
 
-// Print any diagnostics to stderr. Returns true if there were no diagnostics.
-bool interpretResult(const format::FormatResult& result, std::string_view path) {
-    auto diags = result.diagnostics();
+// Print any diagnostics to stderr.
+void printDiagnostics(const format::FormatResult& result, std::string_view path) {
     // Match slang's TextDiagnosticClient palette so the formatter's warnings
     // visually agree with parse-error lines that slang itself emits.
     const auto warnStyle = fmt::fg(fmt::terminal_color::bright_yellow) | fmt::emphasis::bold;
@@ -139,7 +138,8 @@ bool interpretResult(const format::FormatResult& result, std::string_view path) 
         return colorize(pathStyle, fmt::format("'{}'", p));
     };
 
-    for (auto& diag : diags) {
+    for (const auto& diag : result.diagnostics) {
+        auto location = diag.line ? fmt::format("{}:{}", path, *diag.line) : std::string(path);
         // Parse errors: the diagnostic message already includes file locations
         // (slang renders them with `file:line:col:`), so we don't repeat the
         // path. CST/idempotency errors don't have those locations, so we put
@@ -149,7 +149,8 @@ bool interpretResult(const format::FormatResult& result, std::string_view path) 
             case format::FormatDiagnosticKind::MergeConflict:
                 OS::printE(
                     fmt::format(
-                        "{} {}: {}\n", kindPrefix("error:", errStyle), pathFmt(path), diag.message
+                        "{} {}: {}\n", kindPrefix("error:", errStyle), pathFmt(location),
+                        diag.message
                     )
                 );
                 break;
@@ -184,8 +185,6 @@ bool interpretResult(const format::FormatResult& result, std::string_view path) 
                 break;
         }
     }
-
-    return diags.empty();
 }
 
 // Write formatted output to file
@@ -364,17 +363,14 @@ int main(int argc, char** argv) {
 
     auto outputResult = [&](const format::FormatResult& result, std::string_view input,
                             std::string_view path) {
-        bool ok = interpretResult(result, path);
-        if (result.conflictMarkerLine)
+        printDiagnostics(result, path);
+        auto action = result.outputAction(force.value_or(false));
+        if (action == format::FormatOutputAction::Abort)
             return 1;
-        bool skipped = !ok && !force.value_or(false) &&
-                       (result.cstMismatch || result.notIdempotent || result.structuralImbalance) &&
-                       result.internalError.empty() && !result.failedReparse;
-        if (!ok && !skipped && !force.value_or(false))
-            return 1;
+        bool skipped = action == format::FormatOutputAction::KeepOriginal;
         if (dryRun != true)
             OS::print(skipped ? input : std::string_view(result.formatted));
-        return ok || skipped ? 0 : 1;
+        return result.isUsable() || skipped ? 0 : 1;
     };
 
     // If no files specified, read from stdin and write to stdout
@@ -471,45 +467,31 @@ int main(int argc, char** argv) {
     int idempotentFailCount = 0;
 
     auto processResult = [&](FileFormatResult& result) {
-        if (result.result.excluded)
-            return;
-
         if (result.fileReadError) {
             OS::printE(fmt::format("error: failed to read file '{}'\n", result.path));
             errorCount++;
             return;
         }
 
-        bool ok = interpretResult(result.result, result.path);
-        if (result.result.conflictMarkerLine) {
+        printDiagnostics(result.result, result.path);
+        if (result.result.hasDiagnostic(format::FormatDiagnosticKind::CstMismatch))
+            cstMismatchCount++;
+        if (result.result.hasDiagnostic(format::FormatDiagnosticKind::NotIdempotent))
+            idempotentFailCount++;
+
+        auto action = result.result.outputAction(force.value_or(false));
+        if (action == format::FormatOutputAction::Abort) {
             errorCount++;
             return;
         }
-        if (!ok) {
-            if (result.result.cstMismatch)
-                cstMismatchCount++;
-            if (result.result.notIdempotent)
-                idempotentFailCount++;
-            if (!force.value_or(false)) {
-                // Diagnostics caught ourselves before we wrote anything
-                // harmful — count the file as skipped, not failed. The
-                // summary line still tallies the CST/idempotency counts so
-                // the user can see what was skipped, but we exit 0 (unless
-                // a real failure like file-write or --force-with-errors
-                // pushes errorCount up later).
-                if (result.result.structuralImbalance || result.result.cstMismatch ||
-                    result.result.notIdempotent) {
-                    skippedCount++;
-                }
-                else {
-                    errorCount++;
-                }
-                return;
-            }
-            // --force: user asked us to write even with bad output, so
-            // anything that flags is a real error.
-            errorCount++;
+        if (action == format::FormatOutputAction::KeepOriginal) {
+            if (!result.result.generated)
+                skippedCount++;
+            return;
         }
+        // Forced output with validation failures still returns an error status.
+        if (!result.result.isUsable())
+            errorCount++;
 
         if (isDryRun) {
             // Count as "would format" without touching disk.
