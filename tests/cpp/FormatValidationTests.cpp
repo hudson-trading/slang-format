@@ -708,6 +708,62 @@ TEST_CASE("macro token equivalence preserves blank lines within arguments") {
     CHECK_FALSE(format::describeTokenDiff(b->root(), a->root()).empty());
 }
 
+TEST_CASE("macro token equivalence permits only argument boundary indentation") {
+    parsing::PreprocessorOptions options;
+    options.dontExpandMacros = true;
+    for (auto prefix : {std::string(""), std::string("`ifdef FEATURE\n")}) {
+        std::string suffix = prefix.empty() ? "" : "`endif\n";
+        std::string body = "`CHECK(\n  first,\n  (second,\n    third)\n)\n";
+        auto original = SyntaxTree::fromText(prefix + body + suffix, sm, "original", "", options);
+        for (auto token : {"first", "(second", ")\n", "third"}) {
+            INFO(token);
+            auto changed = body;
+            changed.insert(changed.rfind(token), "    ");
+            auto formatted =
+                SyntaxTree::fromText(prefix + changed + suffix, sm, "formatted", "", options);
+            CHECK(
+                format::isTokenEquivalentTo(original->root(), formatted->root()) ==
+                (std::string_view(token) != "third")
+            );
+        }
+    }
+}
+
+TEST_CASE("multiline macro indentation preserves expanded argument values") {
+    std::string input = "`define STRINGS(a, b) initial $display(`\"a`\", `\"b`\");\n"
+                        "module foo;\n"
+                        "`ifdef FEATURE\n"
+                        "`STRINGS(\n first  word\n   second word,\n {foo,  bar}\n)\n"
+                        "`else\n"
+                        "`STRINGS(\n third  word\n   fourth word,\n {baz,  qux}\n)\n"
+                        "`endif\nendmodule\n";
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        for (unsigned width : {2u, 4u}) {
+            format::Config config;
+            config.indentWidth = width;
+            auto result = format::format("macro.sv", input, config, stage);
+            for (const auto& diagnostic : result.diagnostics)
+                UNSCOPED_INFO(diagnostic.message);
+            REQUIRE(result.isUsable());
+            CHECK(
+                result.formatted.find("\n" + std::string(width * 3, ' ') + "first  word") !=
+                std::string::npos
+            );
+            for (bool enabled : {false, true}) {
+                parsing::PreprocessorOptions options;
+                if (enabled)
+                    options.predefines.emplace_back("FEATURE");
+                auto original = SyntaxTree::fromText(input, sm, "original", "", options);
+                auto formatted =
+                    SyntaxTree::fromText(result.formatted, sm, "formatted", "", options);
+                REQUIRE(original->diagnostics().empty());
+                REQUIRE(formatted->diagnostics().empty());
+                CHECK(original->root().isEquivalentTo(formatted->root()));
+            }
+        }
+    }
+}
+
 TEST_CASE("formatting preserves expanded macro string values") {
     std::string input =
         "`define TEXT `\"first \\\n                     second`\"\n"

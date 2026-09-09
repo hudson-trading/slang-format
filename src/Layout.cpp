@@ -189,7 +189,7 @@ private:
             }
         }
 
-        auto protectedLines = protectedLineStarts(text);
+        auto protectedLines = protectedLineStarts(text, false);
         size_t subparseBaseline = SIZE_MAX;
         size_t lineStartOffset = 0;
         while (lineStartOffset < text.size()) {
@@ -282,7 +282,7 @@ private:
         while (!text.empty() && slang::isWhitespace(text.back())) {
             text.remove_suffix(1);
         }
-        protectedLines = protectedLineStarts(text);
+        protectedLines = protectedLineStarts(text, false);
 
         size_t baseline = 0;
         lineStartOffset = 0;
@@ -576,7 +576,22 @@ private:
                     )) {
                     append(builder.text(" "));
                 }
-                append(builder.verbatim(trivia.text));
+                auto indents = macroArgumentIndents(trivia.text);
+                size_t macroBegin = mark();
+                size_t offset = 0;
+                for (auto indent : indents) {
+                    append(builder.verbatim(
+                        std::string_view(trivia.text).substr(offset, indent.begin - offset)
+                    ));
+                    append(builder.indent(
+                        indent.closing ? 0 : static_cast<int>(config.indentWidth.get()),
+                        builder.hardLine(1, true)
+                    ));
+                    offset = indent.end;
+                }
+                append(builder.verbatim(std::string_view(trivia.text).substr(offset)));
+                if (!indents.empty())
+                    append(builder.relativeAnchor(0, capture(macroBegin)));
                 lineStart = false;
                 spacingProvided = false;
                 lastWasMacro = true;
@@ -3145,7 +3160,15 @@ private:
         switch (list.style) {
             case ListStyle::Body:
             case ListStyle::Vertical:
-                lowerVerticalList(list, rootList);
+                if (list.parentKind == SyntaxKind::StructuredAssignmentPattern &&
+                    list.children.size() == 1 && childNode(list.children.front()) &&
+                    !childNode(list.children.front())->verbatimFirstToken && !lineStart &&
+                    !tokenHasComment(list.endTokenIndex)) {
+                    lowerDynamicList(list);
+                }
+                else {
+                    lowerVerticalList(list, rootList);
+                }
                 break;
             case ListStyle::Dynamic:
                 if (std::ranges::any_of(list.children, [](const auto& child) {

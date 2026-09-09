@@ -85,8 +85,9 @@ For character classification, prefer the helpers in
 tests or the locale-sensitive `<cctype>` functions.
 
 The formatter intentionally does not expand macros. Macro invocations and
-preprocessor directives are preserved from CST trivia and emitted from their
-original source text.
+preprocessor directives retain their original source text from CST trivia, except
+for indentation before arguments and closing parentheses in multiline invocations.
+Whitespace within an argument is preserved because it can affect stringification.
 
 ## Formatter tests
 

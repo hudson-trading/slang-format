@@ -37,8 +37,24 @@ struct ProtectedTextRange {
 /// Lex source without preprocessing so inactive macros receive the same protection.
 std::vector<ProtectedTextRange> protectedTextRanges(std::string_view text);
 
+/// Leading whitespace before a macro argument or its closing parenthesis.
+struct MacroArgumentIndent {
+    /// Start of the line's indentation within the macro text.
+    size_t begin;
+    /// First non-whitespace byte on the line.
+    size_t end;
+    /// Whether this line contains the call's closing parenthesis.
+    bool closing;
+};
+
+/// Find adjustable indentation without changing whitespace inside an argument.
+std::vector<MacroArgumentIndent> macroArgumentIndents(std::string_view text);
+
 /// Line-start offsets inside tokens, macros, or block comments with preserved whitespace.
-std::unordered_set<size_t> protectedLineStarts(std::string_view text);
+std::unordered_set<size_t> protectedLineStarts(
+    std::string_view text,
+    bool protectMacroIndentation = true
+);
 
 // The slang preprocessor rewrites LineComment/BlockComment trivia to DisabledText
 // on directive tokens in untaken branches. These helpers detect comment text

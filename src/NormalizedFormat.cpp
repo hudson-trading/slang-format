@@ -329,7 +329,63 @@ std::vector<ProtectedTextRange> protectedTextRanges(std::string_view text) {
     return result;
 }
 
-std::unordered_set<size_t> protectedLineStarts(std::string_view text) {
+std::vector<MacroArgumentIndent> macroArgumentIndents(std::string_view text) {
+    std::vector<MacroArgumentIndent> result;
+    if (text.find('\n') == std::string_view::npos)
+        return result;
+
+    SourceManager sm;
+    BumpAllocator allocator;
+    Diagnostics diagnostics;
+    Lexer lexer(sm.assignText(text), allocator, diagnostics, sm);
+    auto token = lexer.lex();
+    if (token.kind != TokenKind::Directive || token.directiveKind() != SyntaxKind::MacroUsage ||
+        lexer.lex().kind != TokenKind::OpenParenthesis)
+        return result;
+
+    std::vector<TokenKind> delimiters{TokenKind::CloseParenthesis};
+    bool argumentStart = true;
+    for (token = lexer.lex(); token.kind != TokenKind::EndOfFile; token = lexer.lex()) {
+        bool closing = delimiters.size() == 1 && token.kind == TokenKind::CloseParenthesis;
+        if (argumentStart || closing) {
+            // Expansion replaces the first argument token's trivia with the formal
+            // parameter's trivia. Interior whitespace can survive stringification.
+            size_t offset = token.location().offset();
+            for (const auto& trivia : token.trivia())
+                offset -= trivia.getRawText().size();
+            for (const auto& trivia : token.trivia()) {
+                auto raw = trivia.getRawText();
+                if (trivia.kind == TriviaKind::EndOfLine) {
+                    size_t begin = offset + raw.size();
+                    size_t end = begin;
+                    while (end < text.size() && isTabOrSpace(text[end]))
+                        end++;
+                    if (end < text.size() && !isNewline(text[end]))
+                        result.push_back({begin, end, closing && end == token.location().offset()});
+                }
+                offset += raw.size();
+            }
+        }
+        if (closing)
+            return result;
+        if (delimiters.size() == 1 && token.kind == TokenKind::Comma) {
+            argumentStart = true;
+            continue;
+        }
+        argumentStart = false;
+        if (token.kind == delimiters.back())
+            delimiters.pop_back();
+        else if (auto close = SyntaxFacts::getDelimCloseKind(token.kind);
+                 close != TokenKind::Unknown)
+            delimiters.push_back(close);
+    }
+    return {};
+}
+
+std::unordered_set<size_t> protectedLineStarts(
+    std::string_view text,
+    bool protectMacroIndentation
+) {
     std::unordered_set<size_t> result;
     if (text.find('\n') == std::string_view::npos)
         return result;
@@ -337,6 +393,11 @@ std::unordered_set<size_t> protectedLineStarts(std::string_view text) {
         for (size_t pos = text.find('\n', range.begin); pos < range.end;
              pos = text.find('\n', pos + 1)) {
             result.insert(pos + 1);
+        }
+        if (!protectMacroIndentation) {
+            for (auto indent :
+                 macroArgumentIndents(text.substr(range.begin, range.end - range.begin)))
+                result.erase(range.begin + indent.begin);
         }
     }
     // Inactive-branch comments are DisabledText, whose interior bytes must

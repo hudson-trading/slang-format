@@ -10,7 +10,7 @@ interface test_if;
         assign csrng_state = `CSRNG_HIER.state_q;
     `endif
     `DV_CREATE_SIGNAL_PROBE(signal_probe_csrng,
-      csrng_state, 8)
+        csrng_state, 8)
     // Pattern 2: assign with ifdef in RHS
     wire [5:0] aes_state;
     assign aes_state =
@@ -20,7 +20,7 @@ interface test_if;
         `AES_HIER.aes_ctrl_cs;
 `endif
 `DV_CREATE_SIGNAL_PROBE(signal_probe_aes,
-      aes_state, 6)
+    aes_state, 6)
 
 // Pattern 3: ifdef with multiline expression
 wire [2:0] hmac_state;
@@ -34,5 +34,5 @@ wire [2:0] hmac_state;
     assign hmac_state = `HMAC_HIER.st_q;
 `endif
 `DV_CREATE_SIGNAL_PROBE(signal_probe_hmac,
-      hmac_state, 3)
+    hmac_state, 3)
 endinterface

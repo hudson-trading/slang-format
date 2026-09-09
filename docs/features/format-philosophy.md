@@ -4,7 +4,7 @@
 
 Some things are preserved from the original source:
 
-- **Macro definitions and Macro args** — these are emitted verbatim since their body is not parsed into a syntax tree, and modifying these could break functionality.
+- **Macro definitions and argument contents** — these are emitted verbatim since modifying them could change macro expansion, including stringification. Whitespace within a macro argument at a usage is preserved.
 - **Blank lines within lists** — blank lines between module members, port declarations, etc. are kept as authored to respect logical groupings.
 - **Expressions with existing line breaks** — when `respectUserFormatting` is enabled (default), an existing long line split  is retained as one all-or-nothing choice if it fits the column limit.
 

@@ -305,8 +305,17 @@ static std::vector<std::string> protectedSourceText(const SyntaxNode& root) {
                       .print(root)
                       .str();
     std::vector<std::string> result;
-    for (auto range : protectedTextRanges(source))
-        result.push_back(source.substr(range.begin, range.end - range.begin));
+    for (auto range : protectedTextRanges(source)) {
+        auto text = std::string_view(source).substr(range.begin, range.end - range.begin);
+        std::string preserved;
+        size_t offset = 0;
+        for (auto indent : macroArgumentIndents(text)) {
+            preserved.append(text.substr(offset, indent.begin - offset));
+            offset = indent.end;
+        }
+        preserved.append(text.substr(offset));
+        result.push_back(std::move(preserved));
+    }
     return result;
 }
 
