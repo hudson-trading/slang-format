@@ -397,6 +397,62 @@ TEST_CASE("generated source remains safe to apply unchanged") {
     CHECK(result.formatted == input);
 }
 
+TEST_CASE("Git conflict markers reject formatting in both stages") {
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        for (char marker : {'<', '|', '=', '>'}) {
+            for (size_t width : {7, 11}) {
+                for (std::string_view newline : {"\n", "\r\n", "\r"}) {
+                    for (bool labeled : {false, true}) {
+                        std::string input = "module foo;" + std::string(newline);
+                        input += std::string(width, marker);
+                        if (labeled)
+                            input += marker == '=' ? " \t" : " branch";
+                        input += newline;
+                        input += "endmodule";
+                        auto result = format::format("conflict.sv", input, {}, stage);
+                        CHECK_FALSE(result.isUsable());
+                        CHECK(result.conflictMarkerLine == 2);
+                        CHECK(result.errorCount == 1);
+                        CHECK(result.formatted == input);
+                        auto diagnostics = result.diagnostics();
+                        REQUIRE(diagnostics.size() == 1);
+                        CHECK(diagnostics[0].kind == format::FormatDiagnosticKind::MergeConflict);
+                        CHECK(diagnostics[0].message.find("line 2") != std::string::npos);
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("Git conflict detection includes trivia and incomplete conflicts") {
+    for (std::string_view prefix :
+         {"", "\xef\xbb\xbf", "/*\n", "`ifdef DISABLED\n", "// @generated\n",
+          "module foo; string s = \"\"\"\n", "`define FOO \\\n"}) {
+        std::string input = std::string(prefix) + std::string(7, '<') + " HEAD";
+        auto result = format::format("conflict.sv", input, {});
+        CHECK_FALSE(result.isUsable());
+        CHECK_FALSE(result.excluded);
+        CHECK(result.conflictMarkerLine == (prefix.find('\n') == std::string_view::npos ? 1 : 2));
+        CHECK(result.formatted == input);
+    }
+}
+
+TEST_CASE("Git conflict detection leaves marker lookalikes formattable") {
+    std::string input = "// <<<<<<< HEAD\n"
+                        "/* ======= */\n"
+                        "/*\n======\n=======caption\n<<<<<<<identifier\n  >>>>>>> indented\n*/\n"
+                        "module foo; string s = \"<<<<<<< HEAD\";\n"
+                        "assign a = b <<< 2; assign c = d >>> 1; endmodule\n";
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        auto result = format::format("lookalikes.sv", input, {}, stage);
+        CHECK(result.conflictMarkerLine == 0);
+        CHECK(result.errorCount == 0);
+        CHECK(result.isUsable());
+        CHECK(result.formatted != input);
+    }
+}
+
 TEST_CASE("multiline string whitespace survives formatting in either branch") {
     for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
         for (bool inactive : {false, true}) {

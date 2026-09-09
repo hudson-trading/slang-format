@@ -30,6 +30,7 @@ enum class FormatDiagnosticKind {
     FailedReparse,
     CstMismatch,
     NotIdempotent,
+    MergeConflict,
 };
 
 struct FormatDiagnostic {
@@ -38,8 +39,11 @@ struct FormatDiagnostic {
 };
 
 struct FormatResult {
-    /// Formatted source, or unchanged input when excluded; consult isUsable() before applying.
+    /// Formatted source, or unchanged input when excluded or conflicted; check isUsable().
     std::string formatted;
+
+    /// First Git conflict marker's one-based line, or zero when none was found.
+    size_t conflictMarkerLine = 0;
 
     // Pre-rendered diagnostic messages from the parse, one per diagnostic
     // (the SourceManager is local to format(), so we render them eagerly).
@@ -77,13 +81,22 @@ struct FormatResult {
 
     /// Returns true if the formatted output is safe to use.
     bool isUsable() const {
-        return internalError.empty() && !structuralImbalance && !failedReparse && !cstMismatch &&
-               !notIdempotent;
+        return !conflictMarkerLine && internalError.empty() && !structuralImbalance &&
+               !failedReparse && !cstMismatch && !notIdempotent;
     }
 
     /// Build structured diagnostics from the result fields.
     std::vector<FormatDiagnostic> diagnostics() const {
         std::vector<FormatDiagnostic> diags;
+        if (conflictMarkerLine) {
+            diags.push_back(
+                {FormatDiagnosticKind::MergeConflict,
+                 fmt::format(
+                     "Git merge conflict marker at line {}; resolve conflicts before formatting",
+                     conflictMarkerLine
+                 )}
+            );
+        }
         if (!internalError.empty()) {
             diags.push_back(
                 {FormatDiagnosticKind::InternalError,

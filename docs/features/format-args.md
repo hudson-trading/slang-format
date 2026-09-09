@@ -10,6 +10,17 @@ If no files are specified, reads from stdin and writes to stdout.
 If files are specified without `-i`, prints formatted output to stdout.
 With `-i`, modifies files in-place. Multiple files require `-i`.
 
+Files containing Git merge conflict markers are rejected before parsing, including
+with `--force`. The formatter reports the first marker's line, leaves the file
+unchanged, emits no source on stdout, and exits with status 1. Batch runs continue
+formatting unaffected files. This also applies to `--dry-run` and stdin.
+
+Markers must start at column one and contain at least seven repeated `<`, `=`,
+`>`, or `|` characters (including diff3 base markers and larger custom marker
+sizes). Opening, closing, and base markers may have whitespace-separated labels;
+separator lines may have trailing spaces or tabs. Markers are checked even inside
+comments, strings, and inactive preprocessor branches.
+
 ## Options
 
 ### `-h`, `--help`
@@ -33,6 +44,7 @@ Edit files in-place. Required when formatting multiple files. Cannot be used wit
 ### `-f`, `--force`
 
 Force output even if CST validation fails. Validation errors are downgraded to warnings but still printed to stderr.
+Git merge conflict markers always prevent formatting.
 
 ---
 

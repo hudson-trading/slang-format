@@ -19,6 +19,7 @@
 #include "slang/parsing/Parser.h"
 #include "slang/parsing/Preprocessor.h"
 #include "slang/syntax/SyntaxTree.h"
+#include "slang/text/CharInfo.h"
 #include "slang/text/SourceManager.h"
 
 using namespace slang;
@@ -100,6 +101,41 @@ FormatResult format(
 
     FormatResult result = {};
 
+    // Git inserts markers at the start of a line, even inside comments and
+    // inactive preprocessor branches. Check raw source before parsing recovery
+    // can treat them as ordinary tokens or trivia.
+    auto remaining = input;
+    if (remaining.starts_with("\xef\xbb\xbf"))
+        remaining.remove_prefix(3);
+    for (size_t lineNumber = 1; !remaining.empty(); lineNumber++) {
+        auto end = remaining.find_first_of("\r\n");
+        auto line = remaining.substr(0, end);
+        if (line.size() >= 7 &&
+            (line[0] == '<' || line[0] == '=' || line[0] == '>' || line[0] == '|')) {
+            auto markerEnd = line.find_first_not_of(line[0]);
+            if (markerEnd == std::string_view::npos)
+                markerEnd = line.size();
+            auto suffix = line.substr(markerEnd);
+            bool validSuffix = suffix.empty() ||
+                               (line[0] == '='
+                                    ? suffix.find_first_not_of(" \t") == std::string_view::npos
+                                    : isTabOrSpace(suffix.front()));
+            if (markerEnd >= 7 && validSuffix) {
+                result.conflictMarkerLine = lineNumber;
+                result.errorCount = 1;
+                result.formatted = input;
+                return result;
+            }
+        }
+        if (end == std::string_view::npos)
+            break;
+        size_t newlineSize = remaining[end] == '\r' && end + 1 < remaining.size() &&
+                                     remaining[end + 1] == '\n'
+                                 ? 2
+                                 : 1;
+        remaining.remove_prefix(end + newlineSize);
+    }
+
     // Parse the source ourselves (mirroring SyntaxTree::create) so we can
     // inspect the parser's delimiter stack before it is destroyed.
     SourceManager sm;
@@ -123,7 +159,7 @@ FormatResult format(
 
     // Skip generated files: if the first token's leading trivia contains
     // an `@generated` marker in a line/block comment, treat the file as
-    // excluded (same convention as Phabricator/Prettier/Black).
+    // excluded.
     if (auto firstToken = root.getFirstToken()) {
         for (const auto& trivia : firstToken.trivia()) {
             if (trivia.kind != TriviaKind::LineComment && trivia.kind != TriviaKind::BlockComment)

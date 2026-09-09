@@ -125,6 +125,10 @@ if(NOT TARGET slang::slang)
   add_subdirectory(external/slang EXCLUDE_FROM_ALL)
 endif()
 
+if(NOT TARGET fmt::fmt)
+  find_package(fmt 12 REQUIRED)
+endif()
+
 if(NOT TARGET reflectcpp::reflectcpp)
   set(REFLECTCPP_INSTALL
       OFF
@@ -167,7 +171,7 @@ target_include_directories(
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
          $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
 target_compile_features(slang_format_lib PUBLIC cxx_std_20)
-target_link_libraries(slang_format_lib PUBLIC slang::slang
+target_link_libraries(slang_format_lib PUBLIC slang::slang fmt::fmt
                                               reflectcpp::reflectcpp)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

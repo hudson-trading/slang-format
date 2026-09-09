@@ -61,6 +61,72 @@ def main():
                 assert inplace.returncode == 0, inplace.stderr
                 assert path.read_bytes() == source
                 checks += 1
+
+        conflict = (
+            b"module foo;\r\n"
+            + b"<" * 7
+            + b" HEAD\r\nlogic a;\r\n"
+            + b"|" * 7
+            + b" base\r\nlogic b;\r\n"
+            + b"=" * 7
+            + b"\r\nlogic c;\r\n"
+            + b">" * 7
+            + b" branch\r\nendmodule"
+        )
+        conflict_path = root / "conflict.sv"
+        conflict_path.write_bytes(conflict)
+        for stage in ("layout", "aligned"):
+            for force in (False, True):
+                invocation = (
+                    command + ["--stage", stage] + (["--force"] if force else [])
+                )
+                for mode in ("stdin", "stdout", "inplace"):
+                    for dry_run in (False, True):
+                        options = ["--dry-run"] if dry_run else []
+                        if mode != "stdin":
+                            options += [str(conflict_path)]
+                        if mode == "inplace":
+                            options += ["-i"]
+                        result = subprocess.run(
+                            invocation + options,
+                            input=conflict if mode == "stdin" else None,
+                            capture_output=True,
+                        )
+                        assert result.returncode == 1, result
+                        assert result.stdout == b"", result
+                        assert b"Git merge conflict marker at line 2" in result.stderr
+                        location = (
+                            b"<stdin>" if mode == "stdin" else bytes(conflict_path)
+                        )
+                        assert location in result.stderr
+                        assert conflict_path.read_bytes() == conflict
+                        checks += 1
+
+                clean_path = root / "clean.sv"
+                clean = b"module bar;logic x;endmodule\n"
+                for dry_run in (False, True):
+                    clean_path.write_bytes(clean)
+                    result = subprocess.run(
+                        invocation
+                        + ["-i", str(conflict_path), str(clean_path)]
+                        + (["--dry-run"] if dry_run else []),
+                        capture_output=True,
+                    )
+                    assert result.returncode == 1, result
+                    assert result.stdout == b"", result
+                    assert b"Git merge conflict marker" in result.stderr
+                    assert (
+                        b"format 1 files" in result.stderr
+                        if dry_run
+                        else b"formatted 1 files" in result.stderr
+                    )
+                    assert b"1 errors" in result.stderr
+                    assert conflict_path.read_bytes() == conflict
+                    if dry_run:
+                        assert clean_path.read_bytes() == clean
+                    else:
+                        assert clean_path.read_bytes() != clean
+                    checks += 1
         print(f"{checks} CLI output checks passed")
 
 

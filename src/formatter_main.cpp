@@ -146,6 +146,13 @@ bool interpretResult(const format::FormatResult& result, std::string_view path) 
         // the error kind first and then the file name so the kind is what
         // catches the eye when scanning a batch of warnings.
         switch (diag.kind) {
+            case format::FormatDiagnosticKind::MergeConflict:
+                OS::printE(
+                    fmt::format(
+                        "{} {}: {}\n", kindPrefix("error:", errStyle), pathFmt(path), diag.message
+                    )
+                );
+                break;
             case format::FormatDiagnosticKind::StructuralImbalance:
             case format::FormatDiagnosticKind::FailedReparse:
                 OS::printE(fmt::format("{} {}\n", kindPrefix("warning:", warnStyle), diag.message));
@@ -358,6 +365,8 @@ int main(int argc, char** argv) {
     auto outputResult = [&](const format::FormatResult& result, std::string_view input,
                             std::string_view path) {
         bool ok = interpretResult(result, path);
+        if (result.conflictMarkerLine)
+            return 1;
         bool skipped = !ok && !force.value_or(false) &&
                        (result.cstMismatch || result.notIdempotent || result.structuralImbalance) &&
                        result.internalError.empty() && !result.failedReparse;
@@ -472,6 +481,10 @@ int main(int argc, char** argv) {
         }
 
         bool ok = interpretResult(result.result, result.path);
+        if (result.result.conflictMarkerLine) {
+            errorCount++;
+            return;
+        }
         if (!ok) {
             if (result.result.cstMismatch)
                 cstMismatchCount++;
