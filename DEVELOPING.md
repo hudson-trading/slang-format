@@ -42,15 +42,16 @@ It reads `.pre-commit-config.yaml` and caches each hook's tools separately from
 the project environment. Run `prek install` to run the hooks automatically on
 each commit.
 
-Docs deployments use `scripts/ci/publish-docs.sh` to update `gh-pages`. Main
+Docs deployment and PR previews are disabled by job-level `if: ${{ false }}`
+guards in their workflows. Remove those guards to enable publishing.
+
+When enabled, docs deployments use `scripts/ci/publish-docs.sh` to update `gh-pages`. Main
 deployments preserve `previews/`; PR deployments replace only their own
 `previews/pr-N` directory. Concurrent pushes retry against the latest branch
 without force-pushing. The `gh-pages` branch must already exist.
 
-Run `tests/ci/test_publish_docs.py` to exercise publishing against temporary local
-Git repositories. It requires Git, Bash, and rsync. Both docs workflows run it
-before publishing. Manual preview runs require a PR number and publish the selected
-ref without posting a PR comment.
+Manual preview runs require a PR number and publish the selected ref without
+posting a PR comment.
 
 ## Architecture
 

@@ -20,6 +20,8 @@ concurrency:
 
 jobs:
     deploy:
+        # TODO: Remove this guard to re-enable docs deployment when the repo is public.
+        if: ${{ false }}
         runs-on: ubuntu-latest
         env:
             ENABLED_HTMLPROOFER: ${{ vars.ENABLED_HTMLPROOFER || 'False' }}
