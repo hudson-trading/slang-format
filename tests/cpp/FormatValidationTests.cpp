@@ -390,6 +390,27 @@ end
     CHECK(result.formatted.find("    registered <= lhs;") != std::string::npos);
 }
 
+TEST_CASE("custom indent width preserves the two-space instance name offset") {
+    format::Config config;
+    config.indentWidth = 3;
+    auto result = format::format(
+        "indent_width.sv",
+        "module top; always_comb begin foo=bar; end child u_child(.a(foo)); endmodule\n", config
+    );
+
+    for (const auto& diagnostic : result.diagnostics)
+        UNSCOPED_INFO(diagnostic.message);
+    REQUIRE(result.isUsable());
+    CHECK(result.formatted == R"(module top;
+   always_comb begin
+      foo = bar;
+   end
+   child
+     u_child (.a(foo));
+endmodule
+)");
+}
+
 TEST_CASE("format retains parser errors unrelated to compilation-unit context") {
     format::Config config;
     auto result = format::format(

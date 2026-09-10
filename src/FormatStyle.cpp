@@ -142,7 +142,7 @@ bool shouldInsertWhitespace(
     }
 
     if (right == TokenKind::Colon) {
-        if (left == TokenKind::BeginKeyword)
+        if (rightParent == SyntaxKind::NamedBlockClause)
             return true;
         // Ternary conditional: a ? b : c
         if (rightParent == SyntaxKind::ConditionalExpression)

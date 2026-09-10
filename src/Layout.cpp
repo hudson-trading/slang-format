@@ -3366,6 +3366,18 @@ private:
             }
             if (!node.children.empty() && childContainsMacro(node.children.front()))
                 addBinaryContinuationIndent = false;
+            if (anchorBinaryContinuation) {
+                auto first = firstTokenIndex(node, 0, node.children.size());
+                if (first &&
+                    std::ranges::any_of(
+                        normalized.tokens().at(*first).leading, [](const NormalizedTrivia& trivia) {
+                            return trivia.kind == NormalizedTriviaKind::Comment &&
+                                   trivia.placement == TriviaPlacement::Standalone;
+                        }
+                    )) {
+                    anchorBinaryContinuation = false;
+                }
+            }
             if (anchorBinaryContinuation && parenthesizedBinary) {
                 int precedence = SyntaxFacts::getPrecedence(node.kind);
                 auto containsNestedPrecedenceGroup = [&](auto&& self,

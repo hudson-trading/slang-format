@@ -1019,7 +1019,9 @@ private:
                 previous->trailing.push_back(std::move(item));
             }
             else {
-                appendBlankLines(current, lineBreaks, !previous);
+                appendBlankLines(
+                    current, lineBreaks, !previous, syntax.kind == SyntaxKind::MacroUsage
+                );
                 current.leading.push_back(std::move(item));
             }
             lineBreaks = 0;
