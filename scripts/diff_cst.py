@@ -31,6 +31,7 @@ def get_cst_json(path: str, slang: str, mode: str, quiet: bool = False) -> str:
             path,
         ],
         capture_output=True,
+        encoding="utf-8",
         text=True,
     )
     if result.stderr and not quiet:

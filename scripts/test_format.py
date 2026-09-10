@@ -96,7 +96,11 @@ def run_formatter(
         [slang_format, "--force", "--stage", stage, path],
         capture_output=True,
     )
-    return result.stdout.decode(), result.stderr.decode(), result.returncode
+    return (
+        result.stdout.decode("utf-8"),
+        result.stderr.decode("utf-8"),
+        result.returncode,
+    )
 
 
 def check_stage(
@@ -132,7 +136,7 @@ def check_stage(
         if stderr:
             print(f"           {stderr.strip()}", file=sys.stderr)
         if formatted:
-            with open(actual_path, "w") as f:
+            with open(actual_path, "w", encoding="utf-8", newline="") as f:
                 f.write(formatted)
             open_diff(
                 golden_path if os.path.exists(golden_path) else input_path, actual_path
@@ -160,7 +164,7 @@ def check_stage(
         print(f"  CST MISMATCH  {case} [{label}]: formatting changed the syntax tree")
         for line in stderr.strip().splitlines():
             print(f"           {line}")
-        with open(actual_path, "w") as f:
+        with open(actual_path, "w", encoding="utf-8", newline="") as f:
             f.write(formatted)
         open_diff(input_path, actual_path)
         return False
@@ -168,12 +172,12 @@ def check_stage(
     if update:
         already_matches = False
         if os.path.exists(golden_path):
-            with open(golden_path) as f:
+            with open(golden_path, encoding="utf-8") as f:
                 already_matches = f.read() == formatted
         if already_matches:
             print(f"  PASS     {case} [{label}]")
         else:
-            with open(golden_path, "w") as f:
+            with open(golden_path, "w", encoding="utf-8", newline="") as f:
                 f.write(formatted)
             print(f"  UPDATED  {case} [{label}]")
     else:
@@ -182,11 +186,11 @@ def check_stage(
                 f"  FAIL     {case} [{label}]: golden file missing (run with --update)"
             )
             return False
-        with open(golden_path) as f:
+        with open(golden_path, encoding="utf-8") as f:
             expected = f.read()
         if formatted != expected:
             print(f"  FAIL     {case} [{label}]: output differs from golden")
-            with open(actual_path, "w") as f:
+            with open(actual_path, "w", encoding="utf-8", newline="") as f:
                 f.write(formatted)
             open_diff(golden_path, actual_path)
             return False
@@ -196,7 +200,7 @@ def check_stage(
         return True
 
     with tempfile.NamedTemporaryFile(mode="wb", suffix=".sv", delete=False) as tmp:
-        tmp.write(formatted.encode())
+        tmp.write(formatted.encode("utf-8"))
         tmp_path = tmp.name
     try:
         orig_json = get_cst_json(input_path, slang, "no-whitespace", quiet=True)
@@ -212,9 +216,9 @@ def check_stage(
         suffix = ".layout" if stage == "layout" else ""
         orig_cst_path = os.path.join(TESTS_DIR, f"{stem}.cst.json")
         fmt_cst_path = os.path.join(TESTS_DIR, f"{stem}{suffix}.out.cst.json")
-        with open(orig_cst_path, "w") as f:
+        with open(orig_cst_path, "w", encoding="utf-8", newline="") as f:
             f.write(orig_json)
-        with open(fmt_cst_path, "w") as f:
+        with open(fmt_cst_path, "w", encoding="utf-8", newline="") as f:
             f.write(fmt_json)
         print(f"UNDETECTED CST MISMATCH  {case} [{label}]")
         open_diff(input_path, golden_path)
@@ -313,7 +317,7 @@ def main():
 
         formatted, stderr, rc = run_formatter(input_path, args.slang_format)
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".sv", delete=False) as tmp:
-            tmp.write(formatted.encode())
+            tmp.write(formatted.encode("utf-8"))
             tmp_path = tmp.name
 
         try:
@@ -328,9 +332,9 @@ def main():
                 fmt_json = json.dumps(json.loads(fmt_json), indent=2) + "\n"
             except json.JSONDecodeError:
                 pass
-            with open(orig_cst_path, "w") as f:
+            with open(orig_cst_path, "w", encoding="utf-8", newline="") as f:
                 f.write(orig_json)
-            with open(fmt_cst_path, "w") as f:
+            with open(fmt_cst_path, "w", encoding="utf-8", newline="") as f:
                 f.write(fmt_json)
 
             open_diff(orig_cst_path, fmt_cst_path)
