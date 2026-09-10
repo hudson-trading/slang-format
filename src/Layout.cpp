@@ -557,9 +557,13 @@ private:
                     !listContinuation) {
                     hardLine();
                 }
-                if (trailing && inDynamicList && dynamicListLikelyVertical && lastToken &&
+                if (trailing && inDynamicList && lastToken &&
                     lastToken->token.kind == TokenKind::Comma && !lineStart) {
-                    hardLine(1, true);
+                    if (dynamicListForceVertical)
+                        hardLine(1, true);
+                    else
+                        append(builder.softLine(1, " ", currentDynamicGroup));
+                    spacingProvided = true;
                 }
                 if (trailing && bracketDepth == 0 && lastToken && !lineStart && !spacingProvided &&
                     shouldInsertWhitespace(
@@ -1917,6 +1921,33 @@ private:
         });
     }
 
+    bool childHasVerticalMacro(const NormalizedChild& child) const {
+        if (auto token = std::get_if<size_t>(&child.value)) {
+            const auto& normalizedToken = normalized.tokens().at(*token);
+            auto forcesVertical = [](const auto& triviaList) {
+                return std::ranges::any_of(triviaList, [](const NormalizedTrivia& trivia) {
+                    if (trivia.kind != NormalizedTriviaKind::MacroUsage)
+                        return false;
+                    if (std::ranges::any_of(trivia.text, slang::isNewline))
+                        return true;
+                    return !trivia.syntax || trivia.syntax->kind != SyntaxKind::MacroUsage ||
+                           !trivia.syntax->as<MacroUsageSyntax>().args;
+                });
+            };
+            return normalizedToken.fromMacroExpansion || forcesVertical(normalizedToken.leading) ||
+                   forcesVertical(normalizedToken.trailing);
+        }
+        if (auto node = childNode(child)) {
+            return std::ranges::any_of(node->children, [&](const auto& nested) {
+                return childHasVerticalMacro(nested);
+            });
+        }
+        const auto& list = **std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
+        return std::ranges::any_of(list.children, [&](const auto& nested) {
+            return childHasVerticalMacro(nested);
+        });
+    }
+
     bool childHasMacroPlaceholder(const NormalizedChild& child) const {
         if (auto token = std::get_if<size_t>(&child.value)) {
             const auto& normalizedToken = normalized.tokens().at(*token);
@@ -3030,7 +3061,13 @@ private:
         bool hasMacro = std::ranges::any_of(list.children, [&](const NormalizedChild& child) {
             return childContainsMacro(child);
         });
-        bool forceVertical = hasComment || hasMacro || (inMultipleConcatenation && itemCount > 1);
+        bool hasVerticalMacro =
+            hasMacro && (list.parentKind != SyntaxKind::ArgumentList ||
+                         std::ranges::any_of(list.children, [&](const NormalizedChild& child) {
+                             return childHasVerticalMacro(child);
+                         }));
+        bool forceVertical = hasComment || hasVerticalMacro ||
+                             (inMultipleConcatenation && itemCount > 1);
         size_t listWidth = 0;
         for (const auto& child : list.children)
             listWidth += flatWidth(child) + (listWidth ? 1 : 0);
@@ -3055,9 +3092,11 @@ private:
         spacingProvided = true;
         bool savedDynamicList = inDynamicList;
         GroupId savedDynamicGroup = currentDynamicGroup;
+        bool savedDynamicListForceVertical = dynamicListForceVertical;
         bool savedDynamicListLikelyVertical = dynamicListLikelyVertical;
         inDynamicList = true;
         currentDynamicGroup = group;
+        dynamicListForceVertical = forceVertical || hasEscapedIdentifier;
         dynamicListLikelyVertical = forceVertical || hasEscapedIdentifier ||
                                     (config.columnLimit.get() &&
                                      listWidth > config.columnLimit.get() * 3 / 5);
@@ -3099,6 +3138,7 @@ private:
         }
         inDynamicList = savedDynamicList;
         currentDynamicGroup = savedDynamicGroup;
+        dynamicListForceVertical = savedDynamicListForceVertical;
         dynamicListLikelyVertical = savedDynamicListLikelyVertical;
         auto contents = capture(begin);
         int listIndent = static_cast<int>(config.indentWidth.get());
@@ -3596,6 +3636,7 @@ private:
     bool inDynamicList = false;
     GroupId currentDynamicGroup = 0;
     AlignmentGroupId currentAlignmentGroup = 0;
+    bool dynamicListForceVertical = false;
     bool dynamicListLikelyVertical = false;
     size_t conditionalDepth = 0;
     size_t classDepth = 0;

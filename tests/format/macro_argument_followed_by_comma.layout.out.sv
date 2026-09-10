@@ -4,10 +4,6 @@
 
 module example;
     function void update();
-        result = calculate_updated_value(
-                     current_field,
-                     `READ(current_register),
-                     replacement_value
-                 );
+        result = calculate_updated_value(current_field, `READ(current_register), replacement_value);
     endfunction
 endmodule
