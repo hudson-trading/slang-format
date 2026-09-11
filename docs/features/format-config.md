@@ -3,11 +3,15 @@
 # Configuration
 
 `slang-format` reads JSON configuration from `.slang/format.json`. It searches
-upward from the target path first, then from the current working directory.
+upward from each file independently, then from the current working directory.
 An explicit `--config <path>` takes precedence.
 
 All options are optional. Run `slang-format --dump-config` to print the
-resolved configuration.
+resolved configuration for the first target (or stdin's assumed filename).
+Unknown keys are errors, including keys inside nested objects.
+Nested configs replace parent configs; omitted options use built-in defaults.
+Directory selection (`dirs` and `excludeDirs`) uses each directory argument's
+config; every collected file then resolves its own formatting settings.
 
 ## Config Options
 

@@ -11,6 +11,7 @@
 #include <fmt/format.h>
 #include <fstream>
 #include <rfl/DefaultIfMissing.hpp>
+#include <rfl/NoExtraFields.hpp>
 #include <rfl/json.hpp>
 #include <sstream>
 
@@ -48,7 +49,7 @@ std::optional<Config> loadConfigFile(const fs::path& path, std::string& error) {
 
     std::ostringstream buffer;
     buffer << file.rdbuf();
-    auto result = rfl::json::read<Config, rfl::DefaultIfMissing>(buffer.str());
+    auto result = rfl::json::read<Config, rfl::DefaultIfMissing, rfl::NoExtraFields>(buffer.str());
     if (!result) {
         error = fmt::format(
             "failed to parse config file '{}': {}", path.string(), result.error().what()

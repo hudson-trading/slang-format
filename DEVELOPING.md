@@ -131,9 +131,11 @@ validation independently of the golden suite.
 ## Configuration and generated files
 
 The configuration types are declared in `include/format/FormatConfig.h`.
-`slang-format` discovers `.slang/format.json` by walking upward from the first
-target, with the current working directory as a fallback. An explicit
-`--config` path takes precedence.
+`slang-format` discovers `.slang/format.json` by walking upward from each
+file independently, with the current working directory as a fallback. An explicit
+`--config` path takes precedence for all files. Unknown keys are rejected.
+Directory collection uses each directory argument's config; collected files can
+have their own nested formatting configs.
 
 After changing the configuration types, regenerate the JSON schema and user
 documentation:

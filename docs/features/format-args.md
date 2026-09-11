@@ -85,7 +85,7 @@ The default is `true`; it cannot override `--strict`, `--check`, or `--Werror`.
 
 ### `--config <path>`
 
-Path to a JSON config file. If not specified, `slang-format` searches upward from the target path, then from the current directory, for `.slang/format.json`.
+Path to a JSON config file. If not specified, `slang-format` searches upward from each file independently, then from the current directory, for `.slang/format.json`. An explicit config applies to every file. Nested configs replace parent configs; missing settings use defaults. Unknown keys are errors, including nested keys.
 
 See [Configuration](format-config.md) for config file options.
 
@@ -108,7 +108,7 @@ slang-format --assume-filename rtl/top.sv - < editor-buffer.sv
 
 ### `--dump-config`
 
-Print the current configuration as JSON and exit. Useful for inspecting defaults or verifying which config file is being picked up.
+Print the configuration for the first target (or stdin's assumed filename) as JSON and exit. Useful for inspecting defaults or verifying which config file is being picked up.
 
 ---
 

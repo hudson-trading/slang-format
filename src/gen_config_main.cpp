@@ -9,12 +9,14 @@
 #include "format/FormatConfig.h"
 #include <iostream>
 #include <rfl/DefaultIfMissing.hpp>
+#include <rfl/NoExtraFields.hpp>
 #include <rfl/json.hpp>
 
 int main() {
-    const std::string schema = rfl::json::to_schema<format::Config, rfl::DefaultIfMissing>(
-        rfl::json::pretty | YYJSON_WRITE_PRETTY_TWO_SPACES
-    );
+    const std::string schema =
+        rfl::json::to_schema<format::Config, rfl::DefaultIfMissing, rfl::NoExtraFields>(
+            rfl::json::pretty | YYJSON_WRITE_PRETTY_TWO_SPACES
+        );
     std::cout << schema << '\n';
     return 0;
 }

@@ -17,6 +17,7 @@
 #include <fmt/format.h>
 #include <iostream>
 #include <iterator>
+#include <map>
 #include <rfl/json.hpp>
 #include <string>
 #include <vector>
@@ -90,7 +91,7 @@ struct FileFormatResult {
     std::string path;
     std::string input;
     format::FormatResult result;
-    bool fileReadError = false;
+    std::string error;
 };
 // Format a single file and return the result. May be threaded, so don't emit errors directly.
 FileFormatResult formatFile(
@@ -104,7 +105,7 @@ FileFormatResult formatFile(
     SmallVector<char> buffer;
     auto ec = OS::readFile(path, buffer);
     if (ec) {
-        result.fileReadError = true;
+        result.error = fmt::format("failed to read file '{}': {}", path, ec.message());
         return result;
     }
 
@@ -360,71 +361,47 @@ int main(int argc, char** argv) {
     const bool noWrite = dryRun == true || check == true;
     const bool strictValidation = strict == true || failsafeSuccess == false || checkFormatting;
 
-    // Load configuration
-    format::Config config;
-
-    // Directory containing the loaded `.slang/format.json` (the "config root"),
-    // used to resolve the config's relative `dirs`. Empty when no config file
-    // was found or an explicit --config was given (where `dirs` doesn't apply
-    // because there is no implied project root to anchor it to).
-    fs::path configRoot;
-
-    if (configPath.has_value()) {
-        // Use explicitly specified config file
-        if (!fs::exists(*configPath)) {
-            OS::printE(fmt::format("error: config file not found: '{}'\n", *configPath));
-            return 1;
-        }
+    // Resolution happens on the main thread; workers receive independent configs.
+    struct ResolvedConfig {
+        format::Config config;
+        fs::path root;
         std::string error;
-        auto loadedConfig = format::loadConfigFile(*configPath, error);
-        if (!loadedConfig) {
-            OS::printE(fmt::format("error: {}\n", error));
+    };
+    std::map<fs::path, ResolvedConfig> configCache;
+    auto resolveConfig = [&](const fs::path& directory) {
+        ResolvedConfig resolved;
+        auto found = configPath ? std::optional<fs::path>(*configPath)
+                                : format::findConfigFile(directory);
+        if (found && !configPath)
+            resolved.root = fs::weakly_canonical(found->parent_path().parent_path());
+        if (!found)
+            found = format::findConfigFile(fs::current_path());
+        if (!found)
+            return resolved;
+
+        auto key = fs::weakly_canonical(*found);
+        auto [it, inserted] = configCache.try_emplace(key);
+        if (inserted) {
+            auto loaded = format::loadConfigFile(*found, it->second.error);
+            if (loaded)
+                it->second.config = *loaded;
+        }
+        resolved.config = it->second.config;
+        resolved.error = it->second.error;
+        return resolved;
+    };
+
+    if (dumpConfig == true || readStdin) {
+        auto resolved = resolveConfig(configSearchRoot(configTargets));
+        if (!resolved.error.empty()) {
+            OS::printE(fmt::format("error: {}\n", resolved.error));
             return 1;
         }
-        config = *loadedConfig;
-    }
-    else {
-        // Discover `.slang/format.json`. First walk up from the target path
-        // (the folder/file being formatted) so `slang-format /some/other/repo`
-        // picks up that repo's config. If nothing is found there, fall back to
-        // walking up from the current working directory — this matters when the
-        // target is a throwaway temp file outside any project tree (for example,
-        // when a lint runner formats a copied tempfile), where only the CWD
-        // reflects the real project.
-        //
-        // `dirs` scoping only applies to a config found via the *target* tree
-        // (configRoot set below). A CWD-fallback config is consulted for
-        // formatting options but does not drive `dirs` — the target isn't its
-        // config root.
-        auto foundConfig = format::findConfigFile(configSearchRoot(configTargets));
-        bool fromTarget = foundConfig.has_value();
-        if (!foundConfig)
-            foundConfig = format::findConfigFile(fs::current_path());
-
-        if (foundConfig) {
-            std::string error;
-            auto loadedConfig = format::loadConfigFile(*foundConfig, error);
-            if (!loadedConfig) {
-                OS::printE(fmt::format("error: {}\n", error));
-                return 1;
-            }
-            config = *loadedConfig;
-            if (fromTarget) {
-                // configRoot = directory holding `.slang/` (parent of `.slang`).
-                std::error_code ec;
-                configRoot = fs::weakly_canonical(foundConfig->parent_path().parent_path(), ec);
-                if (ec)
-                    configRoot = foundConfig->parent_path().parent_path();
-            }
+        if (dumpConfig == true) {
+            OS::print(rfl::json::write(resolved.config, rfl::json::pretty));
+            OS::print("\n");
+            return 0;
         }
-        // If no config found, use defaults (already initialized)
-    }
-
-    // Dump config if requested
-    if (dumpConfig == true) {
-        OS::print(rfl::json::write(config, rfl::json::pretty));
-        OS::print("\n");
-        return 0;
     }
 
     auto outputResult = [&](const format::FormatResult& result, std::string_view input,
@@ -446,7 +423,10 @@ int main(int argc, char** argv) {
 
     if (readStdin) {
         std::string input(std::istreambuf_iterator<char>(std::cin), {});
-        return outputResult(format::format(stdinName, input, config, stage), input, stdinName);
+        auto resolved = resolveConfig(configSearchRoot(configTargets));
+        return outputResult(
+            format::format(stdinName, input, resolved.config, stage), input, stdinName
+        );
     }
 
     // Validate files exist. Directory args expand to all .sv/.svh/.v/.vh
@@ -466,6 +446,13 @@ int main(int argc, char** argv) {
             return 1;
         }
         if (fs::is_directory(path)) {
+            auto resolved = resolveConfig(path);
+            if (!resolved.error.empty()) {
+                OS::printE(fmt::format("error: {}\n", resolved.error));
+                return 1;
+            }
+            const auto& config = resolved.config;
+            const auto& configRoot = resolved.root;
             std::error_code ec;
             fs::path canonical = fs::weakly_canonical(path, ec);
             if (ec)
@@ -501,11 +488,25 @@ int main(int argc, char** argv) {
         }
     }
 
+    std::vector<ResolvedConfig> fileConfigs;
+    fileConfigs.reserve(files.size());
+    for (const auto& path : files)
+        fileConfigs.push_back(resolveConfig(fs::path(path).parent_path()));
+    auto formatInput = [&](size_t index) {
+        if (!fileConfigs[index].error.empty()) {
+            FileFormatResult result;
+            result.path = files[index];
+            result.error = fileConfigs[index].error;
+            return result;
+        }
+        return formatFile(files[index], fileConfigs[index].config, stage);
+    };
+
     // Single file without -i: output to stdout
     if (files.size() == 1 && inplace != true) {
-        auto result = formatFile(files[0], config, stage);
-        if (result.fileReadError) {
-            OS::printE(fmt::format("error: failed to read file '{}'\n", files[0]));
+        auto result = formatInput(0);
+        if (!result.error.empty()) {
+            OS::printE(fmt::format("error: {}\n", result.error));
             return 1;
         }
         return outputResult(result.result, result.input, result.path);
@@ -533,8 +534,8 @@ int main(int argc, char** argv) {
     int idempotentFailCount = 0;
 
     auto processResult = [&](FileFormatResult& result) {
-        if (result.fileReadError) {
-            OS::printE(fmt::format("error: failed to read file '{}'\n", result.path));
+        if (!result.error.empty()) {
+            OS::printE(fmt::format("error: {}\n", result.error));
             errorCount++;
             return;
         }
@@ -583,9 +584,9 @@ int main(int argc, char** argv) {
 
     if (isVerbose) {
         // Verbose mode: format files sequentially with progress output
-        for (const auto& path : files) {
-            OS::printE(fmt::format("formatting {} ...\n", path));
-            auto result = formatFile(path, config, stage);
+        for (size_t i = 0; i < files.size(); i++) {
+            OS::printE(fmt::format("formatting {} ...\n", files[i]));
+            auto result = formatInput(i);
             processResult(result);
         }
     }
@@ -594,11 +595,8 @@ int main(int argc, char** argv) {
         std::vector<std::future<FileFormatResult>> futures;
         futures.reserve(files.size());
 
-        for (const auto& path : files) {
-            futures.push_back(pool.submit_task([&path, &config, stage]() {
-                return formatFile(path, config, stage);
-            }));
-        }
+        for (size_t i = 0; i < files.size(); i++)
+            futures.push_back(pool.submit_task([&, i]() { return formatInput(i); }));
 
         for (auto& future : futures) {
             auto result = future.get();

@@ -33,6 +33,39 @@ class CliOptionsTests(unittest.TestCase):
             timeout=30,
         )
 
+    def test_per_file_configs(self):
+        for name, width in [("one", 2), ("two", 8)]:
+            folder = self.root / name
+            (folder / ".slang").mkdir(parents=True)
+            (folder / ".slang" / "format.json").write_text(
+                '{"indentWidth": %d}' % width
+            )
+            (folder / "file.sv").write_bytes(self.source)
+        one, two = self.root / "one/file.sv", self.root / "two/file.sv"
+        for targets in [(one, two), (two, one), (self.root,)]:
+            one.write_bytes(self.source)
+            two.write_bytes(self.source)
+            result = self.run_cli("-i", *targets)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(b"\n  logic a;", one.read_bytes())
+            self.assertIn(b"\n        logic a;", two.read_bytes())
+        override = self.root / "override.json"
+        override.write_text('{"indentWidth": 6}')
+        result = self.run_cli("-i", "--config", override, one, two)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(one.read_bytes(), two.read_bytes())
+        self.assertIn(b"\n      logic a;", one.read_bytes())
+        for contents in ['{"indentWidht": 8}', '{"alignment": {"maxSpace": 3}}']:
+            override.write_text(contents)
+            result = self.run_cli("--config", override, self.dirty)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(result.stdout, b"")
+        (self.root / "one/.slang/format.json").write_text('{"indentWidht": 8}')
+        two.write_bytes(self.source)
+        result = self.run_cli("-i", one, two)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn(b"\n        logic a;", two.read_bytes())
+
     def test_stdin_paths(self):
         expected = self.clean.read_bytes()
         result = self.run_cli("-", source=self.source)
