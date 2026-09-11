@@ -57,6 +57,12 @@ if(Python3_FOUND)
   set_tests_properties(format_config_discovery_tests PROPERTIES LABELS "format")
 
   add_test(
+    NAME format_cli_options_tests
+    COMMAND
+      ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/test_cli_options.py
+      --slang-format $<TARGET_FILE:slang_format>)
+
+  add_test(
     NAME format_cli_output_tests
     COMMAND
       ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/test_cli_output.py

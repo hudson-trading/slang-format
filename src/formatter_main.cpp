@@ -235,6 +235,16 @@ int main(int argc, char** argv) {
     std::optional<bool> dryRun;
     cmdline.add("-n,--dry-run", dryRun, "Run formatting and validation but do not write any files");
 
+    std::optional<bool> check;
+    cmdline.add(
+        "--check,--verify", check, "Fail if formatting changes or validation fails; do not write"
+    );
+
+    std::optional<bool> warningsAsErrors;
+    cmdline.add(
+        "--Werror", warningsAsErrors, "Treat warnings and dry-run formatting changes as errors"
+    );
+
     std::optional<bool> force;
     cmdline.add("-f,--force", force, "Force output even if validation fails");
 
@@ -296,6 +306,8 @@ int main(int argc, char** argv) {
             "  --version         Display version information\n"
             "  -i, --inplace     Edit files in-place\n"
             "  -n, --dry-run     Format and validate but do not write\n"
+            "  --check, --verify Check formatting and validation without writing\n"
+            "  --Werror         Fail on warnings and dry-run formatting changes\n"
             "  -f, --force       Force output even if validation fails\n"
             "  --config <path>   Path to config file. If omitted, searches for\n"
             "                    .slang/format.json walking up from the target\n"
@@ -312,6 +324,9 @@ int main(int argc, char** argv) {
         OS::print(fmt::format("slang-format version {}\n", format::FullVersion));
         return 0;
     }
+
+    const bool checkFormatting = check == true || (dryRun == true && warningsAsErrors == true);
+    const bool noWrite = dryRun == true || check == true;
 
     // Load configuration
     format::Config config;
@@ -387,9 +402,14 @@ int main(int argc, char** argv) {
         if (action == format::FormatOutputAction::Abort)
             return 1;
         bool skipped = action == format::FormatOutputAction::KeepOriginal;
-        if (dryRun != true)
+        bool changed = !skipped && result.formatted != input;
+        if (noWrite && changed)
+            OS::printE(fmt::format("{}: needs formatting\n", path));
+        if (!noWrite)
             OS::print(skipped ? input : std::string_view(result.formatted));
-        return result.isUsable() || skipped ? 0 : 1;
+        bool failed = (!result.isUsable() && (!skipped || checkFormatting)) ||
+                      (warningsAsErrors == true && !result.diagnostics.empty());
+        return failed || (checkFormatting && changed) ? 1 : 0;
     };
 
     // If no files specified, read from stdin and write to stdout
@@ -466,8 +486,8 @@ int main(int argc, char** argv) {
     }
 
     // Multiple files require -i (or --dry-run, which doesn't write)
-    if (files.size() > 1 && inplace != true && dryRun != true) {
-        OS::printE("error: multiple files require -i or --dry-run\n");
+    if (files.size() > 1 && inplace != true && !noWrite) {
+        OS::printE("error: multiple files require -i, --dry-run, or --check\n");
         return 1;
     }
 
@@ -477,7 +497,8 @@ int main(int argc, char** argv) {
                                        : numThreads.value_or(std::thread::hardware_concurrency());
     BS::thread_pool pool(threads);
 
-    const bool isDryRun = dryRun.value_or(false);
+    const bool isDryRun = noWrite;
+    bool checkFailed = false;
 
     int errorCount = 0;
     int skippedCount = 0;
@@ -493,6 +514,9 @@ int main(int argc, char** argv) {
         }
 
         printDiagnostics(result.result, result.path);
+        if ((checkFormatting && !result.result.isUsable()) ||
+            (warningsAsErrors == true && !result.result.diagnostics.empty()))
+            checkFailed = true;
         if (result.result.hasDiagnostic(format::FormatDiagnosticKind::CstMismatch))
             cstMismatchCount++;
         if (result.result.hasDiagnostic(format::FormatDiagnosticKind::NotIdempotent))
@@ -513,7 +537,11 @@ int main(int argc, char** argv) {
             errorCount++;
 
         if (isDryRun) {
-            // Count as "would format" without touching disk.
+            if (result.result.formatted != result.input) {
+                OS::printE(fmt::format("{}: needs formatting\n", result.path));
+                checkFailed = checkFailed || checkFormatting;
+            }
+            // Count successful formatting attempts without touching disk.
             formattedCount++;
             return;
         }
@@ -563,5 +591,5 @@ int main(int argc, char** argv) {
         OS::printE(fmt::format(" ({} not idempotent)", idempotentFailCount));
     OS::printE("\n");
 
-    return errorCount > 0 ? 1 : 0;
+    return errorCount > 0 || checkFailed ? 1 : 0;
 }

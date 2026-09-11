@@ -8,7 +8,7 @@ slang-format [options] [<file> ...]
 
 If no files are specified, reads from stdin and writes to stdout.
 If files are specified without `-i`, prints formatted output to stdout.
-With `-i`, modifies files in-place. Multiple files require `-i`.
+With `-i`, modifies files in-place. Multiple files require `-i`, `--dry-run`, or `--check`.
 
 See [validation](format-validation.md) for checks, rejected files, and exit statuses,
 and [disabling formatting](format-markers.md) for preserving source formatting.
@@ -46,8 +46,26 @@ explicit formatting markers remain respected.
 
 ### `-n`, `--dry-run`
 
-Run formatting and validation without writing files or source to stdout. Can be
+Run formatting and validation without writing files or source to stdout. Reports
+files that need formatting on stderr, but differences alone return status 0. Can be
 used with multiple files and combined with `--force` to check forced formatting.
+
+---
+
+### `--check`, `--verify`
+
+Check that files are already formatted and pass validation. Return 0 on success,
+1 if any file needs formatting, fails validation, or cannot be processed.
+Supports stdin, multiple files, and directories. Never writes files or source to
+stdout, including with `-i` or `--force`. Generated files and explicitly disabled
+formatting regions are respected. Batch results do not depend on file order.
+
+### `--Werror`
+
+Treat diagnostic warnings as failures. With `--dry-run`, also fail when formatting
+would change a file. `--dry-run --Werror` is the stricter, clang-format-compatible
+check spelling; unlike `--check`, it also fails on unmatched `on` warnings.
+Without `--dry-run`, this changes exit status without suppressing normal output.
 
 ---
 
@@ -101,4 +119,9 @@ slang-format -f top.sv
 
 # Inspect independently testable pre-alignment output
 slang-format --stage layout top.sv
+```
+
+```sh
+# CI: fail if any file needs formatting or cannot be validated
+slang-format --check rtl/
 ```

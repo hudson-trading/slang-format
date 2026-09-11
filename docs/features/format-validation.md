@@ -80,7 +80,15 @@ the whole file.
 See [disabling formatting](format-markers.md) for scope rules.
 
 `--dry-run` performs the same checks and uses the same exit status rules, but
-never writes files or emits source on stdout.
+never writes files or emits source on stdout. It reports formatting differences
+on stderr without failing for those differences alone.
+
+`--check` (alias `--verify`) also suppresses all writes and source output, but
+returns `1` for any formatting difference or validation failure, including failures
+that normally preserve the original and return `0`. It returns `0` for unchanged
+valid source and intentional exclusions. Unmatched `on` warnings alone still pass.
+`--dry-run --Werror` additionally fails on diagnostic warnings. Neither mode lets
+`--force` turn a failed validation into a successful check.
 
 ## Forcing output
 
