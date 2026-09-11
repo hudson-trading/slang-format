@@ -281,17 +281,6 @@ bool isRealToken(const Token& t) {
     return t && !t.isMissing() && !t.rawText().empty();
 }
 
-/// Iterate all real tokens in a subtree via tokens_begin()/end(), skipping
-/// placeholders. Invokes the visitor with each token.
-template<typename F>
-void forEachRealToken(const SyntaxNode& node, F&& f) {
-    for (auto it = node.tokens_begin(); it != node.tokens_end(); ++it) {
-        Token t = *it;
-        if (isRealToken(t))
-            f(t);
-    }
-}
-
 } // namespace
 
 // Reconstruct unexpanded source so byte-sensitive regions include inactive branches.

@@ -32,6 +32,7 @@ std::string Formatter::format(
     const slang::syntax::SyntaxNode& root,
     std::vector<FormatDiagnostic>* diagnostics
 ) {
+    validateConfig(config_);
     auto normalized = NormalizedFormatDocument::build(root, sourceManager_);
     if (diagnostics) {
         for (size_t i = 0; i < normalized.unmatchedFormatOnCount(); i++) {

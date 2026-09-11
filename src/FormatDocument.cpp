@@ -52,6 +52,7 @@ struct FlatAtom {
     size_t anchorFitWidth = 0;
     size_t minimumPadding = 0;
     AlignmentGroupId alignmentGroup = 0;
+    bool preserveWhitespace = false;
 };
 
 struct FlattenContext {
@@ -87,6 +88,7 @@ void flatten(
                 {FlatAtom::Kind::Verbatim, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
                  node.syntaxKind, context.member}
             );
+            result.back().preserveWhitespace = node.preserveWhitespace;
             break;
         case DocKind::MemberVerbatim:
             result.push_back(
@@ -99,6 +101,7 @@ void flatten(
                 {FlatAtom::Kind::AbsoluteText, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
                  node.syntaxKind, context.member}
             );
+            result.back().preserveWhitespace = node.preserveWhitespace;
             break;
         case DocKind::SoftLine:
             result.push_back(
@@ -407,6 +410,7 @@ struct RenderRun {
         const RenderMetadata& metadata,
         const std::unordered_set<GroupId>& brokenGroups
     ) {
+        size_t preservedBegin = collectText ? result.rendered.text.size() : 0;
         switch (atom.kind) {
             case FlatAtom::Kind::Text: {
                 bool closingDelimiter = atom.text.size() == 1 && !cursor.delimiters.empty() &&
@@ -529,6 +533,10 @@ struct RenderRun {
                 break;
             }
         }
+        if (collectText && atom.preserveWhitespace)
+            result.rendered.preservedRanges.emplace_back(
+                preservedBegin, result.rendered.text.size()
+            );
     }
 
     void finish() {
@@ -1292,18 +1300,28 @@ void normalizeRenderedDocument(RenderedDocument& rendered) {
         offsets.push_back({lineBreak.outputOffset, &lineBreak.outputOffset});
     for (auto& anchor : rendered.alignmentAnchors)
         offsets.push_back({anchor.outputOffset, &anchor.outputOffset});
+    auto originalRanges = rendered.preservedRanges;
+    for (auto& [begin, end] : rendered.preservedRanges) {
+        offsets.push_back({begin, &begin});
+        offsets.push_back({end, &end});
+    }
     std::ranges::sort(offsets, {}, &OffsetRef::original);
 
     std::string normalized;
     normalized.reserve(rendered.text.size());
     size_t pos = 0;
     size_t offsetIndex = 0;
+    size_t rangeIndex = 0;
     while (pos < rendered.text.size()) {
         size_t end = rendered.text.find('\n', pos);
         if (end == std::string::npos)
             end = rendered.text.size();
         size_t contentEnd = end;
-        while (!protectedLines.contains(end + 1) && contentEnd > pos &&
+        while (rangeIndex < originalRanges.size() && originalRanges[rangeIndex].second < end)
+            rangeIndex++;
+        bool preserve = rangeIndex < originalRanges.size() &&
+                        originalRanges[rangeIndex].first < end;
+        while (!preserve && !protectedLines.contains(end + 1) && contentEnd > pos &&
                slang::isTabOrSpace(rendered.text[contentEnd - 1]))
             contentEnd--;
         if (contentEnd > pos && rendered.text[contentEnd - 1] == '\\')
@@ -1318,6 +1336,8 @@ void normalizeRenderedDocument(RenderedDocument& rendered) {
         normalized.push_back('\n');
         pos = end == rendered.text.size() ? end : end + 1;
     }
+    while (offsetIndex < offsets.size())
+        *offsets[offsetIndex++].normalized = normalized.size();
     rendered.text = std::move(normalized);
 }
 
@@ -1372,6 +1392,13 @@ DocId DocumentBuilder::absoluteText(std::string_view value) {
     node.kind = DocKind::AbsoluteText;
     node.text = value;
     return add(std::move(node));
+}
+
+DocId DocumentBuilder::preservedText(std::string_view value, bool absolute) {
+    auto id = absolute ? absoluteText(value) : verbatim(value);
+    if (id)
+        document_.nodes[id].preserveWhitespace = true;
+    return id;
 }
 
 DocId DocumentBuilder::softLine(

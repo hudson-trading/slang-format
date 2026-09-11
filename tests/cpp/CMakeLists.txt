@@ -26,6 +26,14 @@ find_package(
   COMPONENTS Interpreter
   QUIET)
 if(Python3_FOUND)
+  add_test(
+    NAME format_stress_tests
+    COMMAND
+      ${Python3_EXECUTABLE} ${PROJECT_SOURCE_DIR}/scripts/test_format_stress.py
+      --slang-format $<TARGET_FILE:slang_format>)
+  add_test(NAME format_harness_tests
+           COMMAND ${Python3_EXECUTABLE}
+                   ${PROJECT_SOURCE_DIR}/scripts/test_format_harness.py)
   if(NOT TARGET slang::driver)
     add_subdirectory(${PROJECT_SOURCE_DIR}/external/slang/tools/driver
                      ${CMAKE_CURRENT_BINARY_DIR}/slang-driver)

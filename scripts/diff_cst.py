@@ -33,9 +33,34 @@ def get_cst_json(path: str, slang: str, mode: str, quiet: bool = False) -> str:
         capture_output=True,
         encoding="utf-8",
         text=True,
+        timeout=60,
     )
     if result.stderr and not quiet:
         print(result.stderr, end="", file=sys.stderr)
+    if result.returncode not in (0, 1):
+        raise RuntimeError(
+            f"CST checker exited with code {result.returncode}: {result.stderr.strip()}"
+        )
+    try:
+        tree = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(
+            f"CST checker produced invalid JSON for {path}: {result.stderr.strip()}"
+        ) from exc
+    # Parse-error fixtures may exit 1 but must still produce a real syntax tree.
+    trees = tree.get("syntaxTrees") if isinstance(tree, dict) else None
+    if (
+        not isinstance(trees, list)
+        or not trees
+        or not all(
+            isinstance(item, dict)
+            and item.get("kind") == "SyntaxTree"
+            and isinstance(item.get("root"), dict)
+            and isinstance(item["root"].get("kind"), str)
+            for item in trees
+        )
+    ):
+        raise RuntimeError(f"CST checker produced no syntax tree for {path}")
     return result.stdout
 
 
@@ -51,14 +76,13 @@ def diff_cst_json(
 
     Returns an empty list if the CSTs are equivalent.
     """
-    json1 = get_cst_json(file1, slang, mode, quiet=quiet)
-    json2 = get_cst_json(file2, slang, mode, quiet=quiet)
-
     try:
+        json1 = get_cst_json(file1, slang, mode, quiet=quiet)
+        json2 = get_cst_json(file2, slang, mode, quiet=quiet)
         json1 = json.dumps(json.loads(json1), indent=2) + "\n"
         json2 = json.dumps(json.loads(json2), indent=2) + "\n"
-    except json.JSONDecodeError as e:
-        return [f"Failed to parse CST JSON: {e}\n"]
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as e:
+        return [f"CST check failed: {e}\n"]
 
     lines1 = json1.splitlines(keepends=True)
     lines2 = json2.splitlines(keepends=True)

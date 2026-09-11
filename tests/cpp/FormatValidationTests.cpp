@@ -927,6 +927,78 @@ TEST_CASE("trailing whitespace does not affect wrapping or inactive comments") {
     }
 }
 
+TEST_CASE("deep flat expressions fail safely without replacing the input") {
+    std::string source = "module foo; assign value = signal_a";
+    for (size_t i = 0; i < 30000; i++)
+        source += "+signal_a";
+    source += "; endmodule\n";
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        auto result = format::format("deep.sv", source, {}, stage);
+        CHECK(result.hasDiagnostic(format::FormatDiagnosticKind::InternalError));
+        CHECK(result.formatted == source);
+        CHECK(result.outputAction(false) == format::FormatOutputAction::Abort);
+        REQUIRE_FALSE(result.diagnostics.empty());
+        CHECK(result.diagnostics.back().message.find("depth limit") != std::string::npos);
+    }
+}
+
+TEST_CASE("inline assignment conditionals stay inline when over the column limit") {
+    format::Config config;
+    config.columnLimit = 40;
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        auto result = format::format(
+            "inline.sv",
+            "module foo;\nassign signal_a = `ifdef FOO 8'hff `else 8'h00 `endif;\nendmodule\n",
+            config, stage
+        );
+        CHECK(result.isUsable());
+        CHECK(result.formatted.find("signal_a = `ifdef FOO") != std::string::npos);
+    }
+}
+
+TEST_CASE("unlimited columns keep short case clauses inline") {
+    format::Config config;
+    config.columnLimit = 0;
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        auto result = format::format(
+            "case.sv",
+            "module foo; always_comb case (select) 0: value = 1; 1: value = 2; "
+            "endcase endmodule\n",
+            config, stage
+        );
+        CHECK(result.isUsable());
+        CHECK(result.formatted.find("0: value = 1;") != std::string::npos);
+        CHECK(result.formatted.find("1: value = 2;") != std::string::npos);
+    }
+}
+
+TEST_CASE("off and skip regions retain internal trailing whitespace") {
+    for (auto marker : {"off", "skip"}) {
+        std::string preserved = "module foo;  \n  \t\n  logic value; \t\nendmodule";
+        std::string source = "// slang-format: " + std::string(marker) + "\n" + preserved + "\n";
+        for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+            auto result = format::format("preserved.sv", source, {}, stage);
+            CHECK(result.isUsable());
+            CHECK(result.formatted.find(preserved) != std::string::npos);
+        }
+    }
+}
+
+TEST_CASE("macro calls wrap consistently with zero indentation") {
+    format::Config config;
+    config.indentWidth = 0;
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        auto result = format::format(
+            "macro.sv",
+            "task foo(); check_value(0, `VALUE(very_long_scope."
+            "some_really_long_assertion_name_that_exceeds_the_configured_column_limit)); "
+            "endtask\n",
+            config, stage
+        );
+        CHECK(result.isUsable());
+    }
+}
+
 TEST_CASE("foreign syntax detection ignores comments and strings") {
     for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
         auto result = format::format(

@@ -17,20 +17,6 @@ namespace format::constants {
 /// Above this threshold, connections go vertical.
 constexpr size_t maxInlineInstanceConnections = 2;
 
-/// Minimum space remaining (as a multiple of indentWidth) after '=' for
-/// RHS alignment to be worthwhile. If the '=' is too far right, fall back
-/// to continuation-indent style.
-constexpr size_t rhsAlignMinRemainingIndents = 2;
-
-/// Break priority value for "worst break" — used to demote assignment
-/// operators when equal-alignment is active.
-constexpr int worstBreakPriority = 100;
-
-/// Minimum inline width of an argument list before it can go vertical.
-/// Prevents short argument lists like func(a, b, c) from splitting
-/// just because the function name or LHS is long.
-constexpr size_t argListMinWidthForVertical = 40;
-
 /// Maximum width (chars) of a case-item label list before the clause is
 /// forced onto its own line. Even if the full `LABELS: clause` fits in
 /// the column limit, a long-label case is hard to read with the body

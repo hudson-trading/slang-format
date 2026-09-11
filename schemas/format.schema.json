@@ -28,15 +28,15 @@
       "properties": {
         "indentWidth": {
           "type": "integer",
-          "description": "Number of spaces per indentation level"
+          "description": "Number of spaces per indentation level (0-64)"
         },
         "columnLimit": {
           "type": "integer",
-          "description": "Column limit for line wrapping (0 = no limit)"
+          "description": "Column limit for line wrapping (0 = no limit, maximum 1000000)"
         },
         "spacesBeforeTrailingComment": {
           "type": "integer",
-          "description": "Number of spaces before trailing comments"
+          "description": "Number of spaces before trailing comments (0-256)"
         },
         "alignment": {
           "$ref": "#/$defs/format__AlignConfig",

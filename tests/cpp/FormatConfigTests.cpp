@@ -45,6 +45,34 @@ TEST_CASE("formatter config loading reports parse failures") {
     fs::remove(path);
 }
 
+TEST_CASE("numeric configuration cannot wrap or request excessive padding") {
+    std::string error;
+    for (auto json :
+         {R"({"indentWidth":4294967296})", R"({"columnLimit":4294967296})",
+          R"({"spacesBeforeTrailingComment":4294967296})", R"({"indentWidth":2147483647})",
+          R"({"spacesBeforeTrailingComment":4294967295})",
+          R"({"alignment":{"paddingLimit":4294967296}})",
+          R"({"alignment":{"groupSeparatorLines":18446744073709551615}})", R"({"indentWidth":-1})",
+          R"({"columnLimit":1.5})"}) {
+        INFO(json);
+        CHECK_FALSE(format::parseConfig(json, error));
+        CHECK_FALSE(error.empty());
+    }
+    CHECK(
+        format::parseConfig(
+            R"({"indentWidth":0,"columnLimit":0,"spacesBeforeTrailingComment":0})", error
+        )
+    );
+    CHECK(
+        format::parseConfig(
+            R"({"indentWidth":64,"columnLimit":1000000,"spacesBeforeTrailingComment":256})", error
+        )
+    );
+    format::Config config;
+    config.indentWidth = 2147483647;
+    CHECK_THROWS_AS(format::validateConfig(config), std::invalid_argument);
+}
+
 TEST_CASE("unknown config keys report actionable errors without parser advice") {
     std::string error;
     CHECK_FALSE(format::parseConfig(R"({"unknown": true})", error));

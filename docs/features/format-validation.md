@@ -6,6 +6,10 @@ formatted text, keeps the original text, or rejects the file.
 
 ## Input checks
 
+Syntax trees deeper than 2048 levels are rejected with a depth-limit diagnostic,
+preserving the input. This also covers flat operator chains, which can build deep
+trees without exceeding the parser's nesting limit.
+
 ### Generated files
 
 A leading comment containing `@generated` excludes the file from formatting.

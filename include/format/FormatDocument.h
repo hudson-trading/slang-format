@@ -14,6 +14,7 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "slang/syntax/SyntaxKind.h"
@@ -55,6 +56,8 @@ struct DocNode {
     AlignmentGroupId alignmentGroup = 0;
     uint32_t width = 0;
     bool global = false;
+    /// Text belongs to an explicit off/skip region; retain its internal whitespace.
+    bool preserveWhitespace = false;
     slang::syntax::SyntaxKind syntaxKind = slang::syntax::SyntaxKind::Unknown;
 };
 
@@ -75,6 +78,8 @@ public:
     DocId verbatim(std::string_view value);
     DocId memberVerbatim(std::string_view value, int indent = 0);
     DocId absoluteText(std::string_view value);
+    /// Emit an off/skip region without trailing-whitespace cleanup; absolute bypasses indentation.
+    DocId preservedText(std::string_view value, bool absolute = false);
     DocId softLine(
         int priority,
         std::string_view flatText = " ",
@@ -134,12 +139,16 @@ struct RenderedDocument {
     std::unordered_set<BreakId> breaks;
     std::vector<RenderedBreak> renderedBreaks;
     std::vector<RenderedAlignmentAnchor> alignmentAnchors;
+    /// Half-open output byte ranges protected by off/skip markers.
+    std::vector<std::pair<size_t, size_t>> preservedRanges;
 };
 
 class DocumentRenderer {
 public:
     explicit DocumentRenderer(const Config& config)
-        : config_(config) {}
+        : config_(config) {
+        validateConfig(config_);
+    }
 
     RenderedDocument renderLayout(const FormatDocument& document) const;
     RenderedDocument renderAligned(

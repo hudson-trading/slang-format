@@ -11,6 +11,7 @@
 #include "format/FormatterUtils.h"
 #include <algorithm>
 #include <optional>
+#include <stdexcept>
 #include <string_view>
 
 #include "slang/parsing/Lexer.h"
@@ -795,6 +796,10 @@ private:
         size_t depth,
         bool inDataType
     ) {
+        // Flat operator chains can produce a deep CST without tripping the parser's
+        // nesting limit. Bound all subsequent recursive passes and tree destruction.
+        if (depth >= 2048)
+            throw std::runtime_error("syntax tree exceeds formatter depth limit (2048)");
         auto result = std::make_unique<NormalizedNode>();
         result->kind = syntax.kind;
         result->syntax = &syntax;
@@ -1107,7 +1112,8 @@ private:
                         bool beforeDelimiter = current.token.kind == TokenKind::Comma ||
                                                current.token.kind == TokenKind::Semicolon ||
                                                current.token.kind == TokenKind::CloseParenthesis ||
-                                               current.token.kind == TokenKind::CloseBrace;
+                                               current.token.kind == TokenKind::CloseBrace ||
+                                               previous->token.kind == TokenKind::Semicolon;
                         item.placement = (endsLine || beforeDelimiter) && !inlineBeforeElse &&
                                                  !blockBeforeBinary
                                              ? TriviaPlacement::Trailing
@@ -1467,8 +1473,13 @@ private:
                         SyntaxFacts::getBinarySequenceExpr(next->token.kind) !=
                             SyntaxKind::Unknown ||
                         SyntaxFacts::getBinaryPropertyExpr(next->token.kind) != SyntaxKind::Unknown;
+                    bool callBeforeClose = trivia.syntax->kind == SyntaxKind::MacroUsage &&
+                                           trivia.syntax->template as<MacroUsageSyntax>().args &&
+                                           (next->token.kind == TokenKind::CloseParenthesis ||
+                                            next->token.kind == TokenKind::CloseBracket ||
+                                            next->token.kind == TokenKind::CloseBrace);
                     if (binaryOperator || next->token.kind == TokenKind::Dot ||
-                        next->token.kind == TokenKind::OpenBracket) {
+                        next->token.kind == TokenKind::OpenBracket || callBeforeClose) {
                         trivia.joinsFollowingToken = true;
                         continue;
                     }

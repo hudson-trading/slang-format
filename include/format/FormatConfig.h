@@ -18,18 +18,6 @@
 
 namespace format {
 
-enum class AlignWrapStyle {
-    /// Do not wrap alignments
-    never,
-    /// Wrap lines in the same group at the same point
-    synced,
-    /// Wrap lines independently
-    independent
-};
-
-} // namespace format
-
-namespace format {
 /// Controls alignment padding and separation into groups.
 struct AlignConfig {
 
@@ -53,11 +41,12 @@ struct AlignConfig {
 
 /// Configuration for slang-format
 struct Config {
-    rfl::Description<"Number of spaces per indentation level", uint32_t> indentWidth = 4;
+    rfl::Description<"Number of spaces per indentation level (0-64)", uint32_t> indentWidth = 4;
 
-    rfl::Description<"Column limit for line wrapping (0 = no limit)", uint32_t> columnLimit = 100;
+    rfl::Description<"Column limit for line wrapping (0 = no limit, maximum 1000000)", uint32_t>
+        columnLimit = 100;
 
-    rfl::Description<"Number of spaces before trailing comments", uint32_t>
+    rfl::Description<"Number of spaces before trailing comments (0-256)", uint32_t>
         spacesBeforeTrailingComment = 2;
 
     rfl::Description<"Alignment padding and group separation", AlignConfig> alignment = {};
@@ -87,5 +76,9 @@ std::optional<Config> loadConfigFile(const std::filesystem::path& path, std::str
 
 /// Parse JSON with default values for missing settings and errors for unknown keys.
 std::optional<Config> parseConfig(std::string_view json, std::string& error);
+
+/// Reject settings that would overflow layout arithmetic or allocate excessive padding.
+/// Throws std::invalid_argument for both parsed and programmatically constructed configs.
+void validateConfig(const Config& config);
 
 } // namespace format

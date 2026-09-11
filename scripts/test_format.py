@@ -95,6 +95,7 @@ def run_formatter(
     result = subprocess.run(
         [slang_format, "--force", "--stage", stage, path],
         capture_output=True,
+        timeout=60,
     )
     return (
         result.stdout.decode("utf-8"),
@@ -118,7 +119,11 @@ def check_stage(
 ) -> bool:
     """Run and validate one independently renderable formatter stage."""
     label = "layout" if stage == "layout" else "aligned"
-    formatted, stderr, rc = run_formatter(input_path, slang_format, stage)
+    try:
+        formatted, stderr, rc = run_formatter(input_path, slang_format, stage)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        print(f"  FAIL     {case} [{label}]: {exc}")
+        return False
 
     if rc < 0:
         print(f"  CRASH    {case} [{label}]: slang-format killed by signal {-rc}")
@@ -170,16 +175,11 @@ def check_stage(
         return False
 
     if update:
-        already_matches = False
-        if os.path.exists(golden_path):
-            with open(golden_path, encoding="utf-8") as f:
-                already_matches = f.read() == formatted
-        if already_matches:
-            print(f"  PASS     {case} [{label}]")
-        else:
-            with open(golden_path, "w", encoding="utf-8", newline="") as f:
-                f.write(formatted)
-            print(f"  UPDATED  {case} [{label}]")
+        if not have_slang:
+            print(
+                f"  FAIL     {case} [{label}]: updating goldens requires the CST checker"
+            )
+            return False
     else:
         if not os.path.exists(golden_path):
             print(
@@ -205,12 +205,20 @@ def check_stage(
     try:
         orig_json = get_cst_json(input_path, slang, "no-whitespace", quiet=True)
         fmt_json = get_cst_json(tmp_path, slang, "no-whitespace", quiet=True)
-        try:
-            orig_json = json.dumps(json.loads(orig_json), indent=2) + "\n"
-            fmt_json = json.dumps(json.loads(fmt_json), indent=2) + "\n"
-        except json.JSONDecodeError:
-            pass
+        orig_json = json.dumps(json.loads(orig_json), indent=2) + "\n"
+        fmt_json = json.dumps(json.loads(fmt_json), indent=2) + "\n"
         if orig_json == fmt_json:
+            if update:
+                already_matches = False
+                if os.path.exists(golden_path):
+                    with open(golden_path, encoding="utf-8") as f:
+                        already_matches = f.read() == formatted
+                if already_matches:
+                    print(f"  PASS     {case} [{label}]")
+                else:
+                    with open(golden_path, "w", encoding="utf-8", newline="") as f:
+                        f.write(formatted)
+                    print(f"  UPDATED  {case} [{label}]")
             return True
 
         suffix = ".layout" if stage == "layout" else ""
@@ -223,6 +231,14 @@ def check_stage(
         print(f"UNDETECTED CST MISMATCH  {case} [{label}]")
         open_diff(input_path, golden_path)
         open_diff(orig_cst_path, fmt_cst_path)
+        return False
+    except (
+        RuntimeError,
+        OSError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+    ) as exc:
+        print(f"  FAIL     {case} [{label}]: CST check failed: {exc}")
         return False
     finally:
         os.unlink(tmp_path)
@@ -393,8 +409,8 @@ def main():
         print()
         passed = len(cases) - failures
         print(f"{passed}/{len(cases)} tests passed")
-        if failures:
-            sys.exit(1)
+    if failures:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@
 #include "format/FormatterUtils.h"
 #include <algorithm>
 #include <optional>
+#include <unordered_map>
 
 #include "slang/diagnostics/ParserDiags.h"
 #include "slang/parsing/Lexer.h"
@@ -463,7 +464,7 @@ private:
                     hardLine();
                 if (lineStart)
                     text.remove_prefix(skipNewline(text, 0));
-                append(lineStart ? builder.absoluteText(text) : builder.verbatim(text));
+                append(builder.preservedText(text, lineStart));
                 lineStart = text.ends_with('\n');
                 if (trivia.endsLine && !lineStart)
                     hardLine();
@@ -1311,21 +1312,53 @@ private:
         return false;
     }
 
-    size_t flatWidth(const NormalizedChild& child) const {
-        if (auto token = std::get_if<size_t>(&child.value))
-            return normalized.tokens().at(*token).token.rawText().size();
-        if (auto node = childNode(child)) {
-            size_t width = 0;
-            for (const auto& nested : node->children)
-                width += flatWidth(nested) + (width ? 1 : 0);
-            return width;
+    struct SubtreeSummary {
+        size_t flatWidth = 0;
+        bool containsMacro = false;
+        bool containsInlineConditional = false;
+    };
+
+    SubtreeSummary summarize(const NormalizedChild& child) const {
+        if (auto found = subtreeSummaries.find(&child); found != subtreeSummaries.end())
+            return found->second;
+        SubtreeSummary result;
+        if (auto index = std::get_if<size_t>(&child.value)) {
+            const auto& token = normalized.tokens().at(*index);
+            result.flatWidth = token.token.rawText().size();
+            auto containsMacro = [](const auto& trivia) {
+                return std::ranges::any_of(trivia, [](const NormalizedTrivia& item) {
+                    return item.kind == NormalizedTriviaKind::MacroUsage;
+                });
+            };
+            result.containsMacro = token.fromMacroExpansion || containsMacro(token.leading) ||
+                                   containsMacro(token.trailing);
+            auto containsInlineConditional = [](const auto& trivia) {
+                return std::ranges::any_of(trivia, [](const NormalizedTrivia& item) {
+                    return item.kind == NormalizedTriviaKind::ConditionalDirective &&
+                           item.placement == TriviaPlacement::Inline;
+                });
+            };
+            result.containsInlineConditional = containsInlineConditional(token.leading) ||
+                                               containsInlineConditional(token.trailing);
         }
-        size_t width = 0;
-        const auto& list = **std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
-        for (const auto& nested : list.children)
-            width += flatWidth(nested) + (width ? 1 : 0);
-        return width;
+        else {
+            auto node = childNode(child);
+            const auto& children =
+                node ? node->children
+                     : std::get<std::unique_ptr<NormalizedList>>(child.value)->children;
+            for (const auto& nested : children) {
+                auto summary = summarize(nested);
+                result.flatWidth += summary.flatWidth + (result.flatWidth ? 1 : 0);
+                result.containsMacro = result.containsMacro || summary.containsMacro;
+                result.containsInlineConditional = result.containsInlineConditional ||
+                                                   summary.containsInlineConditional;
+            }
+        }
+        subtreeSummaries.emplace(&child, result);
+        return result;
     }
+
+    size_t flatWidth(const NormalizedChild& child) const { return summarize(child).flatWidth; }
 
     bool containsRealKind(const NormalizedNode& node, SyntaxKind kind) const {
         if (node.kind == kind) {
@@ -1900,25 +1933,7 @@ private:
     }
 
     bool childContainsMacro(const NormalizedChild& child) const {
-        if (auto token = std::get_if<size_t>(&child.value)) {
-            const auto& normalizedToken = normalized.tokens().at(*token);
-            auto contains = [](const auto& triviaList) {
-                return std::ranges::any_of(triviaList, [](const NormalizedTrivia& trivia) {
-                    return trivia.kind == NormalizedTriviaKind::MacroUsage;
-                });
-            };
-            return normalizedToken.fromMacroExpansion || contains(normalizedToken.leading) ||
-                   contains(normalizedToken.trailing);
-        }
-        if (auto node = childNode(child)) {
-            return std::ranges::any_of(node->children, [&](const auto& nested) {
-                return childContainsMacro(nested);
-            });
-        }
-        const auto& list = **std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
-        return std::ranges::any_of(list.children, [&](const auto& nested) {
-            return childContainsMacro(nested);
-        });
+        return summarize(child).containsMacro;
     }
 
     bool childHasVerticalMacro(const NormalizedChild& child) const {
@@ -2396,9 +2411,11 @@ private:
                                              SyntaxKind::MultipleConcatenationExpression;
             bool assignmentAlreadyBroken = lineStart;
             DocId assignmentLine = assignmentAlreadyBroken ? builder.empty()
-                                   : keepMulticoncatHeader ? builder.text(" ")
-                                   : hardAssignmentLine    ? builder.hardLine()
-                                                           : builder.softLine(assignmentPriority);
+                                   : keepMulticoncatHeader ||
+                                           summarize(child).containsInlineConditional
+                                       ? builder.text(" ")
+                                   : hardAssignmentLine ? builder.hardLine()
+                                                        : builder.softLine(assignmentPriority);
             append(builder.indent(static_cast<int>(config.indentWidth.get()), assignmentLine));
             spacingProvided = true;
 
@@ -2770,6 +2787,8 @@ private:
         size_t available = config.columnLimit.get() > 16 ? config.columnLimit.get() - 16 : 0;
         return labelWidth > constants::maxInlineCaseItemLabelWidth ||
                (labelCount > 1 && labelWidth > constants::maxInlineMultiLabelWidth) || [&]() {
+                   if (!config.columnLimit.get())
+                       return false;
                    size_t width = 0;
                    for (const auto& child : item.children)
                        width += flatWidth(child) + (width ? 1 : 0);
@@ -3240,7 +3259,7 @@ private:
                 for (const auto& trivia : normalized.tokens().at(*token).leading)
                     emitTrivia(trivia, false);
             }
-            append(builder.verbatim(node.verbatimText));
+            append(builder.preservedText(node.verbatimText));
             lineStart = node.verbatimText.ends_with('\n');
             if (node.verbatimLastToken) {
                 lastToken = &normalized.tokens().at(*node.verbatimLastToken);
@@ -3619,6 +3638,8 @@ private:
     const Config& config;
     FormatStage stage;
     DocumentBuilder builder;
+    // Normalized children are immutable for the lifetime of this lowering pass.
+    mutable std::unordered_map<const NormalizedChild*, SubtreeSummary> subtreeSummaries;
     std::vector<DocId> output;
     const NormalizedToken* lastToken = nullptr;
     SyntaxKind currentMemberKind = SyntaxKind::Unknown;
@@ -3697,6 +3718,7 @@ FormatDocument buildLayoutDocument(
     const Config& config,
     FormatStage stage
 ) {
+    validateConfig(config);
     return Lowerer(normalized, config, stage).build();
 }
 

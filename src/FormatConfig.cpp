@@ -10,14 +10,27 @@
 
 #include <fmt/format.h>
 #include <fstream>
+#include <limits>
+#include <memory>
 #include <rfl/DefaultIfMissing.hpp>
 #include <rfl/NoExtraFields.hpp>
 #include <rfl/json.hpp>
 #include <sstream>
+#include <stdexcept>
 
 namespace fs = std::filesystem;
 
 namespace format {
+
+void validateConfig(const Config& config) {
+    auto check = [](std::string_view name, uint32_t value, uint32_t maximum) {
+        if (value > maximum)
+            throw std::invalid_argument(fmt::format("{} must be between 0 and {}", name, maximum));
+    };
+    check("indentWidth", config.indentWidth.get(), 64);
+    check("columnLimit", config.columnLimit.get(), 1000000);
+    check("spacesBeforeTrailingComment", config.spacesBeforeTrailingComment.get(), 256);
+}
 
 std::optional<fs::path> findConfigFile(const fs::path& startDir) {
     std::error_code ec;
@@ -78,6 +91,46 @@ std::optional<Config> parseConfig(std::string_view json, std::string& error) {
         return std::nullopt;
     }
 
+    // reflect-cpp narrows JSON integers before constructing the config fields.
+    // Inspect the original numbers too, so wrapped values cannot pass validation.
+    std::unique_ptr<yyjson_doc, decltype(&yyjson_doc_free)> document(
+        yyjson_read(json.data(), json.size(), 0), yyjson_doc_free
+    );
+    if (!document) {
+        error = "failed to read configuration JSON";
+        return std::nullopt;
+    }
+    auto root = yyjson_doc_get_root(document.get());
+    auto fits = [&](yyjson_val* object, const char* key, bool unsignedValue) {
+        auto value = yyjson_obj_get(object, key);
+        if (!value || yyjson_is_null(value))
+            return true;
+        bool valid = unsignedValue
+                         ? yyjson_is_uint(value) &&
+                               yyjson_get_uint(value) <= std::numeric_limits<uint32_t>::max()
+                         : yyjson_is_int(value) &&
+                               (!yyjson_is_uint(value) ||
+                                yyjson_get_uint(value) <= std::numeric_limits<int>::max()) &&
+                               yyjson_get_sint(value) >= std::numeric_limits<int>::min() &&
+                               yyjson_get_sint(value) <= std::numeric_limits<int>::max();
+        if (!valid)
+            error = fmt::format("configuration value '{}' is outside its integer range", key);
+        return valid;
+    };
+    if (!fits(root, "indentWidth", true) || !fits(root, "columnLimit", true) ||
+        !fits(root, "spacesBeforeTrailingComment", true))
+        return std::nullopt;
+    if (auto alignment = yyjson_obj_get(root, "alignment");
+        alignment &&
+        (!fits(alignment, "paddingLimit", false) || !fits(alignment, "groupSeparatorLines", false)))
+        return std::nullopt;
+    try {
+        validateConfig(result.value());
+    }
+    catch (const std::invalid_argument& e) {
+        error = e.what();
+        return std::nullopt;
+    }
     return result.value();
 }
 

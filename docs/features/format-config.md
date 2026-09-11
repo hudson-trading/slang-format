@@ -32,7 +32,7 @@ selects `project/src` when `project` is targeted.
 
 **Default:** `4`
 
-Number of spaces per indentation level
+Number of spaces per indentation level (0-64)
 
 ### `columnLimit`
 
@@ -40,7 +40,7 @@ Number of spaces per indentation level
 
 **Default:** `100`
 
-Column limit for line wrapping (0 = no limit)
+Column limit for line wrapping (0 = no limit, maximum 1000000)
 
 ### `spacesBeforeTrailingComment`
 
@@ -48,7 +48,7 @@ Column limit for line wrapping (0 = no limit)
 
 **Default:** `2`
 
-Number of spaces before trailing comments
+Number of spaces before trailing comments (0-256)
 
 ### `alignment`
 
