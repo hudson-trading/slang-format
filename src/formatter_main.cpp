@@ -12,12 +12,15 @@
 #include "format/Version.h"
 #include <algorithm>
 #include <array>
+#include <cerrno>
+#include <cstdio>
 #include <filesystem>
 #include <fmt/color.h>
 #include <fmt/format.h>
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <random>
 #include <rfl/json.hpp>
 #include <string>
 #include <vector>
@@ -199,14 +202,77 @@ void printDiagnostics(const format::FormatResult& result, std::string_view path)
     }
 }
 
-// Write formatted output to file
-bool writeFile(const std::string& path, const std::string& content) {
-    std::ofstream file(path, std::ios::binary);
-    if (!file) {
+// Replace a completed file beside its destination, preserving symlink targets and permissions.
+bool writeFile(const std::string& path, const std::string& content, std::string& error) {
+    std::error_code ec;
+    auto destination = fs::canonical(path, ec);
+    if (ec) {
+        error = ec.message();
         return false;
     }
-    file << content;
-    return file.good();
+    auto permissions = fs::status(destination, ec).permissions();
+    if (ec) {
+        error = ec.message();
+        return false;
+    }
+    auto writable = fs::perms::owner_write | fs::perms::group_write | fs::perms::others_write;
+    if ((permissions & writable) == fs::perms::none) {
+        error = "file is read-only";
+        return false;
+    }
+
+    struct TemporaryFile {
+        fs::path path;
+        std::FILE* stream = nullptr;
+        ~TemporaryFile() {
+            if (stream)
+                std::fclose(stream);
+            if (!path.empty()) {
+                std::error_code ignored;
+                fs::remove(path, ignored);
+            }
+        }
+    } temporary;
+    std::random_device random;
+    for (int attempt = 0; attempt < 100; attempt++) {
+        auto candidate = destination.parent_path() /
+                         fmt::format(".slang-format-{}-{}.tmp", OS::getpid(), random());
+#if defined(_WIN32)
+        auto stream = _wfopen(candidate.c_str(), L"wbx");
+#else
+        auto stream = std::fopen(candidate.c_str(), "wbx");
+#endif
+        if (stream) {
+            temporary.path = std::move(candidate);
+            temporary.stream = stream;
+            break;
+        }
+        if (errno != EEXIST) {
+            error = std::error_code(errno, std::generic_category()).message();
+            return false;
+        }
+    }
+    if (!temporary.stream) {
+        error = "could not create a temporary file";
+        return false;
+    }
+    bool written = std::fwrite(content.data(), 1, content.size(), temporary.stream) ==
+                   content.size();
+    int closed = std::fclose(temporary.stream);
+    temporary.stream = nullptr;
+    if (!written || closed != 0) {
+        error = "could not complete temporary file write";
+        return false;
+    }
+    fs::permissions(temporary.path, permissions, ec);
+    if (!ec)
+        fs::rename(temporary.path, destination, ec);
+    if (ec) {
+        error = ec.message();
+        return false;
+    }
+    temporary.path.clear();
+    return true;
 }
 
 } // namespace
@@ -530,6 +596,9 @@ int main(int argc, char** argv) {
     int errorCount = 0;
     int skippedCount = 0;
     int formattedCount = 0;
+    int unchangedCount = 0;
+    int excludedCount = 0;
+    int failedCount = 0;
     int cstMismatchCount = 0;
     int idempotentFailCount = 0;
 
@@ -537,6 +606,7 @@ int main(int argc, char** argv) {
         if (!result.error.empty()) {
             OS::printE(fmt::format("error: {}\n", result.error));
             errorCount++;
+            failedCount++;
             return;
         }
 
@@ -549,6 +619,8 @@ int main(int argc, char** argv) {
         if (result.result.hasDiagnostic(format::FormatDiagnosticKind::NotIdempotent))
             idempotentFailCount++;
 
+        if (!result.result.isUsable())
+            failedCount++;
         auto action = result.result.outputAction(force.value_or(false));
         if (action == format::FormatOutputAction::Abort) {
             errorCount++;
@@ -557,12 +629,18 @@ int main(int argc, char** argv) {
         if (action == format::FormatOutputAction::KeepOriginal) {
             if (!result.result.generated)
                 skippedCount++;
+            else
+                excludedCount++;
             return;
         }
         // Forced output with validation failures still returns an error status.
         if (!result.result.isUsable())
             errorCount++;
 
+        if (result.result.formatted == result.input) {
+            unchangedCount++;
+            return;
+        }
         if (isDryRun) {
             if (result.result.formatted != result.input) {
                 OS::printE(fmt::format("{}: needs formatting\n", result.path));
@@ -573,9 +651,12 @@ int main(int argc, char** argv) {
             return;
         }
 
-        if (!writeFile(result.path, result.result.formatted)) {
-            OS::printE(fmt::format("error: failed to write '{}'\n", result.path));
+        std::string writeError;
+        if (!writeFile(result.path, result.result.formatted, writeError)) {
+            OS::printE(fmt::format("error: failed to write '{}': {}\n", result.path, writeError));
             errorCount++;
+            if (result.result.isUsable())
+                failedCount++;
         }
         else {
             formattedCount++;
@@ -605,8 +686,13 @@ int main(int argc, char** argv) {
     }
 
     OS::printE(fmt::format("{} {} files", isDryRun ? "would format" : "formatted", formattedCount));
+    OS::printE(
+        fmt::format(
+            ", {} unchanged, {} excluded, {} failed", unchangedCount, excludedCount, failedCount
+        )
+    );
     if (skippedCount > 0)
-        OS::printE(fmt::format(", {} skipped (parse errors)", skippedCount));
+        OS::printE(fmt::format(", {} skipped (validation failures)", skippedCount));
     if (errorCount > 0)
         OS::printE(fmt::format(", {} errors", errorCount));
     if (cstMismatchCount > 0)

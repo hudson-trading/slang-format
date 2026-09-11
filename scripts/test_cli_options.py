@@ -2,6 +2,8 @@
 """Exercise formatter CLI contracts with isolated source and configuration files."""
 
 import argparse
+import os
+import stat
 from pathlib import Path
 import subprocess
 import tempfile
@@ -32,6 +34,46 @@ class CliOptionsTests(unittest.TestCase):
             capture_output=True,
             timeout=30,
         )
+
+    def test_inplace_writes_and_counts(self):
+        timestamp = 1_600_000_000_000_000_000
+        os.utime(self.clean, ns=(timestamp, timestamp))
+        before = self.clean.stat()
+        generated = self.root / "generated.sv"
+        generated.write_bytes(b"// @generated\n" + self.source)
+        result = self.run_cli("-i", self.clean, self.dirty, generated, self.rejected)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.clean.stat().st_mtime_ns, before.st_mtime_ns)
+        self.assertEqual(self.clean.stat().st_ino, before.st_ino)
+        self.assertIn(
+            b"formatted 1 files, 1 unchanged, 1 excluded, 1 failed", result.stderr
+        )
+        self.assertEqual(self.dirty.read_bytes(), self.clean.read_bytes())
+        self.assertEqual(list(self.root.glob(".slang-format-*.tmp")), [])
+        self.dirty.write_bytes(self.source)
+        self.dirty.chmod(0o640)
+        result = self.run_cli("-i", self.dirty)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        if os.name != "nt":
+            self.assertEqual(stat.S_IMODE(self.dirty.stat().st_mode), 0o640)
+        self.dirty.write_bytes(self.source)
+        self.dirty.chmod(0o444)
+        try:
+            result = self.run_cli("-i", self.dirty)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(self.dirty.read_bytes(), self.source)
+            self.assertEqual(list(self.root.glob(".slang-format-*.tmp")), [])
+        finally:
+            self.dirty.chmod(0o600)
+
+    @unittest.skipIf(os.name == "nt", "symlink creation requires Windows privileges")
+    def test_inplace_preserves_symlink(self):
+        link = self.root / "link.sv"
+        link.symlink_to(self.dirty.name)
+        result = self.run_cli("-i", link)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(self.dirty.read_bytes(), self.clean.read_bytes())
 
     def test_per_file_configs(self):
         for name, width in [("one", 2), ("two", 8)]:

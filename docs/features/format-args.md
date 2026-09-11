@@ -30,7 +30,19 @@ Display version information and exit.
 
 ### `-i`, `--inplace`
 
-Edit files in-place. Required when formatting multiple files. Cannot be used with stdin.
+Edit files in-place. Cannot be used with stdin. Unchanged files retain their
+contents and timestamps. Changed files are written completely to a temporary file
+in the destination directory, then renamed over the destination. A failed write
+leaves the original in place. Symlinks remain symlinks and their targets are
+updated; permission bits are preserved. Replacement creates a new file, so other
+hard links retain the old contents, and ownership/extended metadata are not copied.
+The destination directory must be writable. Read-only files are rejected when
+changes are needed.
+
+Batch summaries count actual changed, unchanged, generated/excluded, and failed
+files. `--dry-run` counts only actual changes as "would format". Failed counts
+include validation failures even when the default exit policy tolerates a skip;
+forced failed candidates can count as both changed and failed.
 
 ---
 
