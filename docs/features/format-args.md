@@ -3,13 +3,16 @@
 ## Usage
 
 ```
-slang-format [options] [<file> ...]
+slang-format [options] [<file-or-dir> ...]
 ```
 
 If no files are specified, or the sole input is `-`, reads stdin and writes stdout.
 Stdin cannot be combined with other inputs or `-i`.
 If files are specified without `-i`, prints formatted output to stdout.
 With `-i`, modifies files in-place. Multiple files require `-i`, `--dry-run`, or `--check`.
+Directories recursively collect `.sv`, `.svh`, `.v`, and `.vh` files. Each directory
+argument's config controls `excludeDirs` (directory names) and `dirs` (subtrees when
+targeting a config root). Each collected file resolves its own formatting config.
 
 See [validation](format-validation.md) for checks, rejected files, and exit statuses,
 and [disabling formatting](format-markers.md) for preserving source formatting.
@@ -59,7 +62,7 @@ explicit formatting markers remain respected.
 
 ### `-n`, `--dry-run`
 
-Run formatting and validation without writing files or source to stdout. Reports
+Run formatting and validation without writing source files or source to stdout. Reports
 files that need formatting on stderr, but differences alone return status 0. Can be
 used with multiple files and combined with `--force` to check forced formatting.
 
@@ -69,8 +72,8 @@ used with multiple files and combined with `--force` to check forced formatting.
 
 Check that files are already formatted and pass validation. Return 0 on success,
 1 if any file needs formatting, fails validation, or cannot be processed.
-Supports stdin, multiple files, and directories. Never writes files or source to
-stdout, including with `-i` or `--force`. Generated files and explicitly disabled
+Supports stdin, multiple files, and directories. Never writes source files or source
+to stdout, including with `-i` or `--force`. An explicit `--stats-csv` report is still written. Generated files and explicitly disabled
 formatting regions are respected. Batch results do not depend on file order.
 
 ### `--Werror`
@@ -132,7 +135,63 @@ Select the last formatter pass to run. `layout` performs normalization, spacing,
 
 ### `-j`, `--jobs <n>`
 
-Number of parallel formatting jobs. Defaults to the number of CPU cores. Only relevant when formatting multiple files with `-i`.
+Number of parallel formatting jobs. Defaults to the number of CPU cores. Used for file batches, including checks and dry runs.
+
+### `-v`, `--verbose`
+
+Report `formatting <path> ...` when a worker starts reading and formatting a file,
+then `finished <path> (12.345 ms)` after its result has been handled. Starts without matching
+finishes identify outstanding work when investigating a stall. `finished` also
+appears for rejected or failed files; diagnostics and the summary report failures.
+
+Formatting runs in parallel using `--jobs` (or the default CPU count). Workers
+queue progress events; only the main thread prints progress and diagnostics and
+applies results. Events are reported as they arrive, so a stalled worker does not
+hold up reports from other workers. Output order can vary between runs. Use `-j1`
+to isolate one active file at a time. Single-file and stdin modes also report progress.
+Elapsed time measures wall-clock milliseconds spent reading, formatting, and
+validating that input, including blocked reads. It excludes config discovery,
+worker queue wait, result reporting, and output writes. For stdin it includes
+waiting for input/EOF. Timings use a monotonic clock.
+
+### `--stats-csv <path>`
+
+Write per-file timing and outcomes to a CSV file, independently of `--verbose`.
+Works for files, directory batches, stdin, both formatter stages, checks, and dry
+runs. An explicitly requested report is written even when source writes are disabled
+by `--check` or `--dry-run`. Source stdout remains unchanged.
+
+The report has these columns:
+
+| Column | Meaning |
+| --- | --- |
+| `path` | Input filename, or `<stdin>` / `--assume-filename` for stdin. |
+| `elapsed_ms` | Read, format, and validation wall time in milliseconds, with three decimals; same measurement as verbose output. |
+| `input_bytes` | Number of source bytes read, or zero when input was not read. |
+| `status` | `changed`, `unchanged`, `excluded`, `skipped`, or `error`. |
+| `validation_failed` | `true` if formatter validation failed; otherwise `false`. |
+
+`changed` means output changed, or would change in a check/dry run. `excluded`
+identifies generated files; unchanged disabled regions are `unchanged`. `skipped`
+means validation kept the original. `error` covers aborts and file/config/write
+failures. Forced failed output can be `changed` with `validation_failed=true`.
+These fields describe outcomes, not the command's exit status: strictness and
+checking flags still control that status.
+
+An existing report is overwritten. Rows are written and flushed by the main thread
+as results are handled, in completion order, so finished rows remain available if
+another worker stalls. An interrupted operation has no row. An empty batch writes
+only the header. Errors before input processing, such as invalid arguments or a
+missing input path, can prevent report creation entirely.
+
+Paths are CSV-quoted with embedded quotes doubled. The report cannot overwrite an
+input or loaded configuration, including aliases through symlinks/hard links.
+`-` is rejected as a report path. Failure to open the report stops formatting;
+a later report write failure makes the command exit 1 while processing continues.
+
+```sh
+slang-format -v -j8 --dry-run --stats-csv timings.csv rtl/
+```
 
 ## Examples
 

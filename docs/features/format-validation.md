@@ -80,10 +80,10 @@ the whole file.
 See [disabling formatting](format-markers.md) for scope rules.
 
 `--dry-run` performs the same checks and uses the same exit status rules, but
-never writes files or emits source on stdout. It reports formatting differences
+never writes source files or emits source on stdout. It reports formatting differences
 on stderr without failing for those differences alone.
 
-`--check` (alias `--verify`) also suppresses all writes and source output, but
+`--check` (alias `--verify`) also suppresses source writes and output, but
 returns `1` for any formatting difference or validation failure, including failures
 that normally preserve the original and return `0`. It returns `0` for unchanged
 valid source and intentional exclusions. Unmatched `on` warnings alone still pass.
@@ -127,3 +127,7 @@ If an exception prevents the formatter from producing a replacement, the result
 falls back to the original source. Force cannot complete an operation that failed
 to read or write a file. It also respects `--dry-run`, generated-file exclusions,
 and [disabling formatting](format-markers.md).
+
+An explicit `--stats-csv <path>` report is written in every formatting mode,
+including checks and dry runs. Its write failures make the command exit `1`.
+See [command-line statistics](format-args.md#-stats-csv-path) for timing and outcome fields.

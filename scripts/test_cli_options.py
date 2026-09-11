@@ -2,8 +2,11 @@
 """Exercise formatter CLI contracts with isolated source and configuration files."""
 
 import argparse
+import csv
 import os
 import stat
+import queue
+import threading
 from pathlib import Path
 import subprocess
 import tempfile
@@ -34,6 +37,251 @@ class CliOptionsTests(unittest.TestCase):
             capture_output=True,
             timeout=30,
         )
+
+    def test_verbose_parallel_output(self):
+        warned = self.root / "warned.sv"
+        warned.write_bytes(b"// slang-format: on\n" + self.source)
+        targets = [self.rejected, self.dirty, warned, self.clean]
+        for mode in ["--dry-run", "--check", "-i"]:
+            with self.subTest(mode=mode):
+                serial = self.run_cli("--verbose", "-j1", mode, *targets)
+                self.dirty.write_bytes(self.source)
+                warned.write_bytes(b"// slang-format: on\n" + self.source)
+                parallel = self.run_cli("--verbose", "-j4", mode, *targets)
+                self.assertEqual(parallel.returncode, serial.returncode)
+                self.assertEqual(parallel.stdout, b"")
+                self.assertEqual(
+                    parallel.stderr.splitlines()[-1], serial.stderr.splitlines()[-1]
+                )
+                for result in [serial, parallel]:
+                    lines = [
+                        line.rsplit(b" (", 1)[0]
+                        if line.startswith(b"finished ")
+                        else line
+                        for line in result.stderr.splitlines()
+                    ]
+                    for target in targets:
+                        start = f"formatting {target} ...".encode()
+                        finish = f"finished {target}".encode()
+                        self.assertEqual(lines.count(start), 1)
+                        self.assertEqual(lines.count(finish), 1)
+                        self.assertLess(lines.index(start), lines.index(finish))
+                    self.assertIn(b"parse errors", result.stderr)
+                    self.assertIn(b"slang-format: on", result.stderr)
+        self.assertEqual(self.dirty.read_bytes(), self.clean.read_bytes())
+
+    @unittest.skipIf(os.name == "nt", "requires POSIX named pipes")
+    def test_verbose_reports_other_workers_while_first_file_stalls(self):
+        stalled = self.root / "stalled.sv"
+        os.mkfifo(stalled)
+        # Keep the pipe open without supplying input, blocking the first worker's read.
+        pipe = os.open(stalled, os.O_RDWR | os.O_NONBLOCK)
+        report = self.root / "stats.csv"
+        process = subprocess.Popen(
+            [
+                BINARY,
+                "--verbose",
+                "--stats-csv",
+                str(report),
+                "-j2",
+                "--dry-run",
+                str(stalled),
+                str(self.clean),
+            ],
+            cwd=self.root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        messages = queue.Queue()
+
+        def read_stderr():
+            for line in process.stderr:
+                line = line.rstrip(b"\n")
+                messages.put(
+                    line.rsplit(b" (", 1)[0] if line.startswith(b"finished ") else line
+                )
+
+        reader = threading.Thread(target=read_stderr, daemon=True)
+        reader.start()
+        try:
+            expected = {
+                f"formatting {stalled} ...".encode(),
+                f"formatting {self.clean} ...".encode(),
+                f"finished {self.clean}".encode(),
+            }
+            observed = []
+            while not expected.issubset(observed):
+                try:
+                    observed.append(messages.get(timeout=10))
+                except queue.Empty:
+                    self.fail(f"progress blocked behind stalled input: {observed}")
+            self.assertNotIn(f"finished {stalled}".encode(), observed)
+            self.assertIsNone(process.poll())
+            with report.open(newline="") as stream:
+                rows = list(csv.DictReader(stream))
+            self.assertEqual([row["path"] for row in rows], [str(self.clean)])
+            os.write(pipe, self.source)
+            os.close(pipe)
+            pipe = None
+            self.assertEqual(process.wait(timeout=10), 0)
+            reader.join(timeout=10)
+            self.assertFalse(reader.is_alive())
+            while not messages.empty():
+                observed.append(messages.get_nowait())
+            self.assertIn(f"finished {stalled}".encode(), observed)
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=10)
+            reader.join(timeout=10)
+            process.stderr.close()
+            if pipe is not None:
+                os.close(pipe)
+
+    def test_csv_timings_and_outcomes(self):
+        report = self.root / "stats.csv"
+        generated = self.root / "generated.sv"
+        generated.write_bytes(b"// @generated\n" + self.source)
+        quoted = self.root / (
+            'quoted,"file\n.sv' if os.name != "nt" else "quoted,file.sv"
+        )
+        quoted.write_bytes(self.source)
+        targets = [self.clean, self.dirty, self.rejected, generated, quoted]
+        expected = ["unchanged", "changed", "skipped", "excluded", "changed"]
+        for mode in ["--dry-run", "--check", "-i"]:
+            with self.subTest(mode=mode):
+                result = self.run_cli("--stats-csv", report, "-j4", mode, *targets)
+                self.assertEqual(
+                    result.returncode, 1 if mode == "--check" else 0, result.stderr
+                )
+                self.assertEqual(result.stdout, b"")
+                self.assertNotIn(b"finished ", result.stderr)
+                with report.open(newline="") as stream:
+                    reader = csv.DictReader(stream)
+                    self.assertEqual(
+                        reader.fieldnames,
+                        [
+                            "path",
+                            "elapsed_ms",
+                            "input_bytes",
+                            "status",
+                            "validation_failed",
+                        ],
+                    )
+                    rows = list(reader)
+                self.assertEqual(len(rows), len(targets))
+                by_path = {row["path"]: row for row in rows}
+                for target, status in zip(targets, expected):
+                    row = by_path[str(target)]
+                    self.assertEqual(row["status"], status)
+                    self.assertGreaterEqual(float(row["elapsed_ms"]), 0)
+                    self.assertGreater(int(row["input_bytes"]), 0)
+                    self.assertEqual(
+                        row["validation_failed"],
+                        "true" if target == self.rejected else "false",
+                    )
+        result = self.run_cli("--stats-csv", report, "--force", "-n", self.rejected)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        with report.open(newline="") as stream:
+            row = next(csv.DictReader(stream))
+        self.assertEqual(row["status"], "changed")
+        self.assertEqual(row["validation_failed"], "true")
+
+    def test_csv_single_file_stdin_and_failures(self):
+        report = self.root / "stats.csv"
+        for options in [[], ["--dry-run"], ["--check"]]:
+            for targets in [[], [self.dirty]]:
+                result = self.run_cli(
+                    "-v",
+                    "--stats-csv",
+                    report,
+                    *options,
+                    *targets,
+                    source=self.source if not targets else None,
+                )
+                self.assertEqual(
+                    result.returncode, 1 if "--check" in options else 0, result.stderr
+                )
+                self.assertEqual(
+                    result.stdout, b"" if options else self.clean.read_bytes()
+                )
+                with report.open(newline="") as stream:
+                    rows = list(csv.DictReader(stream))
+                self.assertEqual(len(rows), 1)
+                row = rows[0]
+                self.assertEqual(
+                    row["path"], "<stdin>" if not targets else str(self.dirty)
+                )
+                self.assertEqual(int(row["input_bytes"]), len(self.source))
+                self.assertEqual(row["status"], "changed")
+                timing = f"finished {row['path']} ({row['elapsed_ms']} ms)".encode()
+                self.assertIn(timing, result.stderr)
+        result = self.run_cli(
+            "--stats-csv", report, "--assume-filename", "unsaved.sv", source=self.source
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with report.open(newline="") as stream:
+            self.assertEqual(next(csv.DictReader(stream))["path"], "unsaved.sv")
+        empty = self.root / "empty"
+        empty.mkdir()
+        result = self.run_cli("--stats-csv", report, "-n", empty)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        with report.open(newline="") as stream:
+            self.assertEqual(list(csv.DictReader(stream)), [])
+        for destination in [
+            self.dirty,
+            self.root,
+            self.root / "missing/stats.csv",
+            "-",
+        ]:
+            result = self.run_cli("--stats-csv", destination, "-i", self.dirty)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(self.dirty.read_bytes(), self.source)
+        config = self.root / "config.json"
+        config.write_text("{}")
+        result = self.run_cli("--config", config, "--stats-csv", config, self.dirty)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(config.read_text(), "{}")
+        self.dirty.chmod(0o444)
+        try:
+            result = self.run_cli("--stats-csv", report, "-i", self.dirty)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            with report.open(newline="") as stream:
+                self.assertEqual(next(csv.DictReader(stream))["status"], "error")
+        finally:
+            self.dirty.chmod(0o600)
+
+    @unittest.skipIf(os.name == "nt", "symlink creation requires Windows privileges")
+    def test_csv_rejects_source_aliases(self):
+        for hardlink in [False, True]:
+            alias = self.root / "alias.csv"
+            if hardlink:
+                os.link(self.dirty, alias)
+            else:
+                alias.symlink_to(self.dirty)
+            try:
+                result = self.run_cli("--stats-csv", alias, "-i", self.dirty)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(self.dirty.read_bytes(), self.source)
+            finally:
+                alias.unlink()
+
+    def test_csv_config_errors_and_layout(self):
+        report = self.root / "stats.csv"
+        bad = self.root / "bad"
+        (bad / ".slang").mkdir(parents=True)
+        (bad / ".slang/format.json").write_text('{"unknown": 1}')
+        invalid = bad / "file.sv"
+        invalid.write_bytes(self.source)
+        result = self.run_cli(
+            "--stats-csv", report, "--stage=layout", "-n", invalid, self.clean
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        with report.open(newline="") as stream:
+            rows = {row["path"]: row for row in csv.DictReader(stream)}
+        self.assertEqual(rows[str(invalid)]["status"], "error")
+        self.assertEqual(rows[str(invalid)]["input_bytes"], "0")
+        self.assertEqual(rows[str(self.clean)]["status"], "unchanged")
 
     def test_inplace_writes_and_counts(self):
         timestamp = 1_600_000_000_000_000_000

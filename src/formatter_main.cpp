@@ -13,13 +13,18 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <chrono>
+#include <condition_variable>
 #include <cstdio>
+#include <deque>
 #include <filesystem>
 #include <fmt/color.h>
 #include <fmt/format.h>
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <mutex>
 #include <random>
 #include <rfl/json.hpp>
 #include <string>
@@ -27,6 +32,7 @@
 
 #include "slang/util/CommandLine.h"
 #include "slang/util/OS.h"
+#include "slang/util/ScopeGuard.h"
 #include "slang/util/SmallVector.h"
 
 #if defined(_WIN32)
@@ -90,11 +96,14 @@ void collectSourceFiles(
     }
 }
 
+enum class FileFormatStatus { Changed, Unchanged, Excluded, Skipped, Error };
+
 struct FileFormatResult {
     std::string path;
     std::string input;
     format::FormatResult result;
     std::string error;
+    double elapsedMs = 0;
 };
 // Format a single file and return the result. May be threaded, so don't emit errors directly.
 FileFormatResult formatFile(
@@ -345,7 +354,13 @@ int main(int argc, char** argv) {
     );
 
     std::optional<bool> verbose;
-    cmdline.add("-v,--verbose", verbose, "Print each file before formatting (implies -j1)");
+    cmdline.add("-v,--verbose", verbose, "Report file starts, finishes, and elapsed milliseconds");
+
+    std::optional<std::string> statsPath;
+    cmdline.add(
+        "--stats-csv", statsPath, "Write per-file timing and outcomes to CSV", "<path>",
+        CommandLineFlags::FilePath
+    );
 
     std::vector<std::string> positional;
     cmdline.setPositional(positional, "files", CommandLineFlags::FilePath);
@@ -399,7 +414,8 @@ int main(int argc, char** argv) {
             "  --dump-config     Dump current configuration and exit\n"
             "  --stage <stage>   Stop after layout or aligned output (default: aligned)\n"
             "  -j, --jobs <n>    Number of parallel jobs (default: CPU cores)\n"
-            "  -v, --verbose     Print each file before formatting (implies -j1)\n"
+            "  -v, --verbose     Report file starts, finishes, and elapsed milliseconds\n"
+            "  --stats-csv <path>  Write per-file timing and outcomes to CSV\n"
         );
         return 0;
     }
@@ -470,29 +486,152 @@ int main(int argc, char** argv) {
         }
     }
 
-    auto outputResult = [&](const format::FormatResult& result, std::string_view input,
-                            std::string_view path) {
-        printDiagnostics(result, path);
+    std::ofstream stats;
+    bool statsFailed = false;
+    auto statsError = [&] {
+        if (!statsFailed)
+            OS::printE(fmt::format("error: failed to write statistics '{}'\n", *statsPath));
+        statsFailed = true;
+    };
+    auto openStats = [&](const std::vector<std::string>& inputs) {
+        if (!statsPath)
+            return true;
+        if (*statsPath == "-") {
+            OS::printE("error: --stats-csv requires a file path, not stdout (-)\n");
+            return false;
+        }
+        std::error_code ec;
+        auto destination = fs::weakly_canonical(*statsPath, ec);
+        if (ec) {
+            statsError();
+            return false;
+        }
+        auto conflicts = [&](const fs::path& input) {
+            std::error_code ignored;
+            if (fs::weakly_canonical(input, ignored) == destination && !ignored)
+                return true;
+            return fs::equivalent(input, destination, ignored) && !ignored;
+        };
+        for (const auto& input : inputs) {
+            if (conflicts(input)) {
+                OS::printE("error: --stats-csv must not overwrite an input file\n");
+                return false;
+            }
+        }
+        for (const auto& [path, resolved] : configCache) {
+            if (conflicts(path)) {
+                OS::printE("error: --stats-csv must not overwrite a config file\n");
+                return false;
+            }
+        }
+        stats.open(*statsPath, std::ios::binary | std::ios::trunc);
+        stats << "path,elapsed_ms,input_bytes,status,validation_failed\n";
+        stats.flush();
+        if (!stats) {
+            statsError();
+            return false;
+        }
+        return true;
+    };
+    auto writeStats = [&](const FileFormatResult& result, FileFormatStatus status) {
+        if (!statsPath || statsFailed)
+            return;
+        std::string_view statusName;
+        switch (status) {
+            case FileFormatStatus::Changed:
+                statusName = "changed";
+                break;
+            case FileFormatStatus::Unchanged:
+                statusName = "unchanged";
+                break;
+            case FileFormatStatus::Excluded:
+                statusName = "excluded";
+                break;
+            case FileFormatStatus::Skipped:
+                statusName = "skipped";
+                break;
+            case FileFormatStatus::Error:
+                statusName = "error";
+                break;
+        }
+        // Always quote paths so commas, quotes, and newlines round-trip through CSV readers.
+        stats.put('"');
+        for (char ch : result.path) {
+            if (ch == '"')
+                stats.put('"');
+            stats.put(ch);
+        }
+        stats << fmt::format(
+            "\",{:.3f},{},{},{}\n", result.elapsedMs, result.input.size(), statusName,
+            result.result.isUsable() ? "false" : "true"
+        );
+        stats.flush();
+        if (!stats)
+            statsError();
+    };
+    auto closeStats = [&] {
+        if (stats.is_open()) {
+            stats.close();
+            if (!stats)
+                statsError();
+        }
+        return statsFailed;
+    };
+    auto finishVerbose = [&](const FileFormatResult& result) {
+        OS::printE(fmt::format("finished {} ({:.3f} ms)\n", result.path, result.elapsedMs));
+    };
+    auto outputResult = [&](const FileFormatResult& file) {
+        const auto& result = file.result;
         auto action = result.outputAction(force.value_or(false));
-        if (action == format::FormatOutputAction::Abort)
-            return 1;
-        bool skipped = action == format::FormatOutputAction::KeepOriginal;
-        bool changed = !skipped && result.formatted != input;
-        if (noWrite && changed)
-            OS::printE(fmt::format("{}: needs formatting\n", path));
-        if (!noWrite)
-            OS::print(skipped ? input : std::string_view(result.formatted));
-        bool failed = (!result.isUsable() && (!skipped || strictValidation)) ||
-                      (warningsAsErrors == true && !result.diagnostics.empty());
-        return failed || (checkFormatting && changed) ? 1 : 0;
+        int status = 1;
+        FileFormatStatus outcome = FileFormatStatus::Error;
+        if (!file.error.empty()) {
+            OS::printE(fmt::format("error: {}\n", file.error));
+        }
+        else {
+            printDiagnostics(result, file.path);
+            if (action != format::FormatOutputAction::Abort) {
+                bool skipped = action == format::FormatOutputAction::KeepOriginal;
+                bool changed = !skipped && result.formatted != file.input;
+                outcome = result.generated ? FileFormatStatus::Excluded
+                          : skipped        ? FileFormatStatus::Skipped
+                          : changed        ? FileFormatStatus::Changed
+                                           : FileFormatStatus::Unchanged;
+                if (noWrite && changed)
+                    OS::printE(fmt::format("{}: needs formatting\n", file.path));
+                if (!noWrite)
+                    OS::print(
+                        skipped ? std::string_view(file.input) : std::string_view(result.formatted)
+                    );
+                bool failed = (!result.isUsable() && (!skipped || strictValidation)) ||
+                              (warningsAsErrors == true && !result.diagnostics.empty());
+                status = failed || (checkFormatting && changed) ? 1 : 0;
+            }
+        }
+        writeStats(file, outcome);
+        if (verbose == true)
+            finishVerbose(file);
+        return closeStats() ? 1 : status;
     };
 
     if (readStdin) {
-        std::string input(std::istreambuf_iterator<char>(std::cin), {});
+        if (!openStats(
+                assumeFilename ? std::vector<std::string>{*assumeFilename}
+                               : std::vector<std::string>{}
+            ))
+            return 1;
+        if (verbose == true)
+            OS::printE(fmt::format("formatting {} ...\n", stdinName));
         auto resolved = resolveConfig(configSearchRoot(configTargets));
-        return outputResult(
-            format::format(stdinName, input, resolved.config, stage), input, stdinName
-        );
+        auto start = std::chrono::steady_clock::now();
+        FileFormatResult file;
+        file.path = stdinName;
+        file.input.assign(std::istreambuf_iterator<char>(std::cin), {});
+        file.result = format::format(stdinName, file.input, resolved.config, stage);
+        file.elapsedMs =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+                .count();
+        return outputResult(file);
     }
 
     // Validate files exist. Directory args expand to all .sv/.svh/.v/.vh
@@ -559,35 +698,54 @@ int main(int argc, char** argv) {
     for (const auto& path : files)
         fileConfigs.push_back(resolveConfig(fs::path(path).parent_path()));
     auto formatInput = [&](size_t index) {
+        auto start = std::chrono::steady_clock::now();
+        FileFormatResult result;
         if (!fileConfigs[index].error.empty()) {
-            FileFormatResult result;
             result.path = files[index];
             result.error = fileConfigs[index].error;
-            return result;
         }
-        return formatFile(files[index], fileConfigs[index].config, stage);
+        else {
+            result = formatFile(files[index], fileConfigs[index].config, stage);
+        }
+        result.elapsedMs =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
+                .count();
+        return result;
     };
 
-    // Single file without -i: output to stdout
-    if (files.size() == 1 && inplace != true) {
-        auto result = formatInput(0);
-        if (!result.error.empty()) {
-            OS::printE(fmt::format("error: {}\n", result.error));
-            return 1;
-        }
-        return outputResult(result.result, result.input, result.path);
-    }
-
-    // Multiple files require -i (or --dry-run, which doesn't write)
     if (files.size() > 1 && inplace != true && !noWrite) {
         OS::printE("error: multiple files require -i, --dry-run, or --check\n");
         return 1;
     }
+    if (!openStats(files))
+        return 1;
+
+    // Single file without -i: output to stdout.
+    if (files.size() == 1 && inplace != true) {
+        if (verbose == true)
+            OS::printE(fmt::format("formatting {} ...\n", files[0]));
+        return outputResult(formatInput(0));
+    }
 
     // Format files with in-place editing
     const bool isVerbose = verbose.value_or(false);
-    const uint32_t threads = isVerbose ? 1
-                                       : numThreads.value_or(std::thread::hardware_concurrency());
+    const bool reportCompletions = isVerbose || statsPath.has_value();
+    const uint32_t threads = numThreads.value_or(std::thread::hardware_concurrency());
+    struct ProgressEvent {
+        size_t index;
+        bool finished;
+    };
+    std::mutex progressMutex;
+    std::condition_variable progressReady;
+    std::deque<ProgressEvent> progress;
+    auto reportProgress = [&](size_t index, bool finished) {
+        {
+            std::lock_guard lock(progressMutex);
+            progress.push_back({index, finished});
+        }
+        progressReady.notify_one();
+    };
+    // The pool joins its workers before their captured progress state is destroyed.
     BS::thread_pool pool(threads);
 
     const bool isDryRun = noWrite;
@@ -602,12 +760,12 @@ int main(int argc, char** argv) {
     int cstMismatchCount = 0;
     int idempotentFailCount = 0;
 
-    auto processResult = [&](FileFormatResult& result) {
+    auto processResult = [&](FileFormatResult& result) -> FileFormatStatus {
         if (!result.error.empty()) {
             OS::printE(fmt::format("error: {}\n", result.error));
             errorCount++;
             failedCount++;
-            return;
+            return FileFormatStatus::Error;
         }
 
         printDiagnostics(result.result, result.path);
@@ -624,14 +782,14 @@ int main(int argc, char** argv) {
         auto action = result.result.outputAction(force.value_or(false));
         if (action == format::FormatOutputAction::Abort) {
             errorCount++;
-            return;
+            return FileFormatStatus::Error;
         }
         if (action == format::FormatOutputAction::KeepOriginal) {
             if (!result.result.generated)
                 skippedCount++;
             else
                 excludedCount++;
-            return;
+            return result.result.generated ? FileFormatStatus::Excluded : FileFormatStatus::Skipped;
         }
         // Forced output with validation failures still returns an error status.
         if (!result.result.isUsable())
@@ -639,7 +797,7 @@ int main(int argc, char** argv) {
 
         if (result.result.formatted == result.input) {
             unchangedCount++;
-            return;
+            return FileFormatStatus::Unchanged;
         }
         if (isDryRun) {
             if (result.result.formatted != result.input) {
@@ -648,7 +806,7 @@ int main(int argc, char** argv) {
             }
             // Count successful formatting attempts without touching disk.
             formattedCount++;
-            return;
+            return FileFormatStatus::Changed;
         }
 
         std::string writeError;
@@ -657,28 +815,51 @@ int main(int argc, char** argv) {
             errorCount++;
             if (result.result.isUsable())
                 failedCount++;
+            return FileFormatStatus::Error;
         }
         else {
             formattedCount++;
         }
+        return FileFormatStatus::Changed;
     };
 
-    if (isVerbose) {
-        // Verbose mode: format files sequentially with progress output
-        for (size_t i = 0; i < files.size(); i++) {
-            OS::printE(fmt::format("formatting {} ...\n", files[i]));
-            auto result = formatInput(i);
-            processResult(result);
+    std::vector<std::future<FileFormatResult>> futures;
+    futures.reserve(files.size());
+
+    for (size_t i = 0; i < files.size(); i++) {
+        futures.push_back(pool.submit_task([&, i]() {
+            if (!reportCompletions)
+                return formatInput(i);
+            if (isVerbose)
+                reportProgress(i, false);
+            ScopeGuard finished([&] { reportProgress(i, true); });
+            return formatInput(i);
+        }));
+    }
+
+    if (reportCompletions) {
+        // Consume worker events instead of waiting on an earlier, possibly stalled file.
+        for (size_t remaining = files.size(); remaining > 0;) {
+            std::unique_lock lock(progressMutex);
+            progressReady.wait(lock, [&] { return !progress.empty(); });
+            auto event = progress.front();
+            progress.pop_front();
+            lock.unlock();
+
+            if (event.finished) {
+                auto result = futures[event.index].get();
+                auto status = processResult(result);
+                writeStats(result, status);
+                if (isVerbose)
+                    finishVerbose(result);
+                remaining--;
+            }
+            else {
+                OS::printE(fmt::format("formatting {} ...\n", files[event.index]));
+            }
         }
     }
     else {
-        // Parallel mode: submit all files to thread pool
-        std::vector<std::future<FileFormatResult>> futures;
-        futures.reserve(files.size());
-
-        for (size_t i = 0; i < files.size(); i++)
-            futures.push_back(pool.submit_task([&, i]() { return formatInput(i); }));
-
         for (auto& future : futures) {
             auto result = future.get();
             processResult(result);
@@ -701,5 +882,6 @@ int main(int argc, char** argv) {
         OS::printE(fmt::format(" ({} not idempotent)", idempotentFailCount));
     OS::printE("\n");
 
-    return errorCount > 0 || checkFailed ? 1 : 0;
+    bool reportFailed = closeStats();
+    return errorCount > 0 || checkFailed || reportFailed ? 1 : 0;
 }
