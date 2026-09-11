@@ -60,6 +60,21 @@ std::optional<Config> parseConfig(std::string_view json, std::string& error) {
     auto result = rfl::json::read<Config, rfl::DefaultIfMissing, rfl::NoExtraFields>(json);
     if (!result) {
         error = result.error().what();
+        // The parser exposes only error text; translate its unknown-field advice
+        // without losing nested field context or other errors in the same config.
+        constexpr std::string_view prefix = "Value named '";
+        constexpr std::string_view suffix =
+            "' not used. Remove the rfl::NoExtraFields processor or add "
+            "rfl::ExtraFields to avoid this error message.";
+        constexpr std::string_view replacement = "Unknown configuration key '";
+        for (size_t pos = 0; (pos = error.find(prefix, pos)) != std::string::npos;) {
+            auto end = error.find(suffix, pos + prefix.size());
+            if (end == std::string::npos)
+                break;
+            error.replace(end, suffix.size(), "'.");
+            error.replace(pos, prefix.size(), replacement);
+            pos = end + replacement.size() - prefix.size() + 2;
+        }
         return std::nullopt;
     }
 

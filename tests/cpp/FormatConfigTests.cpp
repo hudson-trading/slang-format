@@ -44,3 +44,29 @@ TEST_CASE("formatter config loading reports parse failures") {
 
     fs::remove(path);
 }
+
+TEST_CASE("unknown config keys report actionable errors without parser advice") {
+    std::string error;
+    CHECK_FALSE(format::parseConfig(R"({"unknown": true})", error));
+    CHECK(error == "Unknown configuration key 'unknown'.");
+
+    CHECK_FALSE(
+        format::parseConfig(
+            R"({"excludeDirs": [], "dirs": [], "alignment": {"paddingLmit": 4, "groupLines": 2}, "indentWidth": "bad"})",
+            error
+        )
+    );
+    for (auto key : {"excludeDirs", "dirs", "paddingLmit", "groupLines"})
+        CHECK(
+            error.find("Unknown configuration key '" + std::string(key) + "'.") != std::string::npos
+        );
+    CHECK(error.find("field 'alignment'") != std::string::npos);
+    CHECK(error.find("field 'indentWidth'") != std::string::npos);
+    CHECK(error.find("rfl::") == std::string::npos);
+    CHECK(error.find("not used") == std::string::npos);
+
+    CHECK_FALSE(format::parseConfig(R"({"it's unknown": 1})", error));
+    CHECK(error == "Unknown configuration key 'it's unknown'.");
+    CHECK(format::parseConfig("{}", error));
+    CHECK(error.empty());
+}

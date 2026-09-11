@@ -131,8 +131,9 @@ discovery. Omitted settings use built-in defaults. It cannot be combined with
 
 Unknown keys (including nested keys), invalid value types, and malformed JSON
 produce an error on stderr and exit status 1 before any files are formatted or
-written. For example, `{"indentWidht":2}` is rejected with an error naming
-`indentWidht`.
+written. For example, `{"indentWidht":2}` reports
+`Unknown configuration key 'indentWidht'.` The same diagnostic is used for config
+files; nested errors also identify the containing field.
 
 As with `--config`, `excludeDirectoryNames` controls directory collection and
 `projectPaths` is ignored because no discovered project root is associated with

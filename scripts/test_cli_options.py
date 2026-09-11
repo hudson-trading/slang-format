@@ -545,6 +545,28 @@ class CliOptionsTests(unittest.TestCase):
                 self.assertEqual(result.stdout, b"")
                 self.assertIn(obsolete.encode(), result.stderr)
 
+    def test_unknown_config_keys_have_user_facing_diagnostics(self):
+        contents = '{"excludeDirs": [], "dirs": [], "alignment": {"paddingLmit": 4}}'
+        config = self.root / "format.json"
+        config.write_text(contents)
+        for args in [("--config", config), ("--config-json", contents)]:
+            with self.subTest(args=args):
+                result = self.run_cli(*args, "-i", self.dirty)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(result.stdout, b"")
+                self.assertEqual(self.dirty.read_bytes(), self.source)
+                for key in ["excludeDirs", "dirs", "paddingLmit"]:
+                    self.assertIn(
+                        f"Unknown configuration key '{key}'.".encode(), result.stderr
+                    )
+                self.assertIn(b"field 'alignment'", result.stderr)
+                self.assertNotIn(b"rfl::", result.stderr)
+                self.assertNotIn(b"processor", result.stderr)
+                self.assertIn(
+                    str(config).encode() if args[0] == "--config" else b"--config-json",
+                    result.stderr,
+                )
+
     def test_project_paths_and_excluded_directory_names(self):
         project = self.root / "project"
         config = project / ".slang/format.json"
