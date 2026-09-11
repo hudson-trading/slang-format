@@ -621,7 +621,7 @@ int main(int argc, char** argv) {
                           : skipped        ? FileFormatStatus::Skipped
                           : changed        ? FileFormatStatus::Changed
                                            : FileFormatStatus::Unchanged;
-                if (noWrite && changed)
+                if (checkFormatting && changed)
                     OS::printE(fmt::format("{}: needs formatting\n", file.path));
                 if (!noWrite)
                     OS::print(
@@ -824,9 +824,9 @@ int main(int argc, char** argv) {
             return FileFormatStatus::Unchanged;
         }
         if (isDryRun) {
-            if (result.result.formatted != result.input) {
+            if (checkFormatting) {
                 OS::printE(fmt::format("{}: needs formatting\n", result.path));
-                checkFailed = checkFailed || checkFormatting;
+                checkFailed = true;
             }
             // Count successful formatting attempts without touching disk.
             formattedCount++;

@@ -93,13 +93,15 @@ the whole file.
 See [disabling formatting](format-markers.md) for scope rules.
 
 `--dry-run` performs the same checks and uses the same exit status rules, but
-never writes source files or emits source on stdout. It reports formatting differences
-on stderr without failing for those differences alone.
+never writes source files or emits source on stdout. It keeps the normal verbosity,
+using "would format" in the batch summary, and does not fail for formatting
+differences alone. `--verbose` enables the usual per-file progress and timing.
 
 `--check` (alias `--verify`) also suppresses source writes and output, but
 returns `1` for any formatting difference or validation failure, including failures
 that normally preserve the original and return `0`. It returns `0` for unchanged
 valid source and intentional exclusions. Unmatched `on` warnings alone still pass.
+Files that would change are reported individually on stderr.
 `--dry-run --Werror` additionally fails on diagnostic warnings. Neither mode lets
 `--force` turn a failed validation into a successful check.
 

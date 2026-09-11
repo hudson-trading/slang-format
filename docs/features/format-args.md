@@ -70,9 +70,11 @@ explicit formatting markers remain respected.
 
 ### `-n`, `--dry-run`
 
-Run formatting and validation without writing source files or source to stdout. Reports
-files that need formatting on stderr, but differences alone return status 0. Can be
-used with multiple files and combined with `--force` to check forced formatting.
+Run formatting and validation without writing source files or source to stdout.
+Uses the same verbosity as a normal run: diagnostics and a batch summary, with
+per-file progress and timing only when `--verbose` is enabled. The summary says
+"would format" for files that would change. Differences alone return status 0.
+Can be used with multiple files and combined with `--force` to check forced formatting.
 
 ---
 
@@ -80,6 +82,7 @@ used with multiple files and combined with `--force` to check forced formatting.
 
 Check that files are already formatted and pass validation. Return 0 on success,
 1 if any file needs formatting, fails validation, or cannot be processed.
+Reports `<path>: needs formatting` on stderr for each file that would change.
 Supports stdin, multiple files, and directories. Never writes source files or source
 to stdout, including with `-i` or `--force`. An explicit `--stats-csv` report is still written. Generated files and explicitly disabled
 formatting regions are respected. Batch results do not depend on file order.
@@ -87,7 +90,7 @@ formatting regions are respected. Batch results do not depend on file order.
 ### `--Werror`
 
 Treat diagnostic warnings as failures. With `--dry-run`, also fail when formatting
-would change a file. `--dry-run --Werror` is the stricter, clang-format-compatible
+would change a file and report each such file on stderr. `--dry-run --Werror` is the stricter, clang-format-compatible
 check spelling; unlike `--check`, it also fails on unmatched `on` warnings.
 Without `--dry-run`, this changes exit status without suppressing normal output.
 

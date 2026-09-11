@@ -694,15 +694,46 @@ class CliOptionsTests(unittest.TestCase):
         result = self.run_cli("-n", "--Werror", source=warned)
         self.assertEqual(result.returncode, 1, result.stderr)
 
-    def test_dry_run_reports_changes_without_failing(self):
-        result = self.run_cli("--dry-run", self.dirty)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, b"")
-        self.assertIn(b"needs formatting", result.stderr)
-        self.assertEqual(self.dirty.read_bytes(), self.source)
-        result = self.run_cli("--dry-run", self.clean)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertNotIn(b"needs formatting", result.stderr)
+    def test_dry_run_preserves_normal_verbosity_without_writing(self):
+        for targets in [(), (self.dirty,), ("-i", self.dirty, self.clean)]:
+            for verbosity in [(), ("--verbose",)]:
+                with self.subTest(targets=targets, verbosity=verbosity):
+                    result = self.run_cli(
+                        "--dry-run", "-j1", *verbosity, *targets, source=self.source
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, b"")
+                    self.assertNotIn(b"needs formatting", result.stderr)
+                    self.assertEqual(self.dirty.read_bytes(), self.source)
+                    normal = self.run_cli(
+                        "-j1", *verbosity, *targets, source=self.source
+                    )
+                    self.assertEqual(normal.returncode, 0, normal.stderr)
+                    outputs = []
+                    for output in [result.stderr, normal.stderr]:
+                        outputs.append(
+                            [
+                                line.rsplit(b" (", 1)[0]
+                                if line.startswith(b"finished ")
+                                else line.replace(b"would format ", b"formatted ")
+                                for line in output.splitlines()
+                            ]
+                        )
+                    self.assertEqual(*outputs)
+                    self.dirty.write_bytes(self.source)
+
+    def test_check_reports_files_that_need_formatting(self):
+        for flags in [("--check",), ("--verify",), ("--dry-run", "--Werror")]:
+            for targets in [(), (self.dirty,), (self.dirty, self.clean)]:
+                with self.subTest(flags=flags, targets=targets):
+                    result = self.run_cli(*flags, *targets, source=self.source)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    path = str(self.dirty) if targets else "<stdin>"
+                    self.assertIn(f"{path}: needs formatting\n".encode(), result.stderr)
+                    self.assertNotIn(
+                        f"{self.clean}: needs formatting".encode(), result.stderr
+                    )
+                    self.assertEqual(self.dirty.read_bytes(), self.source)
 
 
 if __name__ == "__main__":
