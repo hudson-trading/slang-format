@@ -73,7 +73,7 @@ struct Config {
         "File or directory paths relative to the project root containing .slang/. "
         "When that root is targeted, collect files only from these paths; an empty "
         "list collects the whole tree. Ignored for explicit file or subdirectory "
-        "targets, with --config, or when configuration is found only via the "
+        "targets, with --config or --config-json, or when configuration is found only via the "
         "current-directory fallback. Missing paths produce a warning",
         std::vector<std::string>>
         projectPaths = std::vector<std::string>{};
@@ -84,5 +84,8 @@ std::optional<std::filesystem::path> findConfigFile(const std::filesystem::path&
 
 /// Load a formatter config file, returning a user-facing description on failure.
 std::optional<Config> loadConfigFile(const std::filesystem::path& path, std::string& error);
+
+/// Parse JSON with default values for missing settings and errors for unknown keys.
+std::optional<Config> parseConfig(std::string_view json, std::string& error);
 
 } // namespace format

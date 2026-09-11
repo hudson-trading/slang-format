@@ -51,7 +51,7 @@
         },
         "projectPaths": {
           "type": "array",
-          "description": "File or directory paths relative to the project root containing .slang/. When that root is targeted, collect files only from these paths; an empty list collects the whole tree. Ignored for explicit file or subdirectory targets, with --config, or when configuration is found only via the current-directory fallback. Missing paths produce a warning",
+          "description": "File or directory paths relative to the project root containing .slang/. When that root is targeted, collect files only from these paths; an empty list collects the whole tree. Ignored for explicit file or subdirectory targets, with --config or --config-json, or when configuration is found only via the current-directory fallback. Missing paths produce a warning",
           "items": {
             "type": "string"
           }

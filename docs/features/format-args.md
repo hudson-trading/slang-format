@@ -101,9 +101,32 @@ The default is `true`; it cannot override `--strict`, `--check`, or `--Werror`.
 
 ### `--config <path>`
 
-Path to a JSON config file. If not specified, `slang-format` searches upward from each file independently, then from the current directory, for `.slang/format.json`. An explicit config applies to every file. Nested configs replace parent configs; missing settings use defaults. Unknown keys are errors, including nested keys.
+Path to a JSON config file. Without `--config` or `--config-json`, `slang-format` searches upward from each file independently, then from the current directory, for `.slang/format.json`. An explicit config applies to every file. Nested configs replace parent configs; missing settings use defaults. Unknown keys are errors, including nested keys.
 
 See [Configuration](format-config.md) for config file options.
+
+---
+
+### `--config-json <json>`
+
+Supply a JSON config directly on the command line:
+
+```sh
+slang-format --config-json '{"columnLimit":80,"indentWidth":2}' -i file.sv
+```
+
+The config applies to every input, including stdin, and overrides automatic config
+discovery. Omitted settings use built-in defaults. It cannot be combined with
+`--config`. Use `--dump-config` to inspect the resolved settings.
+
+Unknown keys (including nested keys), invalid value types, and malformed JSON
+produce an error on stderr and exit status 1 before any files are formatted or
+written. For example, `{"indentWidht":2}` is rejected with an error naming
+`indentWidht`.
+
+As with `--config`, `excludeDirectoryNames` controls directory collection and
+`projectPaths` is ignored because no discovered project root is associated with
+an explicit config.
 
 ---
 
@@ -112,7 +135,7 @@ See [Configuration](format-config.md) for config file options.
 Give stdin a filename for config discovery and diagnostic locations. The file need
 not exist, so unsaved editor buffers work. Relative paths resolve against the
 current directory. Searches for `.slang/format.json` from the filename's parent,
-then falls back to the current directory. `--config` still takes precedence.
+then falls back to the current directory. `--config` or `--config-json` takes precedence.
 Ignored for actual file inputs. Without this option stdin uses the current
 directory's config and diagnostics identify `<stdin>`.
 

@@ -49,11 +49,17 @@ std::optional<Config> loadConfigFile(const fs::path& path, std::string& error) {
 
     std::ostringstream buffer;
     buffer << file.rdbuf();
-    auto result = rfl::json::read<Config, rfl::DefaultIfMissing, rfl::NoExtraFields>(buffer.str());
+    auto config = parseConfig(buffer.str(), error);
+    if (!config)
+        error = fmt::format("failed to parse config file '{}': {}", path.string(), error);
+    return config;
+}
+
+std::optional<Config> parseConfig(std::string_view json, std::string& error) {
+    error.clear();
+    auto result = rfl::json::read<Config, rfl::DefaultIfMissing, rfl::NoExtraFields>(json);
     if (!result) {
-        error = fmt::format(
-            "failed to parse config file '{}': {}", path.string(), result.error().what()
-        );
+        error = result.error().what();
         return std::nullopt;
     }
 

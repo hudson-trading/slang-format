@@ -337,6 +337,9 @@ int main(int argc, char** argv) {
         CommandLineFlags::FilePath
     );
 
+    std::optional<std::string> configJson;
+    cmdline.add("--config-json", configJson, "Inline JSON configuration", "<json>");
+
     std::optional<std::string> assumeFilename;
     cmdline.add(
         "--assume-filename,--stdin_name", assumeFilename,
@@ -407,9 +410,11 @@ int main(int argc, char** argv) {
             "  --fail-on-incomplete-format  Alias for --strict\n"
             "  --failsafe_success=false    Alias for --strict\n"
             "  -f, --force       Force output even if validation fails\n"
-            "  --config <path>   Path to config file. If omitted, searches for\n"
+            "  --config <path>   Path to config file. Without an explicit config, searches for\n"
             "                    .slang/format.json walking up from the target\n"
             "                    path, then from the current directory\n"
+            "  --config-json <json>  Inline JSON config; cannot combine with --config\n"
+            "                    Explicit configs use defaults for omitted settings\n"
             "  --assume-filename <path>  Use this stdin path for config and diagnostics\n"
             "  --stdin_name <path>      Alias for --assume-filename\n"
             "  --dump-config     Dump current configuration and exit\n"
@@ -424,6 +429,20 @@ int main(int argc, char** argv) {
     if (showVersion == true) {
         OS::print(fmt::format("slang-format version {}\n", format::FullVersion));
         return 0;
+    }
+
+    if (configJson && configPath) {
+        OS::printE("error: --config and --config-json cannot be combined\n");
+        return 1;
+    }
+    std::optional<format::Config> inlineConfig;
+    if (configJson) {
+        std::string error;
+        inlineConfig = format::parseConfig(*configJson, error);
+        if (!inlineConfig) {
+            OS::printE(fmt::format("error: failed to parse --config-json: {}\n", error));
+            return 1;
+        }
     }
 
     const bool readStdin = positional.empty() || (positional.size() == 1 && positional[0] == "-");
@@ -453,6 +472,10 @@ int main(int argc, char** argv) {
     std::map<fs::path, ResolvedConfig> configCache;
     auto resolveConfig = [&](const fs::path& directory) {
         ResolvedConfig resolved;
+        if (inlineConfig) {
+            resolved.config = *inlineConfig;
+            return resolved;
+        }
         auto found = configPath ? std::optional<fs::path>(*configPath)
                                 : format::findConfigFile(directory);
         if (found && !configPath)

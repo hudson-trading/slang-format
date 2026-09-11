@@ -357,6 +357,101 @@ class CliOptionsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn(b"\n        logic a;", two.read_bytes())
 
+    def test_inline_config(self):
+        config = self.root / ".slang/format.json"
+        config.parent.mkdir()
+        config.write_text('{"indentWidth": 8, "columnLimit": 60}')
+        options = '{"indentWidth": 2, "alignment": {"paddingLimit": 12}}'
+        result = self.run_cli("--config-json", options, "--dump-config", self.dirty)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        resolved = json.loads(result.stdout)
+        self.assertEqual(resolved["indentWidth"], 2)
+        self.assertEqual(resolved["columnLimit"], 100)
+        self.assertEqual(
+            resolved["alignment"], {"paddingLimit": 12, "groupSeparatorLines": 1}
+        )
+        override = self.root / "override.json"
+        override.write_text(options)
+        expected = self.run_cli("--config", override, self.dirty)
+        self.assertEqual(expected.returncode, 0, expected.stderr)
+        self.assertIn(b"\n  logic a;", expected.stdout)
+        for args in [
+            ("--config-json", options, self.dirty),
+            ("--config-json=" + options, self.dirty),
+            ("--config-json", options),
+            ("--config-json", options, "--assume-filename", "unsaved.sv", "-"),
+        ]:
+            with self.subTest(args=args):
+                result = self.run_cli(*args, source=self.source)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout, expected.stdout)
+        config.write_text('{"invalidKey": true}')
+        result = self.run_cli("--config-json", "{}", self.dirty)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, self.clean.read_bytes())
+
+    def test_inline_config_rejects_invalid_options_before_writing(self):
+        stats = self.root / "stats.csv"
+        stats.write_bytes(b"existing statistics\n")
+        for value, diagnostic in [
+            ('{"indentWidht": 2}', b"indentWidht"),
+            ('{"alignment": {"paddingLmit": 12}}', b"paddingLmit"),
+            ('{"indentWidth": "two"}', b"indentWidth"),
+            ('{"alignment": false}', b"alignment"),
+            ("{", b"failed to parse"),
+            ("[]", b"failed to parse"),
+            ("null", b"failed to parse"),
+        ]:
+            for mode in [(), ("--dump-config",), ("-i", self.dirty, self.clean)]:
+                with self.subTest(value=value, mode=mode):
+                    result = self.run_cli(
+                        "--config-json",
+                        value,
+                        "--stats-csv",
+                        stats,
+                        *mode,
+                        source=self.source,
+                    )
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(result.stdout, b"")
+                    self.assertIn(b"--config-json", result.stderr)
+                    self.assertIn(diagnostic, result.stderr)
+                    self.assertEqual(self.dirty.read_bytes(), self.source)
+                    self.assertEqual(stats.read_bytes(), b"existing statistics\n")
+        for args in [
+            ("--config", self.root / "missing.json", "--config-json", "{}"),
+            ("--config-json", "{}", "--config", self.root / "missing.json"),
+        ]:
+            result = self.run_cli(*args, "-i", self.dirty)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn(
+                b"--config and --config-json cannot be combined", result.stderr
+            )
+            self.assertEqual(self.dirty.read_bytes(), self.source)
+
+    def test_inline_config_directory_collection_and_parallel_files(self):
+        project = self.root / "project"
+        config = project / ".slang/format.json"
+        config.parent.mkdir(parents=True)
+        config.write_text('{"projectPaths": ["missing"], "indentWidth": 8}')
+        kept = [project / "one.sv", project / "nested/two.sv"]
+        skipped = project / "build/skipped.sv"
+        for target in [*kept, skipped]:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(self.source)
+        options = json.dumps(
+            {
+                "indentWidth": 2,
+                "excludeDirectoryNames": ["build"],
+                "projectPaths": ["missing"],
+            }
+        )
+        result = self.run_cli("--config-json", options, "-i", "-j2", project)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for target in kept:
+            self.assertIn(b"\n  logic a;", target.read_bytes())
+        self.assertEqual(skipped.read_bytes(), self.source)
+
     def test_config_option_names(self):
         config = self.root / "format.json"
         options = {

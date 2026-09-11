@@ -4,7 +4,14 @@
 
 `slang-format` reads JSON configuration from `.slang/format.json`. It searches
 upward from each file independently, then from the current working directory.
-An explicit `--config <path>` takes precedence.
+An explicit `--config <path>` or `--config-json '<json>'` takes precedence.
+These options cannot be combined; omitted settings use built-in defaults.
+
+To configure formatting without a file:
+
+```sh
+slang-format --config-json '{"columnLimit":80,"indentWidth":2}' file.sv
+```
 
 All options are optional. Run `slang-format --dump-config` to print the
 resolved configuration for the first target (or stdin's assumed filename).
@@ -63,7 +70,7 @@ Exact directory names to skip during recursive file collection, at any depth. Th
 
 **Default:** `[]`
 
-File or directory paths relative to the project root containing .slang/. When that root is targeted, collect files only from these paths; an empty list collects the whole tree. Ignored for explicit file or subdirectory targets, with --config, or when configuration is found only via the current-directory fallback. Missing paths produce a warning
+File or directory paths relative to the project root containing .slang/. When that root is targeted, collect files only from these paths; an empty list collects the whole tree. Ignored for explicit file or subdirectory targets, with --config or --config-json, or when configuration is found only via the current-directory fallback. Missing paths produce a warning
 
 ### `alignment.paddingLimit`
 
