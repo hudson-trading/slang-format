@@ -47,9 +47,7 @@ fs::path configSearchRoot(const std::vector<std::string>& positional) {
     std::error_code ec;
     fs::path target = positional.front();
     bool isDir = fs::is_directory(target, ec);
-    if (ec)
-        return fs::current_path();
-    return isDir ? target : target.parent_path();
+    return !ec && isDir ? target : target.parent_path();
 }
 
 // Recursively collect SystemVerilog source files under `dir`, skipping any
@@ -262,6 +260,12 @@ int main(int argc, char** argv) {
         CommandLineFlags::FilePath
     );
 
+    std::optional<std::string> assumeFilename;
+    cmdline.add(
+        "--assume-filename,--stdin_name", assumeFilename,
+        "Filename for stdin configuration discovery and diagnostics", "<path>"
+    );
+
     std::optional<bool> dumpConfig;
     cmdline.add("--dump-config", dumpConfig, "Dump current configuration and exit");
 
@@ -303,7 +307,7 @@ int main(int argc, char** argv) {
             "\n"
             "USAGE: slang-format [options] [<file-or-dir> ...]\n"
             "\n"
-            "If no files are specified, reads from stdin and writes to stdout.\n"
+            "With no files or a single -, reads stdin and writes stdout.\n"
             "If a single file is given without -i, prints formatted output to stdout.\n"
             "With -i, modifies files in-place.\n"
             "Directory arguments recurse into all .sv/.svh/.v/.vh files; subdirs are\n"
@@ -323,6 +327,8 @@ int main(int argc, char** argv) {
             "  --config <path>   Path to config file. If omitted, searches for\n"
             "                    .slang/format.json walking up from the target\n"
             "                    path, then from the current directory\n"
+            "  --assume-filename <path>  Use this stdin path for config and diagnostics\n"
+            "  --stdin_name <path>      Alias for --assume-filename\n"
             "  --dump-config     Dump current configuration and exit\n"
             "  --stage <stage>   Stop after layout or aligned output (default: aligned)\n"
             "  -j, --jobs <n>    Number of parallel jobs (default: CPU cores)\n"
@@ -335,6 +341,20 @@ int main(int argc, char** argv) {
         OS::print(fmt::format("slang-format version {}\n", format::FullVersion));
         return 0;
     }
+
+    const bool readStdin = positional.empty() || (positional.size() == 1 && positional[0] == "-");
+    if (!readStdin && std::ranges::find(positional, "-") != positional.end()) {
+        OS::printE("error: stdin (-) cannot be combined with other inputs\n");
+        return 1;
+    }
+    if (readStdin && inplace == true) {
+        OS::printE("error: -i cannot be used with stdin\n");
+        return 1;
+    }
+    const std::string stdinName = assumeFilename.value_or("<stdin>");
+    auto configTargets = readStdin ? std::vector<std::string>{} : positional;
+    if (readStdin && assumeFilename)
+        configTargets.push_back(*assumeFilename);
 
     const bool checkFormatting = check == true || (dryRun == true && warningsAsErrors == true);
     const bool noWrite = dryRun == true || check == true;
@@ -376,7 +396,7 @@ int main(int argc, char** argv) {
         // (configRoot set below). A CWD-fallback config is consulted for
         // formatting options but does not drive `dirs` — the target isn't its
         // config root.
-        auto foundConfig = format::findConfigFile(configSearchRoot(positional));
+        auto foundConfig = format::findConfigFile(configSearchRoot(configTargets));
         bool fromTarget = foundConfig.has_value();
         if (!foundConfig)
             foundConfig = format::findConfigFile(fs::current_path());
@@ -424,15 +444,9 @@ int main(int argc, char** argv) {
         return failed || (checkFormatting && changed) ? 1 : 0;
     };
 
-    // If no files specified, read from stdin and write to stdout
-    if (positional.empty()) {
-        if (inplace == true) {
-            OS::printE("error: -i cannot be used with stdin\n");
-            return 1;
-        }
-
+    if (readStdin) {
         std::string input(std::istreambuf_iterator<char>(std::cin), {});
-        return outputResult(format::format("stdin", input, config, stage), input, "<stdin>");
+        return outputResult(format::format(stdinName, input, config, stage), input, stdinName);
     }
 
     // Validate files exist. Directory args expand to all .sv/.svh/.v/.vh

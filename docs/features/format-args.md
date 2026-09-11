@@ -6,7 +6,8 @@
 slang-format [options] [<file> ...]
 ```
 
-If no files are specified, reads from stdin and writes to stdout.
+If no files are specified, or the sole input is `-`, reads stdin and writes stdout.
+Stdin cannot be combined with other inputs or `-i`.
 If files are specified without `-i`, prints formatted output to stdout.
 With `-i`, modifies files in-place. Multiple files require `-i`, `--dry-run`, or `--check`.
 
@@ -87,6 +88,21 @@ The default is `true`; it cannot override `--strict`, `--check`, or `--Werror`.
 Path to a JSON config file. If not specified, `slang-format` searches upward from the target path, then from the current directory, for `.slang/format.json`.
 
 See [Configuration](format-config.md) for config file options.
+
+---
+
+### `--assume-filename <path>`, `--stdin_name <path>`
+
+Give stdin a filename for config discovery and diagnostic locations. The file need
+not exist, so unsaved editor buffers work. Relative paths resolve against the
+current directory. Searches for `.slang/format.json` from the filename's parent,
+then falls back to the current directory. `--config` still takes precedence.
+Ignored for actual file inputs. Without this option stdin uses the current
+directory's config and diagnostics identify `<stdin>`.
+
+```sh
+slang-format --assume-filename rtl/top.sv - < editor-buffer.sv
+```
 
 ---
 

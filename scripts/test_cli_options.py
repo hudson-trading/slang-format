@@ -33,6 +33,51 @@ class CliOptionsTests(unittest.TestCase):
             timeout=30,
         )
 
+    def test_stdin_paths(self):
+        expected = self.clean.read_bytes()
+        result = self.run_cli("-", source=self.source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, expected)
+        for args in [("-i", "-"), ("-", self.dirty), ("-", "-")]:
+            result = self.run_cli(*args, source=self.source)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(result.stdout, b"")
+        project = self.root / "project"
+        (project / ".slang").mkdir(parents=True)
+        (project / ".slang" / "format.json").write_text('{"indentWidth": 8}')
+        for option in ["--assume-filename", "--stdin_name"]:
+            for inputs in [(), ("-",)]:
+                result = self.run_cli(
+                    option, "project/unsaved.sv", *inputs, source=self.source
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(b"        logic a;", result.stdout)
+                result = self.run_cli(
+                    option,
+                    "project/unsaved.sv",
+                    "--strict",
+                    *inputs,
+                    source=self.rejected.read_bytes(),
+                )
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(b"project/unsaved.sv:2:", result.stderr)
+        result = self.run_cli("--assume-filename", "project/unsaved.sv", self.dirty)
+        self.assertEqual(result.stdout, expected)
+        override = self.root / "override.json"
+        override.write_text('{"indentWidth": 2}')
+        result = self.run_cli(
+            "--assume-filename",
+            "project/unsaved.sv",
+            "--config",
+            override,
+            source=self.source,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(b"\n  logic a;", result.stdout)
+        result = self.run_cli("--check", "-", source=self.source)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(result.stdout, b"")
+
     def test_strict_validation_preserves_rejected_output(self):
         original = self.rejected.read_bytes()
         for flags in [
