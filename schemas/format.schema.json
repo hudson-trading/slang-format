@@ -38,6 +38,10 @@
           "type": "integer",
           "description": "Number of spaces before trailing comments (0-256)"
         },
+        "maxSyntaxDepth": {
+          "type": "integer",
+          "description": "Maximum syntax tree depth and parser recursion budget (must be positive). Files exceeding the limit are skipped unchanged, even with --force. Raising this limit increases stack usage and can cause stack overflow"
+        },
         "alignment": {
           "$ref": "#/$defs/format__AlignConfig",
           "description": "Alignment padding and group separation"

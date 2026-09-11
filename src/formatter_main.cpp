@@ -164,6 +164,7 @@ void printDiagnostics(const format::FormatResult& result, std::string_view path)
         // catches the eye when scanning a batch of warnings.
         switch (diag.kind) {
             case format::FormatDiagnosticKind::UnmatchedFormatOn:
+            case format::FormatDiagnosticKind::DepthLimit:
                 OS::printE(
                     fmt::format(
                         "{} {}: {}\n", kindPrefix("warning:", warnStyle), pathFmt(path),
@@ -779,6 +780,7 @@ int main(int argc, char** argv) {
     int skippedCount = 0;
     int inputParseSkippedCount = 0;
     int outputValidationSkippedCount = 0;
+    int depthSkippedCount = 0;
     int formattedCount = 0;
     int unchangedCount = 0;
     int excludedCount = 0;
@@ -805,6 +807,8 @@ int main(int argc, char** argv) {
         if (action == format::FormatOutputAction::KeepOriginal) {
             if (!result.result.generated) {
                 skippedCount++;
+                if (result.result.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit))
+                    depthSkippedCount++;
                 if (result.result.hasDiagnostic(format::FormatDiagnosticKind::StructuralImbalance))
                     inputParseSkippedCount++;
                 if (result.result.hasDiagnostic(format::FormatDiagnosticKind::CstMismatch) ||
@@ -893,7 +897,16 @@ int main(int argc, char** argv) {
     OS::printE(fmt::format(", {} unchanged, {} excluded", unchangedCount, excludedCount));
     if (skippedCount > 0) {
         OS::printE(fmt::format(", {} skipped (", skippedCount));
-        if (inputParseSkippedCount > 0 && outputValidationSkippedCount > 0) {
+        if (depthSkippedCount > 0) {
+            OS::printE(fmt::format("{} depth limit", depthSkippedCount));
+            if (inputParseSkippedCount > 0)
+                OS::printE(fmt::format(", {} input parse errors", inputParseSkippedCount));
+            if (outputValidationSkippedCount > 0)
+                OS::printE(
+                    fmt::format(", {} output validation failures", outputValidationSkippedCount)
+                );
+        }
+        else if (inputParseSkippedCount > 0 && outputValidationSkippedCount > 0) {
             OS::printE(
                 fmt::format(
                     "{} input parse errors, {} output validation failures", inputParseSkippedCount,

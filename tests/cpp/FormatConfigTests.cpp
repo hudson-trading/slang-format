@@ -53,7 +53,8 @@ TEST_CASE("numeric configuration cannot wrap or request excessive padding") {
           R"({"spacesBeforeTrailingComment":4294967295})",
           R"({"alignment":{"paddingLimit":4294967296}})",
           R"({"alignment":{"groupSeparatorLines":18446744073709551615}})", R"({"indentWidth":-1})",
-          R"({"columnLimit":1.5})"}) {
+          R"({"columnLimit":1.5})", R"({"maxSyntaxDepth":0})", R"({"maxSyntaxDepth":-1})",
+          R"({"maxSyntaxDepth":4294967296})", R"({"maxSyntaxDepth":1.5})"}) {
         INFO(json);
         CHECK_FALSE(format::parseConfig(json, error));
         CHECK_FALSE(error.empty());
@@ -71,6 +72,21 @@ TEST_CASE("numeric configuration cannot wrap or request excessive padding") {
     format::Config config;
     config.indentWidth = 2147483647;
     CHECK_THROWS_AS(format::validateConfig(config), std::invalid_argument);
+    config = {};
+    config.maxSyntaxDepth = 0;
+    CHECK_THROWS_AS(format::validateConfig(config), std::invalid_argument);
+}
+
+TEST_CASE("syntax depth configuration defaults to 512 and accepts overrides") {
+    std::string error;
+    auto config = format::parseConfig("{}", error);
+    REQUIRE(config);
+    CHECK(config->maxSyntaxDepth.get() == 512);
+    for (auto limit : {1, 128, 512, 768}) {
+        config = format::parseConfig("{\"maxSyntaxDepth\":" + std::to_string(limit) + "}", error);
+        REQUIRE(config);
+        CHECK(config->maxSyntaxDepth.get() == limit);
+    }
 }
 
 TEST_CASE("unknown config keys report actionable errors without parser advice") {

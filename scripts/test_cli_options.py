@@ -18,7 +18,8 @@ class CliOptionsTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
+        # Match canonical paths reported by the CLI (Windows short names and macOS /var).
+        self.root = Path(self.directory.name).resolve()
         self.source = b"module foo;logic a;endmodule\n"
         self.dirty = self.root / "dirty.sv"
         self.dirty.write_bytes(self.source)
@@ -70,6 +71,75 @@ class CliOptionsTests(unittest.TestCase):
                     self.assertIn(b"parse errors", result.stderr)
                     self.assertIn(b"slang-format: on", result.stderr)
         self.assertEqual(self.dirty.read_bytes(), self.clean.read_bytes())
+
+    def test_depth_limit_skips_preserve_source_in_all_output_modes(self):
+        source = (
+            b"module foo; assign value = "
+            + b"+".join([b"signal_a"] * 30000)
+            + b"; endmodule\n"
+        )
+        deep = self.root / "deep.sv"
+        deep.write_bytes(source)
+        report = self.root / "depth.csv"
+        for flags, status in [
+            ((), 0),
+            (("--force",), 0),
+            (("--strict",), 1),
+            (("--check",), 1),
+            (("--Werror",), 1),
+        ]:
+            for targets in [(), (deep,)]:
+                with self.subTest(flags=flags, targets=targets):
+                    result = self.run_cli(*flags, *targets, source=source)
+                    self.assertEqual(result.returncode, status, result.stderr)
+                    self.assertIn(b"depth limit", result.stderr)
+                    self.assertNotIn(b"internal error", result.stderr)
+                    self.assertEqual(
+                        result.stdout, b"" if "--check" in flags else source
+                    )
+            for mode in ["-i", "--dry-run"]:
+                with self.subTest(flags=flags, mode=mode):
+                    result = self.run_cli(
+                        *flags, mode, "--stats-csv", report, deep, self.clean
+                    )
+                    self.assertEqual(result.returncode, status, result.stderr)
+                    self.assertIn(b"1 skipped (1 depth limit)", result.stderr)
+                    self.assertIn(b"0 failed", result.stderr)
+                    self.assertEqual(deep.read_bytes(), source)
+                    with report.open(newline="", encoding="utf-8") as stream:
+                        rows = {row["path"]: row for row in csv.DictReader(stream)}
+                    self.assertEqual(rows[str(deep)]["status"], "skipped")
+                    self.assertEqual(rows[str(deep)]["validation_failed"], "true")
+                    self.assertEqual(rows[str(self.clean)]["status"], "unchanged")
+
+    def test_syntax_depth_limit_configuration(self):
+        source = (
+            b"module foo; assign value = "
+            + b"+".join([b"signal_a"] * 300)
+            + b"; endmodule\n"
+        )
+        self.dirty.write_bytes(source)
+        config_path = self.root / ".slang" / "format.json"
+        config_path.parent.mkdir()
+        default = self.run_cli("--dump-config")
+        self.assertEqual(json.loads(default.stdout)["maxSyntaxDepth"], 512)
+        for limit in (128, 512, 768):
+            config = json.dumps({"maxSyntaxDepth": limit, "columnLimit": 0})
+            config_path.write_text(config, encoding="utf-8")
+            for flags in [(), ("--config", config_path), ("--config-json", config)]:
+                with self.subTest(limit=limit, flags=flags):
+                    result = self.run_cli("--strict", *flags, self.dirty)
+                    self.assertEqual(
+                        result.returncode, int(limit == 128), result.stderr
+                    )
+                    if limit == 128:
+                        self.assertIn(b"syntax depth limit (128)", result.stderr)
+                        self.assertEqual(result.stdout, source)
+                    else:
+                        self.assertNotIn(b"depth limit", result.stderr)
+                        self.assertNotEqual(result.stdout, source)
+                    dumped = self.run_cli("--dump-config", *flags, self.dirty)
+                    self.assertEqual(json.loads(dumped.stdout)["maxSyntaxDepth"], limit)
 
     @unittest.skipIf(os.name == "nt", "requires POSIX named pipes")
     def test_verbose_reports_other_workers_while_first_file_stalls(self):
@@ -751,7 +821,9 @@ class CliOptionsTests(unittest.TestCase):
                     result = self.run_cli(*flags, *targets, source=self.source)
                     self.assertEqual(result.returncode, 1, result.stderr)
                     path = str(self.dirty) if targets else "<stdin>"
-                    self.assertIn(f"{path}: needs formatting\n".encode(), result.stderr)
+                    self.assertIn(
+                        f"{path}: needs formatting".encode(), result.stderr.splitlines()
+                    )
                     self.assertNotIn(
                         f"{self.clean}: needs formatting".encode(), result.stderr
                     )

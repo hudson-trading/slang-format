@@ -30,6 +30,8 @@ void validateConfig(const Config& config) {
     check("indentWidth", config.indentWidth.get(), 64);
     check("columnLimit", config.columnLimit.get(), 1000000);
     check("spacesBeforeTrailingComment", config.spacesBeforeTrailingComment.get(), 256);
+    if (config.maxSyntaxDepth.get() == 0)
+        throw std::invalid_argument("maxSyntaxDepth must be positive");
 }
 
 std::optional<fs::path> findConfigFile(const fs::path& startDir) {
@@ -118,7 +120,7 @@ std::optional<Config> parseConfig(std::string_view json, std::string& error) {
         return valid;
     };
     if (!fits(root, "indentWidth", true) || !fits(root, "columnLimit", true) ||
-        !fits(root, "spacesBeforeTrailingComment", true))
+        !fits(root, "spacesBeforeTrailingComment", true) || !fits(root, "maxSyntaxDepth", true))
         return std::nullopt;
     if (auto alignment = yyjson_obj_get(root, "alignment");
         alignment &&

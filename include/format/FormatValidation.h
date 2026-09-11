@@ -32,6 +32,8 @@ enum class FormatDiagnosticKind {
     NotIdempotent,
     MergeConflict,
     UnmatchedFormatOn,
+    /// Resource limit reached; preserve source and continue with other files.
+    DepthLimit,
 };
 
 /// A formatter diagnostic and its eagerly rendered details.
@@ -68,8 +70,7 @@ struct FormatResult {
     /// Returns true if the formatted output is safe to use without forcing.
     bool isUsable() const;
 
-    /// Chooses output handling; force overrides all validation failures, preserving generated
-    /// files.
+    /// Chooses output handling; force cannot override generated files or depth-limit skips.
     FormatOutputAction outputAction(bool force = false) const;
 };
 

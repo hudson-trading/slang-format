@@ -7,10 +7,12 @@
 //------------------------------------------------------------------------------
 #pragma once
 
+#include "format/FormatConfig.h"
 #include "format/FormatStyle.h"
 #include <cstddef>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -27,6 +29,19 @@ class SyntaxNode;
 } // namespace slang
 
 namespace format {
+
+/// Signals that formatting must preserve the input instead of entering deep recursion.
+class FormatDepthLimitError : public std::runtime_error {
+public:
+    /// Describe the resource limit without implying malformed source.
+    explicit FormatDepthLimitError(size_t limit)
+        : std::runtime_error(
+              "syntax depth limit (" + std::to_string(limit) + ") exceeded; skipping formatting"
+          ) {}
+};
+
+/// Check syntax depth iteratively before any recursive formatter traversal.
+void checkSyntaxDepth(const slang::syntax::SyntaxNode& root, size_t limit);
 
 class NormalizedDocumentBuilder;
 
@@ -133,9 +148,11 @@ struct NormalizedConditional {
 
 class NormalizedFormatDocument {
 public:
+    /// Normalize a syntax tree after checking it against the recursion budget.
     static NormalizedFormatDocument build(
         const slang::syntax::SyntaxNode& root,
-        const slang::SourceManager* sourceManager
+        const slang::SourceManager* sourceManager,
+        size_t maxSyntaxDepth = defaultMaxSyntaxDepth
     );
 
     NormalizedFormatDocument(NormalizedFormatDocument&&) noexcept = default;

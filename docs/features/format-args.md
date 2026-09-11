@@ -45,8 +45,8 @@ changes are needed.
 
 Batch summaries count each file once: formatted, unchanged, excluded, skipped, or
 failed. `--dry-run` counts actual changes as "would format". Skipped files retain
-their original contents; the summary distinguishes input parse errors from output
-validation failures. When both occur in a batch, the reason counts show how many
+their original contents; the summary distinguishes depth limits, input parse errors, and output
+validation failures. When multiple reasons occur in a batch, the reason counts show how many
 skipped files had each problem; a file can have both reasons. Failed files are
 aborted operations or config, read, or write errors.
 
@@ -59,9 +59,10 @@ counting them again as failed.
 
 ### `-f`, `--force`
 
-Use the formatter's output despite any validation failure, including Git merge
+Use the formatter's output despite validation failures, including Git merge
 conflict markers. Diagnostics are still printed to stderr, and the command exits
 with status 1 when validation fails. See [validation](format-validation.md).
+Depth-limit skips always preserve the input, including with `--force`.
 
 `--force` overrides validation, while `--dry-run` still suppresses writes and
 explicit formatting markers remain respected.

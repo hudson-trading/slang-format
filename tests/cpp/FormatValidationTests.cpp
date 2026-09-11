@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: MIT
 
 #include "format/FormatValidation.h"
+#include "format/NormalizedFormat.h"
 #include <catch2/catch_test_macros.hpp>
+#include <exception>
+
+#ifndef _WIN32
+#    include <pthread.h>
+#endif
 
 #include "slang/syntax/SyntaxTree.h"
 #include "slang/text/SourceManager.h"
@@ -934,11 +940,148 @@ TEST_CASE("deep flat expressions fail safely without replacing the input") {
     source += "; endmodule\n";
     for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
         auto result = format::format("deep.sv", source, {}, stage);
-        CHECK(result.hasDiagnostic(format::FormatDiagnosticKind::InternalError));
+        CHECK(result.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit));
         CHECK(result.formatted == source);
-        CHECK(result.outputAction(false) == format::FormatOutputAction::Abort);
+        CHECK(result.outputAction(false) == format::FormatOutputAction::KeepOriginal);
+        CHECK(result.outputAction(true) == format::FormatOutputAction::KeepOriginal);
         REQUIRE_FALSE(result.diagnostics.empty());
         CHECK(result.diagnostics.back().message.find("depth limit") != std::string::npos);
+    }
+}
+
+TEST_CASE("formatting on small worker stacks handles supported and excessive depth") {
+    struct Task {
+        bool passed = false;
+        std::exception_ptr error;
+    } task;
+    auto run = [](void* data) -> void* {
+        auto& task = *static_cast<Task*>(data);
+        try {
+            format::Config config;
+            config.columnLimit = 0;
+            for (size_t operands : {504u, 2040u, 30000u}) {
+                std::string source = "module foo; assign value = signal_a";
+                for (size_t i = 1; i < operands; i++)
+                    source += "+signal_a";
+                source += "; endmodule\n";
+                auto result = format::format("chain.sv", source, config);
+                if (operands == 504
+                        ? !result.isUsable()
+                        : result.formatted != source ||
+                              !result.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit))
+                    return nullptr;
+                if (operands == 504) {
+                    SourceManager sourceManager;
+                    auto tree = SyntaxTree::fromText(source, sourceManager);
+                    auto rendered = format::Formatter(config, &sourceManager).format(tree->root());
+                    if (rendered != result.formatted)
+                        return nullptr;
+                }
+            }
+            std::string nested = "module foo; assign value = " + std::string(1024, '(') +
+                                 "signal_a" + std::string(1024, ')') + "; endmodule\n";
+            auto result = format::format("nested.sv", nested, config);
+            task.passed = result.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit) &&
+                          result.formatted == nested;
+        }
+        catch (...) {
+            task.error = std::current_exception();
+        }
+        return nullptr;
+    };
+#ifdef _WIN32
+    // Windows' default stack already exercises the small-stack entry path.
+    run(&task);
+#else
+    pthread_attr_t attributes;
+    REQUIRE(pthread_attr_init(&attributes) == 0);
+    REQUIRE(pthread_attr_setstacksize(&attributes, 512 * 1024) == 0);
+    pthread_t thread;
+    int error = pthread_create(&thread, &attributes, run, &task);
+    pthread_attr_destroy(&attributes);
+    REQUIRE(error == 0);
+    REQUIRE(pthread_join(thread, nullptr) == 0);
+#endif
+    if (task.error)
+        std::rethrow_exception(task.error);
+    CHECK(task.passed);
+}
+
+TEST_CASE("parser nesting limits skip without returning partial source") {
+    std::string source = "module foo; assign value = " + std::string(1024, '(') + "signal_a" +
+                         std::string(1024, ')') + "; endmodule\n";
+    auto result = format::format("nested.sv", source, {});
+    CHECK(result.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit));
+    CHECK(result.formatted == source);
+    CHECK(result.outputAction(true) == format::FormatOutputAction::KeepOriginal);
+}
+
+TEST_CASE("deep inactive branches skip the complete file") {
+    std::string source = "module foo;\n`ifdef OPTION\nassign value = signal_a";
+    for (size_t i = 0; i < 1024; i++)
+        source += "+signal_a";
+    source += ";\n`endif\nendmodule\n";
+    auto result = format::format("inactive.sv", source, {});
+    CHECK(result.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit));
+    CHECK(result.formatted == source);
+    CHECK(result.outputAction(true) == format::FormatOutputAction::KeepOriginal);
+}
+
+TEST_CASE("syntax depth limits are configurable for active and inactive syntax") {
+    for (bool inactive : {false, true}) {
+        for (bool nested : {false, true}) {
+            std::string source = "module foo;\n";
+            if (inactive)
+                source += "`ifdef OPTION\n";
+            source += "assign value = ";
+            if (nested) {
+                source += std::string(300, '(') + "signal_a" + std::string(300, ')');
+            }
+            else {
+                source += "signal_a";
+                for (size_t i = 0; i < 600; i++)
+                    source += "+signal_a";
+            }
+            source += ";\n";
+            if (inactive)
+                source += "`endif\n";
+            source += "endmodule\n";
+
+            for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+                format::Config config;
+                config.columnLimit = 0;
+                config.maxSyntaxDepth = 128;
+                auto skipped = format::format("configured.sv", source, config, stage);
+                REQUIRE(skipped.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit));
+                CHECK(skipped.formatted == source);
+                CHECK(skipped.outputAction(true) == format::FormatOutputAction::KeepOriginal);
+                CHECK(skipped.diagnostics.back().message.find("(128)") != std::string::npos);
+
+                if (!nested) {
+                    config.maxSyntaxDepth = 512;
+                    CHECK(
+                        format::format("configured.sv", source, config, stage)
+                            .hasDiagnostic(format::FormatDiagnosticKind::DepthLimit)
+                    );
+                }
+                config.maxSyntaxDepth = 768;
+                CHECK(format::format("configured.sv", source, config, stage).isUsable());
+                if (!inactive && !nested) {
+                    SourceManager sourceManager;
+                    auto tree = SyntaxTree::fromText(source, sourceManager);
+                    CHECK_FALSE(
+                        format::Formatter(config, &sourceManager, stage)
+                            .format(tree->root())
+                            .empty()
+                    );
+                    config.maxSyntaxDepth = 128;
+                    CHECK_THROWS_AS(
+                        format::Formatter(config, &sourceManager, stage).format(tree->root()),
+                        format::FormatDepthLimitError
+                    );
+                }
+            }
+        }
     }
 }
 

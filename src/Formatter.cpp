@@ -33,7 +33,8 @@ std::string Formatter::format(
     std::vector<FormatDiagnostic>* diagnostics
 ) {
     validateConfig(config_);
-    auto normalized = NormalizedFormatDocument::build(root, sourceManager_);
+    auto normalized =
+        NormalizedFormatDocument::build(root, sourceManager_, config_.maxSyntaxDepth.get());
     if (diagnostics) {
         for (size_t i = 0; i < normalized.unmatchedFormatOnCount(); i++) {
             diagnostics->push_back(

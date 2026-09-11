@@ -12,6 +12,7 @@
 
 #include "format/Formatter.h"
 #include "format/FormatterUtils.h"
+#include "format/NormalizedFormat.h"
 #include <algorithm>
 #include <fmt/format.h>
 
@@ -73,6 +74,8 @@ bool FormatResult::isUsable() const {
 }
 
 FormatOutputAction FormatResult::outputAction(bool force) const {
+    if (hasDiagnostic(FormatDiagnosticKind::DepthLimit))
+        return FormatOutputAction::KeepOriginal;
     auto action = generated ? FormatOutputAction::KeepOriginal : FormatOutputAction::UseFormatted;
     if (force)
         return action;
@@ -85,6 +88,7 @@ FormatOutputAction FormatResult::outputAction(bool force) const {
             case FormatDiagnosticKind::FailedReparse:
                 return FormatOutputAction::Abort;
             case FormatDiagnosticKind::StructuralImbalance:
+            case FormatDiagnosticKind::DepthLimit:
             case FormatDiagnosticKind::CstMismatch:
             case FormatDiagnosticKind::NotIdempotent:
                 action = FormatOutputAction::KeepOriginal;
@@ -128,7 +132,7 @@ std::string describeTextDiff(std::string_view a, std::string_view b) {
 }
 
 /// Primary formatting method; Performs extra validation
-FormatResult format(
+static FormatResult formatImpl(
     std::string_view filename,
     std::string_view input,
     const format::Config& config,
@@ -136,6 +140,7 @@ FormatResult format(
 ) {
 
     FormatResult result = {};
+    validateConfig(config);
 
     SourceManager sm;
     auto buf = sm.assignText(filename, input);
@@ -187,7 +192,9 @@ FormatResult format(
     PreprocessorOptions ppOptions;
     ppOptions.maxIncludeDepth = 0;
     ppOptions.dontExpandMacros = true;
-    Bag optionsBag(ppOptions);
+    ParserOptions parserOptions;
+    parserOptions.maxRecursionDepth = config.maxSyntaxDepth.get();
+    Bag optionsBag(ppOptions, parserOptions);
 
     BumpAllocator alloc;
     Diagnostics diagnostics;
@@ -201,7 +208,7 @@ FormatResult format(
     // Skip generated files: if the first token's leading trivia contains
     // an `@generated` marker in a line/block comment, treat the file as
     // excluded.
-    if (auto firstToken = root.getFirstToken()) {
+    if (auto firstToken = *root.tokens_begin()) {
         for (const auto& trivia : firstToken.trivia()) {
             if (trivia.kind != TriviaKind::LineComment && trivia.kind != TriviaKind::BlockComment)
                 continue;
@@ -212,6 +219,12 @@ FormatResult format(
             }
         }
     }
+
+    if (std::ranges::any_of(diagnostics, [](const auto& diag) {
+            return diag.code == diag::ParseTreeTooDeep;
+        }))
+        throw FormatDepthLimitError(config.maxSyntaxDepth.get());
+    checkSyntaxDepth(root, config.maxSyntaxDepth.get());
 
     diagnostics.sort(sm);
 
@@ -323,6 +336,9 @@ FormatResult format(
             );
         }
     }
+    catch (const FormatDepthLimitError&) {
+        throw;
+    }
     catch (const std::exception& e) {
         result.diagnostics.push_back({FormatDiagnosticKind::InternalError, e.what(), std::nullopt});
         // An exception before rendering produced no replacement to apply, even with force.
@@ -330,6 +346,27 @@ FormatResult format(
             result.formatted = input;
     }
 
+    return result;
+}
+
+FormatResult format(
+    std::string_view filename,
+    std::string_view input,
+    const Config& config,
+    FormatStage stage
+) {
+    FormatResult result;
+    try {
+        result = formatImpl(filename, input, config, stage);
+    }
+    catch (const FormatDepthLimitError& e) {
+        result.formatted = input;
+        result.diagnostics.push_back({FormatDiagnosticKind::DepthLimit, e.what(), std::nullopt});
+    }
+    catch (const std::exception& e) {
+        result.formatted = input;
+        result.diagnostics.push_back({FormatDiagnosticKind::InternalError, e.what(), std::nullopt});
+    }
     return result;
 }
 

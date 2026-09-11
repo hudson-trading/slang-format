@@ -18,6 +18,9 @@
 
 namespace format {
 
+/// Default recursion budget for parsing and formatter syntax traversal.
+inline constexpr uint32_t defaultMaxSyntaxDepth = 512;
+
 /// Controls alignment padding and separation into groups.
 struct AlignConfig {
 
@@ -49,6 +52,13 @@ struct Config {
     rfl::Description<"Number of spaces before trailing comments (0-256)", uint32_t>
         spacesBeforeTrailingComment = 2;
 
+    rfl::Description<
+        "Maximum syntax tree depth and parser recursion budget (must be positive). "
+        "Files exceeding the limit are skipped unchanged, even with --force. "
+        "Raising this limit increases stack usage and can cause stack overflow",
+        uint32_t>
+        maxSyntaxDepth = defaultMaxSyntaxDepth;
+
     rfl::Description<"Alignment padding and group separation", AlignConfig> alignment = {};
 
     rfl::Description<
@@ -77,7 +87,7 @@ std::optional<Config> loadConfigFile(const std::filesystem::path& path, std::str
 /// Parse JSON with default values for missing settings and errors for unknown keys.
 std::optional<Config> parseConfig(std::string_view json, std::string& error);
 
-/// Reject settings that would overflow layout arithmetic or allocate excessive padding.
+/// Reject invalid resource limits, overflowing layout arithmetic, and excessive padding.
 /// Throws std::invalid_argument for both parsed and programmatically constructed configs.
 void validateConfig(const Config& config);
 

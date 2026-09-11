@@ -50,6 +50,14 @@ Column limit for line wrapping (0 = no limit, maximum 1000000)
 
 Number of spaces before trailing comments (0-256)
 
+### `maxSyntaxDepth`
+
+**Type:** `integer`
+
+**Default:** `512`
+
+Maximum syntax tree depth and parser recursion budget (must be positive). Files exceeding the limit are skipped unchanged, even with --force. Raising this limit increases stack usage and can cause stack overflow
+
 ### `alignment`
 
 **Type:** `AlignConfig`

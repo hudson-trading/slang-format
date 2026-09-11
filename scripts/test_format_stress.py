@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -57,10 +58,10 @@ def main():
         _, hard = resource.getrlimit(resource.RLIMIT_STACK)
         resource.setrlimit(
             resource.RLIMIT_STACK,
-            (min(8 * 1024 * 1024, hard) if hard >= 0 else 8 * 1024 * 1024, hard),
+            (min(512 * 1024, hard) if hard >= 0 else 512 * 1024, hard),
         )
 
-    for operands in (2040, 30000):
+    for operands in (504, 2040, 30000):
         source = (
             "module foo; assign value = "
             + "+".join(["signal_a"] * operands)
@@ -74,16 +75,46 @@ def main():
             timeout=30,
             preexec_fn=limit_stack if os.name == "posix" else None,
         )
-        if operands == 2040:
+        if operands == 504:
             if result.returncode:
                 failures.append(f"supported chain failed: {result.stderr}")
-        elif result.returncode != 1 or "depth limit" not in result.stderr:
+        elif (
+            result.returncode != 1
+            or "depth limit" not in result.stderr
+            or result.stdout != source
+        ):
             failures.append(
                 f"deep chain failed unsafely: exit {result.returncode}, {result.stderr}"
             )
+        # Directory/file batches use pool workers, whose stacks can be smaller
+        # than the main thread even when the executable has a large stack reserve.
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "chain.sv"
+            path.write_text(source, encoding="utf-8")
+            result = subprocess.run(
+                [
+                    args.slang_format,
+                    "--strict",
+                    "--dry-run",
+                    "-j2",
+                    "--config-json",
+                    '{"columnLimit":0}',
+                    directory,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if operands == 504:
+                if result.returncode:
+                    failures.append(f"supported worker chain failed: {result.stderr}")
+            elif result.returncode != 1 or "depth limit" not in result.stderr:
+                failures.append(
+                    f"deep worker chain failed unsafely: {result.returncode}, {result.stderr}"
+                )
     if failures:
         raise SystemExit("\n".join(failures))
-    print(f"{count} configuration checks and 2 bounded-stack stress checks passed")
+    print(f"{count} configuration checks and 6 bounded-stack stress checks passed")
 
 
 if __name__ == "__main__":

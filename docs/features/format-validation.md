@@ -6,9 +6,21 @@ formatted text, keeps the original text, or rejects the file.
 
 ## Input checks
 
-Syntax trees deeper than 2048 levels are rejected with a depth-limit diagnostic,
-preserving the input. This also covers flat operator chains, which can build deep
-trees without exceeding the parser's nesting limit.
+Syntax trees reaching `maxSyntaxDepth` levels, or exceeding the parser's matching recursion budget,
+are skipped with a depth-limit warning. The original input is preserved even with
+`--force`, and batch formatting continues. Normal mode succeeds; `--strict`,
+`--check`, and `--Werror` report incomplete formatting with status 1.
+The default is **512**, configurable in `.slang/format.json`:
+
+```json
+{"maxSyntaxDepth": 512}
+```
+
+The value must be positive. It measures syntax depth, not file size: flat operator
+chains can build deep trees even without nested parentheses. The same setting
+also applies to reparsed inactive preprocessor branches. This is a preventive
+recursion budget, not recovery from an actual native stack overflow. Raising it
+increases stack usage; callers with small thread stacks may need a lower value.
 
 ### Generated files
 
@@ -128,7 +140,9 @@ slang-format --strict -i rtl/
 
 ## Forcing output
 
-`--force` overrides **every validation failure**, including merge conflicts:
+`--force` permits candidates that fail validation, including merge conflicts.
+Depth-limit skips are the exception: they never produce a candidate, so the
+original input remains untouched even with `--force`.
 
 ```sh
 # Inspect the candidate despite validation failures
@@ -138,7 +152,8 @@ slang-format --force top.sv
 slang-format --force -i top.sv
 ```
 
-Diagnostics remain visible and the exit status is still `1` if validation failed.
+Diagnostics remain visible and the exit status is still `1` for forced invalid candidates.
+Depth-limit skips follow the normal skip policy described above.
 Force permits output; it does not make that output pass validation. Conflict
 markers and the surrounding source may be reformatted.
 

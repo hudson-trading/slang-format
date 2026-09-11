@@ -11,7 +11,6 @@
 #include "format/FormatterUtils.h"
 #include <algorithm>
 #include <optional>
-#include <stdexcept>
 #include <string_view>
 
 #include "slang/parsing/Lexer.h"
@@ -796,10 +795,6 @@ private:
         size_t depth,
         bool inDataType
     ) {
-        // Flat operator chains can produce a deep CST without tripping the parser's
-        // nesting limit. Bound all subsequent recursive passes and tree destruction.
-        if (depth >= 2048)
-            throw std::runtime_error("syntax tree exceeds formatter depth limit (2048)");
         auto result = std::make_unique<NormalizedNode>();
         result->kind = syntax.kind;
         result->syntax = &syntax;
@@ -1566,10 +1561,28 @@ private:
     std::vector<std::unique_ptr<NormalizedConditional>> conditionals;
 };
 
+void checkSyntaxDepth(const SyntaxNode& root, size_t limit) {
+    // Reject oversized trees before allocating a recursively owned tree: throwing
+    // from buildNode would also have to unwind and destroy that tree on the stack.
+    std::vector<std::pair<const SyntaxNode*, size_t>> pending{{&root, 0}};
+    while (!pending.empty()) {
+        auto [node, depth] = pending.back();
+        pending.pop_back();
+        if (depth >= limit)
+            throw FormatDepthLimitError(limit);
+        for (size_t i = 0; i < node->getChildCount(); i++) {
+            if (auto child = node->childNode(i))
+                pending.emplace_back(child, depth + 1);
+        }
+    }
+}
+
 NormalizedFormatDocument NormalizedFormatDocument::build(
     const SyntaxNode& root,
-    const SourceManager* sourceManager
+    const SourceManager* sourceManager,
+    size_t maxSyntaxDepth
 ) {
+    checkSyntaxDepth(root, maxSyntaxDepth);
     return NormalizedDocumentBuilder(root, sourceManager).build();
 }
 

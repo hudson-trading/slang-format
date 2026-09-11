@@ -33,6 +33,7 @@ public:
     );
 
     /// Render source and optionally collect formatting directive warnings.
+    /// Throws FormatDepthLimitError for excessive depth; format::format returns a skip instead.
     std::string format(
         const slang::syntax::SyntaxNode& root,
         std::vector<FormatDiagnostic>* diagnostics = nullptr

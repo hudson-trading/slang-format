@@ -19,6 +19,7 @@
 #include "slang/diagnostics/ParserDiags.h"
 #include "slang/parsing/Lexer.h"
 #include "slang/parsing/LexerFacts.h"
+#include "slang/parsing/Parser.h"
 #include "slang/parsing/Preprocessor.h"
 #include "slang/parsing/TokenKind.h"
 #include "slang/syntax/AllSyntax.h"
@@ -239,17 +240,25 @@ private:
         slang::parsing::PreprocessorOptions preprocessorOptions;
         preprocessorOptions.maxIncludeDepth = 0;
         preprocessorOptions.dontExpandMacros = true;
-        slang::Bag options(preprocessorOptions);
+        slang::parsing::ParserOptions parserOptions;
+        parserOptions.maxRecursionDepth = config.maxSyntaxDepth.get();
+        slang::Bag options(preprocessorOptions, parserOptions);
         auto tree = SyntaxTree::fromFileInMemory(
             subparseInput, sourceManager, "inactive conditional branch", "", options
         );
+        if (tree && std::ranges::any_of(tree->diagnostics(), [](const auto& diagnostic) {
+                return diagnostic.code == slang::diag::ParseTreeTooDeep;
+            }))
+            throw FormatDepthLimitError(config.maxSyntaxDepth.get());
         bool hasParseError = tree &&
                              std::ranges::any_of(tree->diagnostics(), [](const auto& diagnostic) {
                                  return diagnostic.isError() &&
                                         diagnostic.code != slang::diag::NotAllowedInCU;
                              });
         if (tree && !hasParseError) {
-            auto subparsed = NormalizedFormatDocument::build(tree->root(), &sourceManager);
+            auto subparsed = NormalizedFormatDocument::build(
+                tree->root(), &sourceManager, config.maxSyntaxDepth.get()
+            );
             auto document = Lowerer(subparsed, config, stage).build();
             DocumentRenderer renderer(config);
             auto layout = renderer.renderLayout(document);

@@ -176,8 +176,8 @@ embedded and standalone callers share the same behavior.
 `format::format()` returns a `FormatResult` whose `diagnostics` collection owns
 each diagnostic's kind, message, and optional input line. Use `isUsable()`
 to check validation and `outputAction(force)` to choose formatted output,
-unchanged input, or an abort. Force overrides every validation diagnostic, including
-merge conflicts. Formatting still produces a candidate when diagnostics are present;
+unchanged input, or an abort. Force overrides validation diagnostics except depth-limit
+skips, which always preserve the input. Formatting otherwise produces a candidate when diagnostics are present;
 callers must check the output action before applying it.
 `generated` identifies files skipped because of an `@generated` comment;
 `parseErrorCount` separately counts parser errors, which can be safely recovered
