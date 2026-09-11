@@ -143,7 +143,9 @@ scripts/genconfig.py
 ```
 
 `src/FormatStyleGen.inc` is generated from slang's syntax definitions and the
-list policies in `scripts/gen_format_style.py`. Check or update it with:
+list policies in `scripts/gen_format_style.py`. Every syntax list must have an
+explicit body, vertical, dynamic, or inline policy; generation fails when a
+list is missing or classified more than once. Check or update it with:
 
 ```sh
 scripts/gen_format_style.py --check

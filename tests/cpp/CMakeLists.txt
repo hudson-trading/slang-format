@@ -41,6 +41,13 @@ if(Python3_FOUND)
   set_tests_properties(format_golden_tests PROPERTIES LABELS "format")
 
   add_test(
+    NAME format_style_generation_tests
+    COMMAND ${Python3_EXECUTABLE}
+            ${PROJECT_SOURCE_DIR}/scripts/gen_format_style.py --check
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR})
+  set_tests_properties(format_style_generation_tests PROPERTIES LABELS "format")
+
+  add_test(
     NAME format_config_discovery_tests
     COMMAND
       ${Python3_EXECUTABLE}

@@ -2,8 +2,8 @@
 """Generate FormatStyle functions from slang's syntax definitions.
 
 Reads syntax.txt to determine:
-  1. Which (SyntaxKind, listIndex) pairs correspond to list fields that
-     should be formatted vertically (getListStyle).
+  1. The formatting policy for every (SyntaxKind, listIndex) pair
+     (getListStyle).
   2. Which SyntaxKinds have non-standard attribute lists
      (isNonstandardAttributeListSyntax).
 
@@ -36,13 +36,9 @@ BODY_LISTS = [
     ("FunctionDeclaration", "items"),
     ("GenerateBlock", "members"),
     ("GenerateRegion", "members"),
-    ("InterfaceDeclaration", "members"),
     ("LibraryMap", "members"),
     ("ModuleDeclaration", "members"),
-    ("PackageDeclaration", "members"),
-    ("ProgramDeclaration", "members"),
     ("SpecifyBlock", "items"),
-    ("TaskDeclaration", "items"),
 ]
 
 # Vertical list configuration: always one-item-per-line when non-empty.
@@ -61,18 +57,14 @@ VERTICAL_LISTS = [
     ("CoverCross", "members"),
     ("Coverpoint", "members"),
     ("EnumType", "members"),
-    ("InterfaceHeader", "imports"),
     ("ModuleHeader", "imports"),
     ("NonAnsiPortList", "ports"),
     ("NonAnsiUdpPortList", "ports"),
-    ("PackageHeader", "imports"),
     ("ParameterPortList", "declarations"),
     ("Production", "rules"),
-    ("ProgramHeader", "imports"),
     ("RandCaseStatement", "items"),
-    ("StructType", "members"),
+    ("StructUnionType", "members"),
     ("StructuredAssignmentPattern", "items"),
-    ("UnionType", "members"),
 ]
 
 # Dynamic list configuration: vertical when the list has comments or exceeds
@@ -80,11 +72,116 @@ VERTICAL_LISTS = [
 DYNAMIC_LISTS = [
     ("ArgumentList", "parameters"),
     ("ConcatenationExpression", "expressions"),
+    ("DistConstraintList", "items"),
     ("FunctionPortList", "ports"),
     ("HierarchicalInstance", "connections"),
     ("ParameterValueAssignment", "parameters"),
     ("RangeList", "valueRanges"),
     ("SimpleAssignmentPattern", "items"),
+]
+
+# Inline lists need context-specific layout, must remain attached to adjacent
+# syntax, or contain source-preserved constructs. They are listed explicitly so
+# new syntax cannot silently inherit inline formatting.
+INLINE_LISTS = [
+    ("AssertionItemPort", "attributes"),
+    ("AssertionItemPort", "dimensions"),
+    ("AttributeInstance", "specs"),
+    ("BinaryExpression", "attributes"),
+    ("BindTargetList", "targets"),
+    ("CasePropertyExpr", "items"),
+    ("CheckerInstantiation", "instances"),
+    ("ClockingItem", "decls"),
+    ("ConditionalExpression", "attributes"),
+    ("ConditionalPredicate", "conditions"),
+    ("ConfigDeclaration", "topCells"),
+    ("ConstraintDeclaration", "specifiers"),
+    ("ConstraintPrototype", "specifiers"),
+    ("ContinuousAssign", "assignments"),
+    ("CoverCross", "items"),
+    ("DataDeclaration", "declarators"),
+    ("Declarator", "dimensions"),
+    ("DefParam", "assignments"),
+    ("DelayedSequenceExpr", "elements"),
+    ("EdgeControlSpecifier", "descriptors"),
+    ("EdgeSensitivePathSuffix", "outputs"),
+    ("EnumType", "dimensions"),
+    ("ExternModuleDecl", "actualAttributes"),
+    ("ExternUdpDecl", "actualAttributes"),
+    ("ForLoopStatement", "initializers"),
+    ("ForLoopStatement", "steps"),
+    ("ForeachLoopList", "loopVariables"),
+    ("FunctionPort", "attributes"),
+    ("FunctionPrototype", "specifiers"),
+    ("GenvarDeclaration", "identifiers"),
+    ("HierarchyInstantiation", "instances"),
+    ("IdentifierSelectName", "selectors"),
+    ("ImplementsClause", "interfaces"),
+    ("ImplicitType", "dimensions"),
+    ("InstanceConfigRule", "instanceNames"),
+    ("InstanceName", "dimensions"),
+    ("IntegerType", "dimensions"),
+    ("InvocationExpression", "attributes"),
+    ("LibraryDeclaration", "filePaths"),
+    ("LibraryIncDirClause", "filePaths"),
+    ("LocalVariableDeclaration", "declarators"),
+    ("MacroActualArgumentList", "args"),
+    ("MacroFormalArgumentList", "args"),
+    ("Member", "attributes"),
+    ("ModportDeclaration", "items"),
+    ("ModportSimplePortList", "ports"),
+    ("ModportSubroutinePortList", "ports"),
+    ("NetAlias", "nets"),
+    ("NetDeclaration", "declarators"),
+    ("PackageExportDeclaration", "items"),
+    ("PackageImportDeclaration", "items"),
+    ("ParameterDeclaration", "declarators"),
+    ("ParenExpressionList", "expressions"),
+    ("ParenPragmaExpression", "values"),
+    ("PathDeclaration", "delays"),
+    ("PathDescription", "inputs"),
+    ("PortConcatenation", "references"),
+    ("PortConnection", "attributes"),
+    ("PortDeclaration", "declarators"),
+    ("PostfixUnaryExpression", "attributes"),
+    ("PragmaDirective", "args"),
+    ("PrefixUnaryExpression", "attributes"),
+    ("PrimitiveInstantiation", "instances"),
+    ("PropertyDeclaration", "variables"),
+    ("PulseStyleDeclaration", "inputs"),
+    ("RandSequenceStatement", "productions"),
+    ("ReplicatedAssignmentPattern", "items"),
+    ("RsCase", "items"),
+    ("RsCodeBlock", "items"),
+    ("RsRule", "prods"),
+    ("SequenceDeclaration", "variables"),
+    ("SequenceMatchList", "items"),
+    ("SimplePathSuffix", "outputs"),
+    ("SolveBeforeConstraint", "afterExpr"),
+    ("SolveBeforeConstraint", "beforeExpr"),
+    ("SpecparamDeclaration", "declarators"),
+    ("StandardCaseItem", "expressions"),
+    ("StandardPropertyCaseItem", "expressions"),
+    ("StandardRsCaseItem", "expressions"),
+    ("Statement", "attributes"),
+    ("StreamingConcatenationExpression", "expressions"),
+    ("StructurePattern", "members"),
+    ("StructUnionMember", "attributes"),
+    ("StructUnionMember", "declarators"),
+    ("StructUnionType", "dimensions"),
+    ("SystemTimingCheck", "args"),
+    ("TransListCoverageBinInitializer", "sets"),
+    ("TransRange", "items"),
+    ("TransSet", "ranges"),
+    ("TypeParameterDeclaration", "declarators"),
+    ("TypedefDeclaration", "dimensions"),
+    ("UdpBody", "entries"),
+    ("UdpBody", "portDecls"),
+    ("UdpEntry", "inputs"),
+    ("UdpInputPortDecl", "names"),
+    ("UdpPortDecl", "attributes"),
+    ("UserDefinedNetDeclaration", "declarators"),
+    ("WaitOrderStatement", "names"),
 ]
 
 
@@ -174,6 +271,11 @@ def _finalize_type(name, tags, fields, types, kindmap):
 
 def get_combined_fields(type_name, types):
     """Get all fields including inherited ones, with their child indices."""
+    return [field for _, field in get_combined_fields_with_owners(type_name, types)]
+
+
+def get_combined_fields_with_owners(type_name, types):
+    """Get all fields including the syntax type that declares each field."""
     chain = []
     t = type_name
     while t and t != "SyntaxNode":
@@ -184,7 +286,7 @@ def get_combined_fields(type_name, types):
 
     fields = []
     for t in reversed(chain):
-        fields.extend(types[t]["fields"])
+        fields.extend((t, field) for field in types[t]["fields"])
     return fields
 
 
@@ -207,47 +309,43 @@ def resolve_list_entries(entries, style, types, kindmap):
     results = []
 
     for kind_name, field_name in entries:
-        # Resolve kind name to type name via kindmap, or fall back to
-        # treating it as a type name directly.
-        if kind_name in kindmap:
+        type_name = kind_name + "Syntax"
+        specific_kind = None
+        if type_name not in types and kind_name in kindmap:
             type_name = kindmap[kind_name]
-        else:
-            type_name = kind_name + "Syntax"
+            specific_kind = kind_name
 
         if type_name not in types:
-            print(f"Warning: {kind_name} not found in syntax.txt", file=sys.stderr)
-            continue
+            raise ValueError(f"{kind_name} not found in syntax.txt")
 
-        combined = get_combined_fields(type_name, types)
-        num_lists = sum(1 for _, _, is_list, _ in combined if is_list)
-
-        # Get all SyntaxKind values for this type. For multiKind types
-        # (e.g. BlockStatement -> Sequential/Parallel), this expands to
-        # all concrete kinds. If the entry itself is a specific kind
-        # within a multiKind type, only emit that one kind.
-        kinds = get_kinds_for_type(type_name, kindmap)
-        if kind_name in kinds:
-            kinds = [kind_name]
-        elif not kinds:
-            kinds = [kind_name]
-
+        kinds = (
+            [specific_kind]
+            if specific_kind
+            else [
+                kind
+                for kind, concrete_type in kindmap.items()
+                if inherits_from(concrete_type, type_name, types)
+            ]
+        )
         found = False
-        list_idx = 0
-        for _child_idx, (ftype, fname, is_list, list_kind) in enumerate(combined):
-            if not is_list:
-                continue
-            if fname == field_name and is_list:
-                for kind in kinds:
-                    results.append((kind, list_idx, fname, type_name, num_lists, style))
-                found = True
-                break
-            list_idx += 1
+        for kind in kinds:
+            concrete_type = kindmap[kind]
+            combined = get_combined_fields_with_owners(concrete_type, types)
+            num_lists = sum(1 for _, (_, _, is_list, _) in combined if is_list)
+            list_idx = 0
+            for owner, (_ftype, fname, is_list, _list_kind) in combined:
+                if not is_list:
+                    continue
+                if owner == type_name and fname == field_name:
+                    results.append(
+                        (kind, list_idx, fname, concrete_type, num_lists, style)
+                    )
+                    found = True
+                    break
+                list_idx += 1
 
         if not found:
-            print(
-                f"Warning: field '{field_name}' not found as a list in {type_name}",
-                file=sys.stderr,
-            )
+            raise ValueError(f"field '{field_name}' not found as a list in {type_name}")
 
     return results
 
@@ -257,6 +355,40 @@ def find_list_styles(types, kindmap):
     results = resolve_list_entries(BODY_LISTS, "Body", types, kindmap)
     results += resolve_list_entries(VERTICAL_LISTS, "Vertical", types, kindmap)
     results += resolve_list_entries(DYNAMIC_LISTS, "Dynamic", types, kindmap)
+    results += resolve_list_entries(INLINE_LISTS, "Inline", types, kindmap)
+
+    expected = {}
+    for kind, type_name in kindmap.items():
+        list_idx = 0
+        for owner, (
+            _ftype,
+            field_name,
+            is_list,
+            _list_kind,
+        ) in get_combined_fields_with_owners(type_name, types):
+            if not is_list:
+                continue
+            expected[(kind, list_idx)] = (owner.removesuffix("Syntax"), field_name)
+            list_idx += 1
+
+    classified = {}
+    for result in results:
+        key = result[0], result[1]
+        if key in classified:
+            owner, field_name = expected[key]
+            raise ValueError(
+                f"duplicate list style for {owner}.{field_name} ({key[0]}[{key[1]}])"
+            )
+        classified[key] = result
+
+    missing = [
+        f"{owner}.{field_name} ({kind}[{list_idx}])"
+        for (kind, list_idx), (owner, field_name) in expected.items()
+        if (kind, list_idx) not in classified
+    ]
+    if missing:
+        raise ValueError("missing list styles:\n  " + "\n  ".join(sorted(missing)))
+
     return sorted(results, key=lambda x: x[0])
 
 
@@ -316,7 +448,8 @@ def generate_vertical_list_function(results):
 
     by_kind = {}
     for kind, idx, fname, tname, num_lists, style in results:
-        by_kind.setdefault(kind, []).append((idx, fname, tname, num_lists, style))
+        if style != "Inline":
+            by_kind.setdefault(kind, []).append((idx, fname, tname, num_lists, style))
 
     for kind in sorted(by_kind):
         entries = by_kind[kind]
@@ -347,7 +480,13 @@ def generate_vertical_list_function(results):
             names = ", ".join(fname for _, fname, _, _, _ in entries)
 
             # If all entries share the same style, use a simple condition.
-            if len(by_style) == 1:
+            if len(by_style) == 1 and len(entries) == num_lists:
+                style = next(iter(by_style))
+                lines.append(
+                    f"        case SyntaxKind::{kind}: return ListStyle::{style};"
+                    f" // {names}"
+                )
+            elif len(by_style) == 1:
                 style = list(by_style.keys())[0]
                 indices = " || ".join(
                     f"listIndex == {idx}" for idx, _ in by_style[style]

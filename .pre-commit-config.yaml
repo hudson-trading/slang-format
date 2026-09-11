@@ -75,6 +75,12 @@ repos:
     # Local hook for formatter config documentation and schema synchronization
     - repo: local
       hooks:
+          - id: format-style-sync
+            name: Check formatter list-style generation
+            entry: python3 scripts/gen_format_style.py --check
+            language: system
+            pass_filenames: false
+            files: ^(external/slang|scripts/gen_format_style\.py|src/FormatStyleGen\.inc)$
           - id: format-config-schema-sync
             name: Regenerate formatter config schema and docs
             entry: python3 scripts/genconfig.py

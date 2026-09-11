@@ -19,6 +19,7 @@ ListStyle getListStyle(SyntaxKind parentKind, size_t listIndex) {
         case SyntaxKind::CoverCross: return listIndex == 2 ? ListStyle::Vertical : ListStyle::Inline; // members
         case SyntaxKind::CovergroupDeclaration: return listIndex == 1 ? ListStyle::Body : ListStyle::Inline; // members
         case SyntaxKind::Coverpoint: return listIndex == 1 ? ListStyle::Vertical : ListStyle::Inline; // members
+        case SyntaxKind::DistConstraintList: return ListStyle::Dynamic; // items
         case SyntaxKind::EnumType: return listIndex == 0 ? ListStyle::Vertical : ListStyle::Inline; // members
         case SyntaxKind::FunctionDeclaration: return listIndex == 1 ? ListStyle::Body : ListStyle::Inline; // items
         case SyntaxKind::FunctionPortList: return ListStyle::Dynamic; // ports
