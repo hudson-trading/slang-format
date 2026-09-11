@@ -43,10 +43,17 @@ hard links retain the old contents, and ownership/extended metadata are not copi
 The destination directory must be writable. Read-only files are rejected when
 changes are needed.
 
-Batch summaries count actual changed, unchanged, generated/excluded, and failed
-files. `--dry-run` counts only actual changes as "would format". Failed counts
-include validation failures even when the default exit policy tolerates a skip;
-forced failed candidates can count as both changed and failed.
+Batch summaries count each file once: formatted, unchanged, excluded, skipped, or
+failed. `--dry-run` counts actual changes as "would format". Skipped files retain
+their original contents; the summary distinguishes input parse errors from output
+validation failures. When both occur in a batch, the reason counts show how many
+skipped files had each problem; a file can have both reasons. Failed files are
+aborted operations or config, read, or write errors.
+
+Forced output counts as formatted or unchanged when the operation completes, even
+when input or output checks fail. Diagnostics and exit status still report those
+failures. Strict/check modes can also return status 1 for skipped files without
+counting them again as failed.
 
 ---
 
@@ -193,11 +200,11 @@ The report has these columns:
 | `elapsed_ms` | Read, format, and validation wall time in milliseconds, with three decimals; same measurement as verbose output. |
 | `input_bytes` | Number of source bytes read, or zero when input was not read. |
 | `status` | `changed`, `unchanged`, `excluded`, `skipped`, or `error`. |
-| `validation_failed` | `true` if formatter validation failed; otherwise `false`. |
+| `validation_failed` | `true` if an input check or output validation failed; otherwise `false`. |
 
 `changed` means output changed, or would change in a check/dry run. `excluded`
 identifies generated files; unchanged disabled regions are `unchanged`. `skipped`
-means validation kept the original. `error` covers aborts and file/config/write
+means an input check or output validation kept the original. `error` covers aborts and file/config/write
 failures. Forced failed output can be `changed` with `validation_failed=true`.
 These fields describe outcomes, not the command's exit status: strictness and
 checking flags still control that status.

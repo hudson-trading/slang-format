@@ -295,7 +295,9 @@ class CliOptionsTests(unittest.TestCase):
         self.assertEqual(self.clean.stat().st_mtime_ns, before.st_mtime_ns)
         self.assertEqual(self.clean.stat().st_ino, before.st_ino)
         self.assertIn(
-            b"formatted 1 files, 1 unchanged, 1 excluded, 1 failed", result.stderr
+            b"formatted 1 files, 1 unchanged, 1 excluded, "
+            b"1 skipped (input parse errors), 0 failed",
+            result.stderr,
         )
         self.assertEqual(self.dirty.read_bytes(), self.clean.read_bytes())
         self.assertEqual(list(self.root.glob(".slang-format-*.tmp")), [])
@@ -314,6 +316,69 @@ class CliOptionsTests(unittest.TestCase):
             self.assertEqual(list(self.root.glob(".slang-format-*.tmp")), [])
         finally:
             self.dirty.chmod(0o600)
+
+    def test_summary_parse_skips_and_errors_are_exclusive(self):
+        conflict = self.root / "conflict.sv"
+        conflict.write_bytes(b"// heading\n<<<<<<< branch\n" + self.source)
+        invalid = self.root / "bad/file.sv"
+        config = self.root / "bad/.slang/format.json"
+        config.parent.mkdir(parents=True)
+        config.write_text('{"unknown": true}')
+        invalid.write_bytes(self.source)
+        original = self.rejected.read_bytes()
+        for jobs in ["-j1", "-j4"]:
+            for mode, status in [("--dry-run", 0), ("--check", 1), ("--strict", 1)]:
+                with self.subTest(jobs=jobs, mode=mode):
+                    args = [jobs, "--verbose", "-i", mode, self.clean, self.rejected]
+                    result = self.run_cli(*args)
+                    self.assertEqual(result.returncode, status, result.stderr)
+                    prefix = b"formatted" if mode == "--strict" else b"would format"
+                    self.assertEqual(
+                        result.stderr.splitlines()[-1],
+                        prefix + b" 0 files, 1 unchanged, 0 excluded, "
+                        b"1 skipped (input parse errors), 0 failed",
+                    )
+                    result = self.run_cli(*args, conflict, invalid)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(
+                        result.stderr.splitlines()[-1],
+                        prefix + b" 0 files, 1 unchanged, 0 excluded, "
+                        b"1 skipped (input parse errors), 2 failed",
+                    )
+                    self.assertEqual(self.rejected.read_bytes(), original)
+                    self.assertEqual(invalid.read_bytes(), self.source)
+
+    def test_summary_forced_output_counts_only_its_outcome(self):
+        original = self.rejected.read_bytes()
+        result = self.run_cli("--force", self.rejected)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        expected = result.stdout
+        self.assertNotEqual(expected, self.rejected.read_bytes())
+        result = self.run_cli("--force", "-i", self.rejected, self.clean)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(self.rejected.read_bytes(), expected)
+        self.assertEqual(
+            result.stderr.splitlines()[-1],
+            b"formatted 1 files, 1 unchanged, 0 excluded, 0 failed",
+        )
+        result = self.run_cli("--force", "-i", self.rejected, self.clean)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(
+            result.stderr.splitlines()[-1],
+            b"formatted 0 files, 2 unchanged, 0 excluded, 0 failed",
+        )
+        self.rejected.write_bytes(original)
+        self.rejected.chmod(0o444)
+        try:
+            result = self.run_cli("--force", "-i", self.rejected, self.clean)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(
+                result.stderr.splitlines()[-1],
+                b"formatted 0 files, 1 unchanged, 0 excluded, 1 failed",
+            )
+            self.assertEqual(self.rejected.read_bytes(), original)
+        finally:
+            self.rejected.chmod(0o600)
 
     @unittest.skipIf(os.name == "nt", "symlink creation requires Windows privileges")
     def test_inplace_preserves_symlink(self):

@@ -776,19 +776,18 @@ int main(int argc, char** argv) {
     const bool isDryRun = noWrite;
     bool checkFailed = false;
 
-    int errorCount = 0;
     int skippedCount = 0;
+    int inputParseSkippedCount = 0;
+    int outputValidationSkippedCount = 0;
     int formattedCount = 0;
     int unchangedCount = 0;
     int excludedCount = 0;
     int failedCount = 0;
-    int cstMismatchCount = 0;
-    int idempotentFailCount = 0;
 
     auto processResult = [&](FileFormatResult& result) -> FileFormatStatus {
         if (!result.error.empty()) {
             OS::printE(fmt::format("error: {}\n", result.error));
-            errorCount++;
+            checkFailed = true;
             failedCount++;
             return FileFormatStatus::Error;
         }
@@ -797,28 +796,28 @@ int main(int argc, char** argv) {
         if ((strictValidation && !result.result.isUsable()) ||
             (warningsAsErrors == true && !result.result.diagnostics.empty()))
             checkFailed = true;
-        if (result.result.hasDiagnostic(format::FormatDiagnosticKind::CstMismatch))
-            cstMismatchCount++;
-        if (result.result.hasDiagnostic(format::FormatDiagnosticKind::NotIdempotent))
-            idempotentFailCount++;
-
-        if (!result.result.isUsable())
-            failedCount++;
         auto action = result.result.outputAction(force.value_or(false));
         if (action == format::FormatOutputAction::Abort) {
-            errorCount++;
+            checkFailed = true;
+            failedCount++;
             return FileFormatStatus::Error;
         }
         if (action == format::FormatOutputAction::KeepOriginal) {
-            if (!result.result.generated)
+            if (!result.result.generated) {
                 skippedCount++;
+                if (result.result.hasDiagnostic(format::FormatDiagnosticKind::StructuralImbalance))
+                    inputParseSkippedCount++;
+                if (result.result.hasDiagnostic(format::FormatDiagnosticKind::CstMismatch) ||
+                    result.result.hasDiagnostic(format::FormatDiagnosticKind::NotIdempotent))
+                    outputValidationSkippedCount++;
+            }
             else
                 excludedCount++;
             return result.result.generated ? FileFormatStatus::Excluded : FileFormatStatus::Skipped;
         }
-        // Forced output with validation failures still returns an error status.
+        // Forced output that fails input or output checks still returns an error status.
         if (!result.result.isUsable())
-            errorCount++;
+            checkFailed = true;
 
         if (result.result.formatted == result.input) {
             unchangedCount++;
@@ -837,9 +836,8 @@ int main(int argc, char** argv) {
         std::string writeError;
         if (!writeFile(result.path, result.result.formatted, writeError)) {
             OS::printE(fmt::format("error: failed to write '{}': {}\n", result.path, writeError));
-            errorCount++;
-            if (result.result.isUsable())
-                failedCount++;
+            checkFailed = true;
+            failedCount++;
             return FileFormatStatus::Error;
         }
         else {
@@ -892,21 +890,26 @@ int main(int argc, char** argv) {
     }
 
     OS::printE(fmt::format("{} {} files", isDryRun ? "would format" : "formatted", formattedCount));
-    OS::printE(
-        fmt::format(
-            ", {} unchanged, {} excluded, {} failed", unchangedCount, excludedCount, failedCount
-        )
-    );
-    if (skippedCount > 0)
-        OS::printE(fmt::format(", {} skipped (validation failures)", skippedCount));
-    if (errorCount > 0)
-        OS::printE(fmt::format(", {} errors", errorCount));
-    if (cstMismatchCount > 0)
-        OS::printE(fmt::format(" ({} CST mismatch)", cstMismatchCount));
-    if (idempotentFailCount > 0)
-        OS::printE(fmt::format(" ({} not idempotent)", idempotentFailCount));
-    OS::printE("\n");
+    OS::printE(fmt::format(", {} unchanged, {} excluded", unchangedCount, excludedCount));
+    if (skippedCount > 0) {
+        OS::printE(fmt::format(", {} skipped (", skippedCount));
+        if (inputParseSkippedCount > 0 && outputValidationSkippedCount > 0) {
+            OS::printE(
+                fmt::format(
+                    "{} input parse errors, {} output validation failures", inputParseSkippedCount,
+                    outputValidationSkippedCount
+                )
+            );
+        }
+        else {
+            OS::printE(
+                inputParseSkippedCount > 0 ? "input parse errors" : "output validation failures"
+            );
+        }
+        OS::printE(")");
+    }
+    OS::printE(fmt::format(", {} failed\n", failedCount));
 
     bool reportFailed = closeStats();
-    return errorCount > 0 || checkFailed || reportFailed ? 1 : 0;
+    return checkFailed || reportFailed ? 1 : 0;
 }

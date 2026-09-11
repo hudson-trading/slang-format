@@ -4,7 +4,7 @@
 output before the CLI applies it. These checks determine whether the CLI writes
 formatted text, keeps the original text, or rejects the file.
 
-## Before formatting
+## Input checks
 
 ### Generated files
 
@@ -36,9 +36,10 @@ Resolve the conflict and rerun the formatter for normal validated output, or use
 ### Parse structure
 
 The input is parsed before formatting. Parser errors that leave unclosed
-constructs indicate that the formatter cannot reliably format the source. The
-file is likely still being edited. Without `--force`, the CLI keeps the original
-text and reports the parse errors.
+constructs indicate that the formatter cannot reliably format the source. This
+can reflect incomplete source, parser limitations, or unexpanded macros. Without
+`--force`, the CLI keeps the original text and reports the parse errors. The batch
+summary labels these files as `skipped (input parse errors)`.
 
 Recovered parser errors alone do not necessarily prevent formatting. The
 formatter does not expand macros or follow includes, and it accepts standalone
@@ -63,15 +64,27 @@ Without `--force`, the CLI handles each file as follows:
 
 | Result | stdout mode | In-place mode | Exit status |
 | --- | --- | --- | --- |
-| Validation passes | Formatted source | Write formatted source | `0` |
+| Input and output checks pass | Formatted source | Write formatted source | `0` |
 | Generated file | Original source | Leave unchanged | `0` |
-| Parse structure, CST, or idempotency failure | Original source | Leave unchanged | `0` |
+| Input parse structure failure | Original source | Leave unchanged | `0` |
+| CST or idempotency failure | Original source | Leave unchanged | `0` |
 | Merge conflict, failed reparse, or internal error | No source output | Leave unchanged | `1` |
 
-Skipped validation failures still produce diagnostics on stderr. A rejected file
+Skipped input or output checks still produce diagnostics on stderr. A rejected file
 does **not** stop other files in a batch from being formatted. The command exits
-with status `1` if any file is rejected, a forced result has validation failures,
+with status `1` if any file is rejected, a forced result fails input or output checks,
 or a file operation fails.
+
+Batch outcome counts are exclusive: skipped files are not also counted as failed.
+Input parse skips and output validation skips have separate reason labels. Aborts,
+configuration errors, and file I/O errors count as failed. For example:
+
+```text
+formatted 0 files, 3998 unchanged, 0 excluded, 3 skipped (input parse errors), 0 failed
+```
+
+These counts describe what happened to each file, independently of exit policy.
+`--strict` can make a skipped file fail the command without changing its outcome.
 
 An unmatched `slang-format: on` produces a warning and formatting continues.
 The warning alone does not change the exit status. An unmatched `off` silently

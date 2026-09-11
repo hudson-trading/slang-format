@@ -172,8 +172,11 @@ def main():
                     assert b"Git merge conflict marker" in result.stderr
                     count = 2 if force else 1
                     verb = "would format" if dry_run else "formatted"
-                    assert f"{verb} {count} files".encode() in result.stderr
-                    assert b"1 errors" in result.stderr
+                    failed = 0 if force else 1
+                    summary = f"{verb} {count} files, 0 unchanged, 0 excluded, {failed} failed"
+                    assert result.stderr.splitlines()[-1] == summary.encode(), (
+                        result.stderr
+                    )
                     if force and not dry_run:
                         assert conflict_path.read_bytes() != conflict
                         assert conflict_path.read_bytes()
