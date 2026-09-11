@@ -810,7 +810,7 @@ TEST_CASE("formatting preserves expanded macro string values") {
 
 TEST_CASE("alignment padding cap starts a new group for later short rows") {
     format::Config config;
-    config.alignment.value().maxSpaces = 4;
+    config.alignment.value().paddingLimit = 4;
     auto result = format::format(
         "alignment.sv", "module foo; initial begin long_name = 1; aa = 2; b = 3; end endmodule\n",
         config
@@ -819,7 +819,7 @@ TEST_CASE("alignment padding cap starts a new group for later short rows") {
         UNSCOPED_INFO(diag.message);
     CHECK(result.isUsable());
     CHECK(result.formatted.find("aa = 2;\n        b  = 3;") != std::string::npos);
-    config.alignment.value().maxSpaces = std::nullopt;
+    config.alignment.value().paddingLimit = std::nullopt;
     result = format::format(
         "alignment.sv", "module foo; initial begin long_name = 1; aa = 2; b = 3; end endmodule\n",
         config

@@ -30,23 +30,25 @@ enum class AlignWrapStyle {
 } // namespace format
 
 namespace format {
+/// Controls alignment padding and separation into groups.
 struct AlignConfig {
 
     rfl::Description<
-        "Split the group if a space of this size or more is inserted "
-        "(null = never split on padding width)",
+        "Alignment padding threshold in spaces. Split a group when adding a row "
+        "would require this many or more spaces of padding; do not apply padding "
+        "at or above the threshold. null disables the limit",
         std::optional<int>>
-        maxSpaces = std::nullopt;
+        paddingLimit = std::nullopt;
 
     rfl::Description<
-        "Number of separator lines required to split an alignment "
+        "Number of existing separator lines required to split an alignment "
         "group of in-body code (assignment statements, local "
         "declarations). Empty lines count once; a standalone N-line "
         "comment region counts N-1. Structural groups (ports, params, "
         "case items, struct members, struct-pattern assigns) always "
-        "require 2 separator lines.",
+        "require 2 separator lines. Does not insert lines; values below 1 use 1.",
         int>
-        linesBetweenGroups = 1;
+        groupSeparatorLines = 1;
 };
 
 /// Configuration for slang-format
@@ -58,27 +60,23 @@ struct Config {
     rfl::Description<"Number of spaces before trailing comments", uint32_t>
         spacesBeforeTrailingComment = 2;
 
-    rfl::Description<
-        "When true, preserve user line breaks in expressions if all resulting lines "
-        "fit within the column limit",
-        bool>
-        respectUserFormatting = false;
-
-    rfl::Description<"Alignment config", AlignConfig> alignment = {};
+    rfl::Description<"Alignment padding and group separation", AlignConfig> alignment = {};
 
     rfl::Description<
-        "Directory names to exclude from formatting, omitted while crawling",
+        "Exact directory names to skip during recursive file collection, at any depth. "
+        "These are names, not paths or glob patterns. Explicit file and directory "
+        "arguments are still processed",
         std::vector<std::string>>
-        excludeDirs = std::vector<std::string>{};
+        excludeDirectoryNames = std::vector<std::string>{};
 
     rfl::Description<
-        "Paths (relative to the config file's directory) to format when the "
-        "formatter is pointed at that config directory itself. Lets a project "
-        "scope formatting to specific subtrees (e.g. [\"fpga\"]) without "
-        "formatting the whole tree. Ignored when a subdirectory or file is "
-        "targeted directly, so you can still format any path ad hoc.",
+        "File or directory paths relative to the project root containing .slang/. "
+        "When that root is targeted, collect files only from these paths; an empty "
+        "list collects the whole tree. Ignored for explicit file or subdirectory "
+        "targets, with --config, or when configuration is found only via the "
+        "current-directory fallback. Missing paths produce a warning",
         std::vector<std::string>>
-        dirs = std::vector<std::string>{};
+        projectPaths = std::vector<std::string>{};
 };
 
 /// Find `.slang/format.json` by walking from startDir toward the filesystem root.

@@ -10,8 +10,12 @@ All options are optional. Run `slang-format --dump-config` to print the
 resolved configuration for the first target (or stdin's assumed filename).
 Unknown keys are errors, including keys inside nested objects.
 Nested configs replace parent configs; omitted options use built-in defaults.
-Directory selection (`dirs` and `excludeDirs`) uses each directory argument's
-config; every collected file then resolves its own formatting settings.
+Directory selection (`projectPaths` and `excludeDirectoryNames`) uses each
+directory argument's config; each file then resolves its own formatting settings.
+
+`projectPaths` entries resolve from the project root containing `.slang/`.
+For example, `src` in `project/.slang/format.json`
+selects `project/src` when `project` is targeted.
 
 ## Config Options
 
@@ -39,46 +43,38 @@ Column limit for line wrapping (0 = no limit)
 
 Number of spaces before trailing comments
 
-### `respectUserFormatting`
-
-**Type:** `boolean`
-
-**Default:** `false`
-
-When true, preserve user line breaks in expressions if all resulting lines fit within the column limit
-
 ### `alignment`
 
 **Type:** `AlignConfig`
 
-Alignment config
+Alignment padding and group separation
 
-### `excludeDirs`
-
-**Type:** `list[string]`
-
-**Default:** `[]`
-
-Directory names to exclude from formatting, omitted while crawling
-
-### `dirs`
+### `excludeDirectoryNames`
 
 **Type:** `list[string]`
 
 **Default:** `[]`
 
-Paths (relative to the config file's directory) to format when the formatter is pointed at that config directory itself. Lets a project scope formatting to specific subtrees (e.g. ["fpga"]) without formatting the whole tree. Ignored when a subdirectory or file is targeted directly, so you can still format any path ad hoc.
+Exact directory names to skip during recursive file collection, at any depth. These are names, not paths or glob patterns. Explicit file and directory arguments are still processed
 
-### `alignment.maxSpaces`
+### `projectPaths`
+
+**Type:** `list[string]`
+
+**Default:** `[]`
+
+File or directory paths relative to the project root containing .slang/. When that root is targeted, collect files only from these paths; an empty list collects the whole tree. Ignored for explicit file or subdirectory targets, with --config, or when configuration is found only via the current-directory fallback. Missing paths produce a warning
+
+### `alignment.paddingLimit`
 
 **Type:** `integer | null`
 
-Split the group if a space of this size or more is inserted (null = never split on padding width)
+Alignment padding threshold in spaces. Split a group when adding a row would require this many or more spaces of padding; do not apply padding at or above the threshold. null disables the limit
 
-### `alignment.linesBetweenGroups`
+### `alignment.groupSeparatorLines`
 
 **Type:** `integer`
 
 **Default:** `1`
 
-Number of separator lines required to split an alignment group of in-body code (assignment statements, local declarations). Empty lines count once; a standalone N-line comment region counts N-1. Structural groups (ports, params, case items, struct members, struct-pattern assigns) always require 2 separator lines.
+Number of existing separator lines required to split an alignment group of in-body code (assignment statements, local declarations). Empty lines count once; a standalone N-line comment region counts N-1. Structural groups (ports, params, case items, struct members, struct-pattern assigns) always require 2 separator lines. Does not insert lines; values below 1 use 1.

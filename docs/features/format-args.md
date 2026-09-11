@@ -11,8 +11,9 @@ Stdin cannot be combined with other inputs or `-i`.
 If files are specified without `-i`, prints formatted output to stdout.
 With `-i`, modifies files in-place. Multiple files require `-i`, `--dry-run`, or `--check`.
 Directories recursively collect `.sv`, `.svh`, `.v`, and `.vh` files. Each directory
-argument's config controls `excludeDirs` (directory names) and `dirs` (subtrees when
-targeting a config root). Each collected file resolves its own formatting config.
+argument's config controls `excludeDirectoryNames` (directory names) and
+`projectPaths` (files or subtrees when targeting the project root containing
+`.slang/`). Each collected file resolves its own formatting config.
 
 See [validation](format-validation.md) for checks, rejected files, and exit statuses,
 and [disabling formatting](format-markers.md) for preserving source formatting.

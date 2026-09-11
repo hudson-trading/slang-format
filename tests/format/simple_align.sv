@@ -42,9 +42,9 @@ module top;
     .very_long_port_name(sig)
   );
 
-  // With default maxSpaces = null, very-wide gaps no longer split the group
-  // (set alignment.maxSpaces to a positive int to break alignment on a >N
-  // char column gap).
+  // With default paddingLimit = null, wide gaps keep the group aligned.
+  // Set alignment.paddingLimit to a positive integer N to split the group
+  // when a column needs N or more spaces of padding.
   sub u_max_spaces (
     .a(x),
     .this_port_name_is_over_thirty_chars_longer(y),

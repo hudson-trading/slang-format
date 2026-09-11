@@ -1015,7 +1015,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
             size_t groupEnd = groupBegin + 1;
             bool proceduralBlock = constants::isProceduralBlockAlignKind(key.kind);
             int threshold = constants::isBodyAlignKind(key.kind)
-                                ? config.alignment.get().linesBetweenGroups.get()
+                                ? config.alignment.get().groupSeparatorLines.get()
                                 : constants::defaultGroupSeparatorLines;
             threshold = std::max(threshold, 1);
             if (isTerminalAssignmentAnchor(*rows[groupBegin])) {
@@ -1025,13 +1025,13 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
             size_t sectionBegin = groupBegin;
             size_t minimumColumn = rows[groupBegin]->column + rowShifts[rows[groupBegin]->line];
             size_t maximumColumn = minimumColumn;
-            const auto& maxSpaces = config.alignment.get().maxSpaces.get();
+            const auto& paddingLimit = config.alignment.get().paddingLimit.get();
             while (groupEnd < rows.size()) {
                 size_t nextColumn = rows[groupEnd]->column + rowShifts[rows[groupEnd]->line];
                 size_t nextMinimum = std::min(minimumColumn, nextColumn);
                 size_t nextMaximum = std::max(maximumColumn, nextColumn);
-                if (maxSpaces && *maxSpaces > 0 &&
-                    nextMaximum - nextMinimum >= static_cast<size_t>(*maxSpaces))
+                if (paddingLimit && *paddingLimit > 0 &&
+                    nextMaximum - nextMinimum >= static_cast<size_t>(*paddingLimit))
                     break;
                 minimumColumn = nextMinimum;
                 maximumColumn = nextMaximum;
@@ -1257,8 +1257,8 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                     currentWidth + padding > config.columnLimit.get()) {
                     continue;
                 }
-                const auto& maxSpaces = config.alignment.get().maxSpaces.get();
-                if (!maxSpaces || padding < static_cast<size_t>(*maxSpaces)) {
+                const auto& paddingLimit = config.alignment.get().paddingLimit.get();
+                if (!paddingLimit || padding < static_cast<size_t>(*paddingLimit)) {
                     result.padding[rows[i]->id] = padding;
                     if (key.column == 1) {
                         auto suffix = lineSuffix(*rows[i]);

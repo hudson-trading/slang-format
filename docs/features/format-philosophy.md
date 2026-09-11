@@ -6,7 +6,6 @@ Some things are preserved from the original source:
 
 - **Macro definitions and argument contents** — these are emitted verbatim since modifying them could change macro expansion, including stringification. Whitespace within a macro argument at a usage is preserved.
 - **Blank lines within lists** — blank lines between module members, port declarations, etc. are kept as authored to respect logical groupings.
-- **Expressions with existing line breaks** — when `respectUserFormatting` is enabled (default), an existing long line split  is retained as one all-or-nothing choice if it fits the column limit.
 
 ## Formatter Passes
 
@@ -163,7 +162,7 @@ New kinds can be added by lowering alignment anchors in `src/Layout.cpp`.
 
 Consecutive alignable members form a group. Groups are broken intentionally so that alignment doesn't span unrelated sections of code.
 
-**Blank lines** are the primary way to control groups. Structural alignments (ports, instance/param connections, case items, struct fields, struct-pattern assigns) require **two** consecutive blank lines to split — a single blank line is preserved visually but keeps the group aligned. Body alignments (assignment statements, local declarations) use the user-configurable `alignment.linesBetweenGroups` setting (default: `1`), so a single blank line is enough to split assignment groups inside an always/initial/function body.
+**Blank lines** are the primary way to control groups. Structural alignments (ports, instance/param connections, case items, struct fields, struct-pattern assigns) require **two** consecutive blank lines to split — a single blank line is preserved visually but keeps the group aligned. Body alignments (assignment statements, local declarations) use the user-configurable `alignment.groupSeparatorLines` setting (default: `1`), so a single blank line is enough to split assignment groups inside an always/initial/function body.
 
 Standalone comment regions also contribute to that threshold, but their first physical line is free: an N-line comment region counts as N-1 separator lines. A one-line annotation such as `// meta: packet_t` therefore does not disturb alignment; a longer section header can combine with blank lines to split the group.
 
@@ -201,13 +200,13 @@ end
 
 **Kind changes** also break groups. A port declaration followed by a data declaration starts a new group, since they have different column layouts.
 
-**Maximum padding** (`alignment.maxSpaces`, default: `null`) optionally splits a group when aligning would require an excessive gap. By default no gap-based splitting happens — all otherwise-compatible rows align together. Setting `maxSpaces` to a positive integer reinstates the cap: when any column would need that many or more spaces of padding for a new member, that member starts a fresh group instead. This is useful when one member has a much longer type or name than the rest and forcing every other line to pad out to match would produce unreadable code:
+**Maximum padding** (`alignment.paddingLimit`, default: `null`) optionally splits a group when aligning would require an excessive gap. By default no gap-based splitting happens — all otherwise-compatible rows align together. Setting `paddingLimit` to a positive integer reinstates the cap: when any column would need that many or more spaces of padding for a new member, that member starts a fresh group instead. This is useful when one member has a much longer type or name than the rest and forcing every other line to pad out to match would produce unreadable code:
 
 ```systemverilog
-// Default (maxSpaces = null) — everything aligns:
+// Default (paddingLimit = null) — everything aligns:
 logic [VERY_LONG_PARAMETER-1:0] some_very_long_signal_name;
 logic                           x;
 
-// With maxSpaces = 30, 'x' would start its own group because including it
-// would force a >30-char gap in the type column.
+// With paddingLimit = 30, 'x' would start its own group because including it
+// would force a gap of 30 or more spaces in the type column.
 ```

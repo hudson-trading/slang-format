@@ -49,12 +49,12 @@ constexpr size_t maxInlineMultiLabelWidth = 12;
 /// lines count once; a standalone comment region contributes all but its first
 /// physical line. A threshold of two means a single blank line between e.g.
 /// ports, case items, or struct fields does NOT split the group. Body code
-/// overrides this with `AlignConfig::linesBetweenGroups` (default 1).
+/// overrides this with `AlignConfig::groupSeparatorLines` (default 1).
 constexpr int defaultGroupSeparatorLines = 2;
 
 /// True for row kinds that represent "body" code — statements and local
 /// declarations inside a function/always/initial block. These honor the user's
-/// `AlignConfig::linesBetweenGroups`; all other kinds use
+/// `AlignConfig::groupSeparatorLines`; all other kinds use
 /// `defaultGroupSeparatorLines`.
 constexpr bool isBodyAlignKind(slang::syntax::SyntaxKind kind) {
     switch (kind) {

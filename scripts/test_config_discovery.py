@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Integration test for slang-format config discovery and `dirs` scoping.
+"""Integration test for slang-format config discovery and `projectPaths` scoping.
 
 Verifies that when no --config is given, slang-format finds .slang/format.json
 by walking up from the *target* path (the file/dir being formatted), not from
 the current working directory. An explicit --config still overrides, and stdin
 mode falls back to CWD-based discovery.
 
-Also verifies the config's `dirs`: when the formatter is pointed at the config
+Also verifies the config's `projectPaths`: when the formatter is pointed at the config
 root (the directory holding .slang/format.json), formatting is scoped to those
-subtrees; pointing it at any other directory ignores `dirs`.
+subtrees; pointing it at any other directory ignores `projectPaths`.
 
 Each case builds a throwaway directory tree under a temp dir and runs the
 binary, checking either the effective columnLimit (via --dump-config) or the
@@ -49,9 +49,7 @@ def dump_column_limit(
 
 def formatted_files(binary: str, args: list[str], cwd: str) -> set[str]:
     """Run slang-format --dry-run -v and return the set of basenames it
-    reports it would format. Verbose prints 'formatting <path> ...' per file;
-    a single-file run prints the formatted source to stdout instead, so this
-    is only meaningful for multi-file (directory) targets."""
+    reports it would format. Verbose prints 'formatting <path> ...' per file."""
     result = subprocess.run(
         [binary, "--dry-run", "-v", *args],
         cwd=cwd,
@@ -174,16 +172,14 @@ def main() -> None:
             40,
         )
 
-        # --- `dirs` scoping ----------------------------------------------
-        # Config root with `dirs: ["fpga"]`. fpga/ is in scope; other/ is not.
+        # --- `projectPaths` scoping ----------------------------------------------
+        # Config root with `projectPaths: ["fpga"]`. fpga/ is in scope; other/ is not.
         droot = os.path.join(tmp, "droot")
         os.makedirs(os.path.join(droot, ".slang"))
         os.makedirs(os.path.join(droot, "fpga", "src"))
         os.makedirs(os.path.join(droot, "other", "src"))
         with open(os.path.join(droot, ".slang", "format.json"), "w") as f:
-            f.write('{"dirs": ["fpga"]}\n')
-        # Two files per subtree so a directory run is always multi-file (a
-        # single-file run prints to stdout instead of the verbose listing).
+            f.write('{"projectPaths": ["fpga"]}\n')
         for rel in (
             "fpga/src/a.sv",
             "fpga/src/a2.sv",
@@ -193,32 +189,32 @@ def main() -> None:
             with open(os.path.join(droot, rel), "w") as f:
                 f.write("module m;\nendmodule\n")
 
-        # 6. Targeting the config root scopes to `dirs` (only fpga files).
+        # 6. Targeting the config root scopes to `projectPaths` (only fpga files).
         check(
-            "dirs scopes config-root target",
+            "projectPaths scopes config-root target",
             formatted_files(binary, [droot], cwd=tmp),
             {"a.sv", "a2.sv"},
         )
 
-        # 7. Targeting a subfolder directly ignores `dirs` (ad-hoc format).
+        # 7. Targeting a subfolder directly ignores `projectPaths` (ad-hoc format).
         check(
-            "dirs ignored for ad-hoc subfolder",
+            "projectPaths ignored for ad-hoc subfolder",
             formatted_files(binary, [os.path.join(droot, "other")], cwd=tmp),
             {"b.sv", "b2.sv"},
         )
 
-        # 8. Config root reached via trailing slash still applies `dirs`.
+        # 8. Config root reached via trailing slash still applies `projectPaths`.
         check(
-            "dirs applies with trailing slash",
+            "projectPaths applies with trailing slash",
             formatted_files(binary, [droot + os.sep], cwd=tmp),
             {"a.sv", "a2.sv"},
         )
 
-        # 9. Without `dirs`, targeting the config root formats everything.
+        # 9. Without `projectPaths`, targeting the config root formats everything.
         with open(os.path.join(droot, ".slang", "format.json"), "w") as f:
             f.write("{}\n")
         check(
-            "no dirs -> format whole tree",
+            "no projectPaths -> format whole tree",
             formatted_files(binary, [droot], cwd=tmp),
             {"a.sv", "a2.sv", "b.sv", "b2.sv"},
         )

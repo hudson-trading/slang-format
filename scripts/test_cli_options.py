@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import json
 import os
 import stat
 import queue
@@ -355,6 +356,77 @@ class CliOptionsTests(unittest.TestCase):
         result = self.run_cli("-i", one, two)
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn(b"\n        logic a;", two.read_bytes())
+
+    def test_config_option_names(self):
+        config = self.root / "format.json"
+        options = {
+            "alignment": {"paddingLimit": 12, "groupSeparatorLines": 3},
+            "excludeDirectoryNames": ["build"],
+            "projectPaths": ["src", "top.sv"],
+        }
+        config.write_text(json.dumps(options))
+        result = self.run_cli("--config", config, "--dump-config")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        resolved = json.loads(result.stdout)
+        for key, value in options.items():
+            self.assertEqual(resolved[key], value)
+        self.assertNotIn("respectUserFormatting", resolved)
+        for obsolete, value in [
+            ("maxSpaces", {"alignment": {"maxSpaces": 12}}),
+            ("linesBetweenGroups", {"alignment": {"linesBetweenGroups": 3}}),
+            ("excludeDirs", {"excludeDirs": ["build"]}),
+            ("dirs", {"dirs": ["src"]}),
+            ("respectUserFormatting", {"respectUserFormatting": False}),
+        ]:
+            with self.subTest(obsolete=obsolete):
+                config.write_text(json.dumps(value))
+                result = self.run_cli("--config", config, self.dirty)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(result.stdout, b"")
+                self.assertIn(obsolete.encode(), result.stderr)
+
+    def test_project_paths_and_excluded_directory_names(self):
+        project = self.root / "project"
+        config = project / ".slang/format.json"
+        config.parent.mkdir(parents=True)
+        config.write_text(
+            json.dumps(
+                {
+                    "projectPaths": ["src", "top.sv"],
+                    "excludeDirectoryNames": ["build"],
+                }
+            )
+        )
+        for path in [
+            "top.sv",
+            "src/keep.sv",
+            "src/build/skipped.sv",
+            "src/deep/build/nested.sv",
+            "src/build_extra/included.sv",
+            "other/file.sv",
+        ]:
+            target = project / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(self.source)
+        selected = {"top.sv", "src/keep.sv", "src/build_extra/included.sv"}
+        for args, expected in [
+            ((project,), selected),
+            ((project / "src/build",), {"src/build/skipped.sv"}),
+            ((project / "src/deep/build/nested.sv",), {"src/deep/build/nested.sv"}),
+            ((project / "other",), {"other/file.sv"}),
+            (("--config", config, project), selected | {"other/file.sv"}),
+        ]:
+            with self.subTest(args=args):
+                result = self.run_cli("--dry-run", "--verbose", *args)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    {
+                        line
+                        for line in result.stderr.splitlines()
+                        if line.startswith(b"formatting ")
+                    },
+                    {f"formatting {project / path} ...".encode() for path in expected},
+                )
 
     def test_stdin_paths(self):
         expected = self.clean.read_bytes()

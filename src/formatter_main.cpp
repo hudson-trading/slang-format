@@ -61,10 +61,10 @@ fs::path configSearchRoot(const std::vector<std::string>& positional) {
 }
 
 // Recursively collect SystemVerilog source files under `dir`, skipping any
-// subdirectory whose name exactly matches an entry in `excludeDirs`.
+// subdirectory whose name exactly matches an entry in `excludeDirectoryNames`.
 void collectSourceFiles(
     const fs::path& dir,
-    const std::vector<std::string>& excludeDirs,
+    const std::vector<std::string>& excludeDirectoryNames,
     std::vector<std::string>& out
 ) {
     static constexpr std::array<std::string_view, 4> kExtensions = {".sv", ".svh", ".v", ".vh"};
@@ -81,7 +81,8 @@ void collectSourceFiles(
         const auto& entry = *it;
         if (entry.is_directory(ec)) {
             auto name = entry.path().filename().string();
-            if (std::find(excludeDirs.begin(), excludeDirs.end(), name) != excludeDirs.end())
+            if (std::find(excludeDirectoryNames.begin(), excludeDirectoryNames.end(), name) !=
+                excludeDirectoryNames.end())
                 it.disable_recursion_pending();
             continue;
         }
@@ -393,7 +394,7 @@ int main(int argc, char** argv) {
             "If a single file is given without -i, prints formatted output to stdout.\n"
             "With -i, modifies files in-place.\n"
             "Directory arguments recurse into all .sv/.svh/.v/.vh files; subdirs are\n"
-            "filtered using the config's excludeDirs (match on directory name).\n"
+            "filtered using the config's excludeDirectoryNames (match on directory name).\n"
             "\n"
             "OPTIONS:\n"
             "  -h, --help        Display this help message\n"
@@ -635,14 +636,14 @@ int main(int argc, char** argv) {
     }
 
     // Validate files exist. Directory args expand to all .sv/.svh/.v/.vh
-    // files underneath, with subdirs filtered by the config's excludeDirs.
+    // files underneath, with subdirs filtered by the config's excludeDirectoryNames.
     // Files are added verbatim — only directory args are filtered, since
     // explicit file paths are an intentional opt-in.
     //
-    // The config's `dirs` only applies when a directory arg IS the config root
+    // The config's `projectPaths` only applies when a directory arg IS the config root
     // (the directory holding `.slang/format.json`). In that case, formatting
     // is scoped to those subtrees instead of the whole tree. Pointing the
-    // formatter at any other directory ignores `dirs` and crawls it directly,
+    // formatter at any other directory ignores `projectPaths` and crawls it directly,
     // so a subfolder can be formatted ad hoc without committing the whole tree.
     std::vector<std::string> files;
     for (const auto& path : positional) {
@@ -662,30 +663,31 @@ int main(int argc, char** argv) {
             fs::path canonical = fs::weakly_canonical(path, ec);
             if (ec)
                 canonical = path;
-            bool isConfigRoot = !configRoot.empty() && !config.dirs.value().empty() &&
+            bool isConfigRoot = !configRoot.empty() && !config.projectPaths.value().empty() &&
                                 canonical == configRoot;
             if (isConfigRoot) {
-                // Scope to the config's `dirs` (resolved relative to the
-                // config root). A `dirs` entry that doesn't exist is skipped
+                // Scope to the config's `projectPaths` (resolved relative to the
+                // config root). A `projectPaths` entry that doesn't exist is skipped
                 // with a warning rather than failing the whole run.
-                for (const auto& d : config.dirs.value()) {
+                for (const auto& d : config.projectPaths.value()) {
                     fs::path sub = configRoot / d;
                     if (!fs::exists(sub)) {
                         OS::printE(
                             fmt::format(
-                                "warning: config 'dirs' entry not found: '{}'\n", sub.string()
+                                "warning: config 'projectPaths' entry not found: '{}'\n",
+                                sub.string()
                             )
                         );
                         continue;
                     }
                     if (fs::is_directory(sub))
-                        collectSourceFiles(sub, config.excludeDirs.value(), files);
+                        collectSourceFiles(sub, config.excludeDirectoryNames.value(), files);
                     else
                         files.push_back(sub.string());
                 }
             }
             else {
-                collectSourceFiles(path, config.excludeDirs.value(), files);
+                collectSourceFiles(path, config.excludeDirectoryNames.value(), files);
             }
         }
         else {

@@ -5,8 +5,8 @@
     "format__AlignConfig": {
       "type": "object",
       "properties": {
-        "maxSpaces": {
-          "description": "Split the group if a space of this size or more is inserted (null = never split on padding width)",
+        "paddingLimit": {
+          "description": "Alignment padding threshold in spaces. Split a group when adding a row would require this many or more spaces of padding; do not apply padding at or above the threshold. null disables the limit",
           "anyOf": [
             {
               "type": "integer"
@@ -16,9 +16,9 @@
             }
           ]
         },
-        "linesBetweenGroups": {
+        "groupSeparatorLines": {
           "type": "integer",
-          "description": "Number of separator lines required to split an alignment group of in-body code (assignment statements, local declarations). Empty lines count once; a standalone N-line comment region counts N-1. Structural groups (ports, params, case items, struct members, struct-pattern assigns) always require 2 separator lines."
+          "description": "Number of existing separator lines required to split an alignment group of in-body code (assignment statements, local declarations). Empty lines count once; a standalone N-line comment region counts N-1. Structural groups (ports, params, case items, struct members, struct-pattern assigns) always require 2 separator lines. Does not insert lines; values below 1 use 1."
         }
       },
       "required": []
@@ -38,24 +38,20 @@
           "type": "integer",
           "description": "Number of spaces before trailing comments"
         },
-        "respectUserFormatting": {
-          "description": "When true, preserve user line breaks in expressions if all resulting lines fit within the column limit",
-          "type": "boolean"
-        },
         "alignment": {
           "$ref": "#/$defs/format__AlignConfig",
-          "description": "Alignment config"
+          "description": "Alignment padding and group separation"
         },
-        "excludeDirs": {
+        "excludeDirectoryNames": {
           "type": "array",
-          "description": "Directory names to exclude from formatting, omitted while crawling",
+          "description": "Exact directory names to skip during recursive file collection, at any depth. These are names, not paths or glob patterns. Explicit file and directory arguments are still processed",
           "items": {
             "type": "string"
           }
         },
-        "dirs": {
+        "projectPaths": {
           "type": "array",
-          "description": "Paths (relative to the config file's directory) to format when the formatter is pointed at that config directory itself. Lets a project scope formatting to specific subtrees (e.g. [\"fpga\"]) without formatting the whole tree. Ignored when a subdirectory or file is targeted directly, so you can still format any path ad hoc.",
+          "description": "File or directory paths relative to the project root containing .slang/. When that root is targeted, collect files only from these paths; an empty list collects the whole tree. Ignored for explicit file or subdirectory targets, with --config, or when configuration is found only via the current-directory fallback. Missing paths produce a warning",
           "items": {
             "type": "string"
           }
