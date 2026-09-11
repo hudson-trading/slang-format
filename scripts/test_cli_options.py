@@ -33,6 +33,31 @@ class CliOptionsTests(unittest.TestCase):
             timeout=30,
         )
 
+    def test_strict_validation_preserves_rejected_output(self):
+        original = self.rejected.read_bytes()
+        for flags in [
+            ("--strict",),
+            ("--fail-on-incomplete-format",),
+            ("--failsafe_success=false",),
+        ]:
+            for mode in [(), ("-n",), ("-i",)]:
+                with self.subTest(flags=flags, mode=mode):
+                    result = self.run_cli(*flags, *mode, self.rejected)
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertEqual(result.stdout, b"" if mode else original)
+                    self.assertEqual(self.rejected.read_bytes(), original)
+            for targets in [(self.clean, self.rejected), (self.rejected, self.clean)]:
+                result = self.run_cli(*flags, "-n", *targets)
+                self.assertEqual(result.returncode, 1, result.stderr)
+            result = self.run_cli(*flags, self.dirty)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, self.clean.read_bytes())
+            result = self.run_cli(*flags, source=original)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(result.stdout, original)
+        result = self.run_cli("--failsafe_success=true", self.rejected)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_check_modes(self):
         for flags in [("--check",), ("--verify",), ("-n", "--Werror")]:
             for targets, expected in [

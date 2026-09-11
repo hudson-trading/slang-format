@@ -245,6 +245,14 @@ int main(int argc, char** argv) {
         "--Werror", warningsAsErrors, "Treat warnings and dry-run formatting changes as errors"
     );
 
+    std::optional<bool> strict;
+    cmdline.add("--strict,--fail-on-incomplete-format", strict, "Fail on any validation failure");
+
+    std::optional<bool> failsafeSuccess;
+    cmdline.add(
+        "--failsafe_success", failsafeSuccess, "Allow skipped validation failures (default: true)"
+    );
+
     std::optional<bool> force;
     cmdline.add("-f,--force", force, "Force output even if validation fails");
 
@@ -308,6 +316,9 @@ int main(int argc, char** argv) {
             "  -n, --dry-run     Format and validate but do not write\n"
             "  --check, --verify Check formatting and validation without writing\n"
             "  --Werror         Fail on warnings and dry-run formatting changes\n"
+            "  --strict         Fail on any validation failure without forcing output\n"
+            "  --fail-on-incomplete-format  Alias for --strict\n"
+            "  --failsafe_success=false    Alias for --strict\n"
             "  -f, --force       Force output even if validation fails\n"
             "  --config <path>   Path to config file. If omitted, searches for\n"
             "                    .slang/format.json walking up from the target\n"
@@ -327,6 +338,7 @@ int main(int argc, char** argv) {
 
     const bool checkFormatting = check == true || (dryRun == true && warningsAsErrors == true);
     const bool noWrite = dryRun == true || check == true;
+    const bool strictValidation = strict == true || failsafeSuccess == false || checkFormatting;
 
     // Load configuration
     format::Config config;
@@ -407,7 +419,7 @@ int main(int argc, char** argv) {
             OS::printE(fmt::format("{}: needs formatting\n", path));
         if (!noWrite)
             OS::print(skipped ? input : std::string_view(result.formatted));
-        bool failed = (!result.isUsable() && (!skipped || checkFormatting)) ||
+        bool failed = (!result.isUsable() && (!skipped || strictValidation)) ||
                       (warningsAsErrors == true && !result.diagnostics.empty());
         return failed || (checkFormatting && changed) ? 1 : 0;
     };
@@ -514,7 +526,7 @@ int main(int argc, char** argv) {
         }
 
         printDiagnostics(result.result, result.path);
-        if ((checkFormatting && !result.result.isUsable()) ||
+        if ((strictValidation && !result.result.isUsable()) ||
             (warningsAsErrors == true && !result.result.diagnostics.empty()))
             checkFailed = true;
         if (result.result.hasDiagnostic(format::FormatDiagnosticKind::CstMismatch))

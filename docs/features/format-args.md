@@ -69,6 +69,19 @@ Without `--dry-run`, this changes exit status without suppressing normal output.
 
 ---
 
+### `--strict`, `--fail-on-incomplete-format`
+
+Return status 1 on every validation failure, including structural parse failures,
+CST mismatches, and non-idempotent output that normally preserve the input and
+return 0. Output handling is unchanged: rejected candidates remain unapplied unless
+`--force` is also given. Formatting differences and unmatched `on` warnings alone
+are not failures. This is validation of formatting safety, not compilation.
+
+`--failsafe_success=false` is an equivalent spelling for Verible integrations.
+The default is `true`; it cannot override `--strict`, `--check`, or `--Werror`.
+
+---
+
 ### `--config <path>`
 
 Path to a JSON config file. If not specified, `slang-format` searches upward from the target path, then from the current directory, for `.slang/format.json`.

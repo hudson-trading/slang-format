@@ -90,6 +90,23 @@ valid source and intentional exclusions. Unmatched `on` warnings alone still pas
 `--dry-run --Werror` additionally fails on diagnostic warnings. Neither mode lets
 `--force` turn a failed validation into a successful check.
 
+## Strict validation
+
+`--strict` returns `1` for every validation failure while preserving the normal
+output policy. Structural parse failures, CST mismatches, and idempotency failures
+therefore keep the original source but fail the command. This also applies to
+stdin and batches; a later successful file never clears an earlier failure.
+
+`--fail-on-incomplete-format` and `--failsafe_success=false` are equivalent
+spellings. Explicit `--strict` and checking options take precedence over
+`--failsafe_success=true`. Recovered parser errors that do not invalidate
+formatting, intentional exclusions, and unmatched `on` warnings still pass.
+
+```sh
+# Require safe formatting without forcing rejected candidates
+slang-format --strict -i rtl/
+```
+
 ## Forcing output
 
 `--force` overrides **every validation failure**, including merge conflicts:
