@@ -53,6 +53,22 @@ without force-pushing. The `gh-pages` branch must already exist.
 Manual preview runs require a PR number and publish the selected ref without
 posting a PR comment.
 
+## Releases
+
+Select **Actions → Release → Run workflow** on GitHub, choose the branch to
+release, and select a `patch`, `minor`, or `major` version bump (default: `patch`).
+For example, starting from `0.1.0`, these produce `0.1.1`, `0.2.0`, or `1.0.0`.
+The workflow commits the updated `VERSION` to that branch and pushes it together
+with the matching `v<VERSION>` tag, then builds, tests, and publishes that commit.
+The manual trigger becomes available once the workflow is on `main`.
+
+The branch must allow the workflow to push the version commit. Branch updates
+and tags are pushed atomically; a rejected branch update also prevents tag
+creation. Rerunning the same workflow reuses an existing tag only if it contains
+the expected version update on the original commit. Pushing a `v*` tag directly
+still triggers the release pipeline without bumping the version; the tag must
+match `VERSION` at that commit.
+
 ## Architecture
 
 The formatter uses the concrete syntax tree (CST) from slang so that comments,
