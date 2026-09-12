@@ -7,6 +7,23 @@
 
 #include "slang/syntax/SyntaxKind.h"
 
+TEST_CASE("deep document wrappers preserve child order and anchor scope") {
+    format::DocumentBuilder builder;
+    auto root = builder.text("value");
+    for (size_t i = 0; i < 4096; i++) {
+        root =
+            builder.concat({builder.text("a"), builder.relativeAnchor(0, root), builder.text("b")});
+    }
+    root = builder.concat({root, builder.hardLine(), builder.text("next")});
+    auto document = std::move(builder).finish(root);
+    format::Config config;
+    config.columnLimit = 0;
+    format::DocumentRenderer renderer(config);
+    auto layout = renderer.renderLayout(document);
+    CHECK(layout.text == std::string(4096, 'a') + "value" + std::string(4096, 'b') + "\nnext\n");
+    CHECK(renderer.renderAligned(document, layout).text == layout.text);
+}
+
 TEST_CASE("layout solver reuses costs for many fitting members") {
     format::DocumentBuilder builder;
     std::vector<format::DocId> lines;

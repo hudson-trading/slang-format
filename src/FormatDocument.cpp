@@ -15,6 +15,7 @@
 #include <limits>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <tuple>
 
 #include "slang/text/CharInfo.h"
@@ -73,100 +74,14 @@ void flatten(
     FlattenContext context,
     std::vector<FlatAtom>& result
 ) {
-    const auto& node = document.nodes.at(id);
-    switch (node.kind) {
-        case DocKind::Empty:
-            break;
-        case DocKind::Text:
-            result.push_back(
-                {FlatAtom::Kind::Text, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
-                 node.syntaxKind, context.member}
-            );
-            break;
-        case DocKind::Verbatim:
-            result.push_back(
-                {FlatAtom::Kind::Verbatim, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
-                 node.syntaxKind, context.member}
-            );
-            result.back().preserveWhitespace = node.preserveWhitespace;
-            break;
-        case DocKind::MemberVerbatim:
-            result.push_back(
-                {FlatAtom::Kind::MemberVerbatim, node.text, 0, 0, 0, 1,
-                 context.memberIndent + node.value, 0, 0, 0, node.syntaxKind, context.member}
-            );
-            break;
-        case DocKind::AbsoluteText:
-            result.push_back(
-                {FlatAtom::Kind::AbsoluteText, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
-                 node.syntaxKind, context.member}
-            );
-            result.back().preserveWhitespace = node.preserveWhitespace;
-            break;
-        case DocKind::SoftLine:
-            result.push_back(
-                {FlatAtom::Kind::SoftLine, node.text, node.id,
-                 node.group ? node.group : context.group, node.value, 1, context.indent, 0, 0, 0,
-                 node.syntaxKind, node.global ? 0 : context.member}
-            );
-            result.back().anchorIndent = context.anchorIndent;
-            result.back().conditionalIndentBreak = context.conditionalIndentBreak;
-            result.back().conditionalIndent = context.conditionalIndent;
-            break;
-        case DocKind::HardLine:
-            result.push_back(
-                {FlatAtom::Kind::HardLine,
-                 {},
-                 0,
-                 context.group,
-                 0,
-                 node.value,
-                 context.indent,
-                 0,
-                 0,
-                 0,
-                 node.syntaxKind,
-                 context.member}
-            );
-            result.back().anchorIndent = node.id ? context.anchorIndent : -1;
-            result.back().conditionalIndentBreak = context.conditionalIndentBreak;
-            result.back().conditionalIndent = context.conditionalIndent;
-            break;
-        case DocKind::Concat:
-            for (auto child : node.children)
-                flatten(document, child, context, result);
-            break;
-        case DocKind::Indent:
-            if (context.anchorDepth)
-                context.anchorIndent += node.value;
-            else
-                context.indent += node.value;
-            flatten(document, node.children.front(), context, result);
-            break;
-        case DocKind::IndentIfBreak:
-            context.conditionalIndentBreak = node.id;
-            context.conditionalIndent += node.value;
-            flatten(document, node.children.front(), context, result);
-            break;
-        case DocKind::RelativeAnchor:
-            result.push_back(
-                {FlatAtom::Kind::AnchorStart,
-                 {},
-                 0,
-                 0,
-                 node.value,
-                 1,
-                 context.indent,
-                 node.id,
-                 0,
-                 0,
-                 node.syntaxKind,
-                 context.member}
-            );
-            result.back().anchorFitWidth = node.width;
-            context.anchorDepth++;
-            context.anchorIndent = 0;
-            flatten(document, node.children.front(), context, result);
+    // Layout wrappers can make the document deeper than its source syntax tree.
+    std::vector<std::tuple<DocId, FlattenContext, bool>> pending{{id, context, false}};
+    while (!pending.empty()) {
+        auto [current, currentContext, closeAnchor] = pending.back();
+        pending.pop_back();
+        context = currentContext;
+        const auto& node = document.nodes.at(current);
+        if (closeAnchor) {
             result.push_back(
                 {FlatAtom::Kind::AnchorEnd,
                  {},
@@ -181,36 +96,133 @@ void flatten(
                  node.syntaxKind,
                  context.member}
             );
-            break;
-        case DocKind::ConsistentGroup:
-            context.group = node.id;
-            flatten(document, node.children.front(), context, result);
-            break;
-        case DocKind::AlignmentAnchor:
-            result.push_back(
-                {FlatAtom::Kind::Alignment,
-                 {},
-                 0,
-                 0,
-                 0,
-                 1,
-                 context.indent,
-                 0,
-                 node.id,
-                 static_cast<uint32_t>(node.value),
-                 node.syntaxKind,
-                 context.member}
-            );
-            result.back().minimumPadding = node.width;
-            result.back().alignmentGroup = node.alignmentGroup;
-            break;
-        case DocKind::Member:
-            if (context.memberKind != node.syntaxKind)
-                context.memberIndent = context.indent;
-            context.member = node.id;
-            context.memberKind = node.syntaxKind;
-            flatten(document, node.children.front(), context, result);
-            break;
+            continue;
+        }
+        switch (node.kind) {
+            case DocKind::Empty:
+                break;
+            case DocKind::Text:
+                result.push_back(
+                    {FlatAtom::Kind::Text, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
+                     node.syntaxKind, context.member}
+                );
+                break;
+            case DocKind::Verbatim:
+                result.push_back(
+                    {FlatAtom::Kind::Verbatim, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
+                     node.syntaxKind, context.member}
+                );
+                result.back().preserveWhitespace = node.preserveWhitespace;
+                break;
+            case DocKind::MemberVerbatim:
+                result.push_back(
+                    {FlatAtom::Kind::MemberVerbatim, node.text, 0, 0, 0, 1,
+                     context.memberIndent + node.value, 0, 0, 0, node.syntaxKind, context.member}
+                );
+                break;
+            case DocKind::AbsoluteText:
+                result.push_back(
+                    {FlatAtom::Kind::AbsoluteText, node.text, 0, 0, 0, 1, context.indent, 0, 0, 0,
+                     node.syntaxKind, context.member}
+                );
+                result.back().preserveWhitespace = node.preserveWhitespace;
+                break;
+            case DocKind::SoftLine:
+                result.push_back(
+                    {FlatAtom::Kind::SoftLine, node.text, node.id,
+                     node.group ? node.group : context.group, node.value, 1, context.indent, 0, 0,
+                     0, node.syntaxKind, node.global ? 0 : context.member}
+                );
+                result.back().anchorIndent = context.anchorIndent;
+                result.back().conditionalIndentBreak = context.conditionalIndentBreak;
+                result.back().conditionalIndent = context.conditionalIndent;
+                break;
+            case DocKind::HardLine:
+                result.push_back(
+                    {FlatAtom::Kind::HardLine,
+                     {},
+                     0,
+                     context.group,
+                     0,
+                     node.value,
+                     context.indent,
+                     0,
+                     0,
+                     0,
+                     node.syntaxKind,
+                     context.member}
+                );
+                result.back().anchorIndent = node.id ? context.anchorIndent : -1;
+                result.back().conditionalIndentBreak = context.conditionalIndentBreak;
+                result.back().conditionalIndent = context.conditionalIndent;
+                break;
+            case DocKind::Concat:
+                for (auto child : std::views::reverse(node.children))
+                    pending.emplace_back(child, context, false);
+                break;
+            case DocKind::Indent:
+                if (context.anchorDepth)
+                    context.anchorIndent += node.value;
+                else
+                    context.indent += node.value;
+                pending.emplace_back(node.children.front(), context, false);
+                break;
+            case DocKind::IndentIfBreak:
+                context.conditionalIndentBreak = node.id;
+                context.conditionalIndent += node.value;
+                pending.emplace_back(node.children.front(), context, false);
+                break;
+            case DocKind::RelativeAnchor:
+                result.push_back(
+                    {FlatAtom::Kind::AnchorStart,
+                     {},
+                     0,
+                     0,
+                     node.value,
+                     1,
+                     context.indent,
+                     node.id,
+                     0,
+                     0,
+                     node.syntaxKind,
+                     context.member}
+                );
+                result.back().anchorFitWidth = node.width;
+                context.anchorDepth++;
+                context.anchorIndent = 0;
+                pending.emplace_back(current, context, true);
+                pending.emplace_back(node.children.front(), context, false);
+                break;
+            case DocKind::ConsistentGroup:
+                context.group = node.id;
+                pending.emplace_back(node.children.front(), context, false);
+                break;
+            case DocKind::AlignmentAnchor:
+                result.push_back(
+                    {FlatAtom::Kind::Alignment,
+                     {},
+                     0,
+                     0,
+                     0,
+                     1,
+                     context.indent,
+                     0,
+                     node.id,
+                     static_cast<uint32_t>(node.value),
+                     node.syntaxKind,
+                     context.member}
+                );
+                result.back().minimumPadding = node.width;
+                result.back().alignmentGroup = node.alignmentGroup;
+                break;
+            case DocKind::Member:
+                if (context.memberKind != node.syntaxKind)
+                    context.memberIndent = context.indent;
+                context.member = node.id;
+                context.memberKind = node.syntaxKind;
+                pending.emplace_back(node.children.front(), context, false);
+                break;
+        }
     }
 }
 

@@ -3258,30 +3258,35 @@ private:
     }
 
     void lowerNode(const NormalizedNode& node, SyntaxKind parentExpressionKind, bool isRoot) {
+        // Branch-local lambdas keep their scratch space out of every recursive frame
+        // in unoptimized builds, including branches not taken by a deep expression.
         for (const auto& trivia : node.leading)
             emitTrivia(trivia, false, true);
         if (node.verbatim) {
-            size_t begin = mark();
-            if (auto token = node.verbatimFirstToken
-                                 ? node.verbatimFirstToken
-                                 : firstTokenIndex(node, 0, node.children.size())) {
-                for (const auto& trivia : normalized.tokens().at(*token).leading)
-                    emitTrivia(trivia, false);
-            }
-            append(builder.preservedText(node.verbatimText));
-            lineStart = node.verbatimText.ends_with('\n');
-            if (node.verbatimLastToken) {
-                lastToken = &normalized.tokens().at(*node.verbatimLastToken);
-                for (const auto& trivia : normalized.tokens().at(*node.verbatimLastToken).trailing)
-                    emitTrivia(trivia, true);
-            }
-            spacingProvided = false;
-            auto contents = capture(begin);
-            if (!isRoot &&
-                (MemberSyntax::isKind(node.kind) || StatementSyntax::isKind(node.kind))) {
-                contents = builder.member(contents, node.kind);
-            }
-            append(contents);
+            [&] {
+                size_t begin = mark();
+                if (auto token = node.verbatimFirstToken
+                                     ? node.verbatimFirstToken
+                                     : firstTokenIndex(node, 0, node.children.size())) {
+                    for (const auto& trivia : normalized.tokens().at(*token).leading)
+                        emitTrivia(trivia, false);
+                }
+                append(builder.preservedText(node.verbatimText));
+                lineStart = node.verbatimText.ends_with('\n');
+                if (node.verbatimLastToken) {
+                    lastToken = &normalized.tokens().at(*node.verbatimLastToken);
+                    for (const auto& trivia :
+                         normalized.tokens().at(*node.verbatimLastToken).trailing)
+                        emitTrivia(trivia, true);
+                }
+                spacingProvided = false;
+                auto contents = capture(begin);
+                if (!isRoot &&
+                    (MemberSyntax::isKind(node.kind) || StatementSyntax::isKind(node.kind))) {
+                    contents = builder.member(contents, node.kind);
+                }
+                append(contents);
+            }();
             return;
         }
         bool entersClass = node.kind == SyntaxKind::ClassDeclaration;
@@ -3378,123 +3383,127 @@ private:
                                     parentExpressionKind == SyntaxKind::ParenthesizedPropertyExpr ||
                                     parentExpressionKind == SyntaxKind::ParenthesizedSequenceExpr);
         if (isBinaryKind(node.kind) && !assignment) {
-            bool sameChain = isBinaryKind(parentExpressionKind) &&
-                             SyntaxFacts::getPrecedence(node.kind) > 0 &&
-                             SyntaxFacts::getPrecedence(node.kind) ==
-                                 SyntaxFacts::getPrecedence(parentExpressionKind);
-            if (!sameChain)
-                expressionBreakPriority++;
-            if (assignmentRhsRoot) {
-                bool rootChain = isBinaryKind(assignmentRhsRoot->kind) && sameChain;
-                if (assignmentRhsRoot->kind == SyntaxKind::ConditionalExpression) {
-                    bool branchRoot = ternaryTrueBranch == &node || ternaryFalseBranch == &node;
-                    addBinaryContinuationIndent = branchRoot && !binaryContinuationScope;
-                    if (addBinaryContinuationIndent) {
-                        anchorBinaryContinuation = true;
-                        binaryContinuationScope = true;
+            [&] {
+                bool sameChain = isBinaryKind(parentExpressionKind) &&
+                                 SyntaxFacts::getPrecedence(node.kind) > 0 &&
+                                 SyntaxFacts::getPrecedence(node.kind) ==
+                                     SyntaxFacts::getPrecedence(parentExpressionKind);
+                if (!sameChain)
+                    expressionBreakPriority++;
+                if (assignmentRhsRoot) {
+                    bool rootChain = isBinaryKind(assignmentRhsRoot->kind) && sameChain;
+                    if (assignmentRhsRoot->kind == SyntaxKind::ConditionalExpression) {
+                        bool branchRoot = ternaryTrueBranch == &node || ternaryFalseBranch == &node;
+                        addBinaryContinuationIndent = branchRoot && !binaryContinuationScope;
+                        if (addBinaryContinuationIndent) {
+                            anchorBinaryContinuation = true;
+                            binaryContinuationScope = true;
+                        }
                     }
-                }
-                else if (isBinaryKind(assignmentRhsRoot->kind)) {
-                    addBinaryContinuationIndent = assignmentRhsRoot != &node && !rootChain;
-                    if (addBinaryContinuationIndent && !isBinaryKind(parentExpressionKind)) {
-                        anchorBinaryContinuation = true;
-                        binaryContinuationScope = true;
+                    else if (isBinaryKind(assignmentRhsRoot->kind)) {
+                        addBinaryContinuationIndent = assignmentRhsRoot != &node && !rootChain;
+                        if (addBinaryContinuationIndent && !isBinaryKind(parentExpressionKind)) {
+                            anchorBinaryContinuation = true;
+                            binaryContinuationScope = true;
+                        }
+                    }
+                    else if (!binaryContinuationScope) {
+                        addBinaryContinuationIndent = assignmentRhsRoot != &node;
+                        if (addBinaryContinuationIndent) {
+                            anchorBinaryContinuation = true;
+                            binaryContinuationScope = true;
+                        }
+                    }
+                    else if (!sameChain) {
+                        addBinaryContinuationIndent = true;
+                        anchorBinaryContinuation = !isBinaryKind(parentExpressionKind);
                     }
                 }
                 else if (!binaryContinuationScope) {
-                    addBinaryContinuationIndent = assignmentRhsRoot != &node;
+                    addBinaryContinuationIndent = !sameChain;
                     if (addBinaryContinuationIndent) {
                         anchorBinaryContinuation = true;
                         binaryContinuationScope = true;
                     }
                 }
                 else if (!sameChain) {
-                    addBinaryContinuationIndent = true;
-                    anchorBinaryContinuation = !isBinaryKind(parentExpressionKind);
+                    addBinaryContinuationIndent = isBinaryKind(parentExpressionKind);
                 }
-            }
-            else if (!binaryContinuationScope) {
-                addBinaryContinuationIndent = !sameChain;
-                if (addBinaryContinuationIndent) {
+                if (parenthesizedBinary) {
+                    addBinaryContinuationIndent = true;
                     anchorBinaryContinuation = true;
                     binaryContinuationScope = true;
                 }
-            }
-            else if (!sameChain) {
-                addBinaryContinuationIndent = isBinaryKind(parentExpressionKind);
-            }
-            if (parenthesizedBinary) {
-                addBinaryContinuationIndent = true;
-                anchorBinaryContinuation = true;
-                binaryContinuationScope = true;
-            }
-            if (inAssignmentCastOperand) {
-                addBinaryContinuationIndent = false;
-                anchorBinaryContinuation = false;
-            }
-            if (!node.children.empty() && childContainsMacro(node.children.front()))
-                addBinaryContinuationIndent = false;
-            if (anchorBinaryContinuation) {
-                auto first = firstTokenIndex(node, 0, node.children.size());
-                if (first &&
-                    std::ranges::any_of(
-                        normalized.tokens().at(*first).leading, [](const NormalizedTrivia& trivia) {
-                            return trivia.kind == NormalizedTriviaKind::Comment &&
-                                   trivia.placement == TriviaPlacement::Standalone;
-                        }
-                    )) {
+                if (inAssignmentCastOperand) {
+                    addBinaryContinuationIndent = false;
                     anchorBinaryContinuation = false;
                 }
-            }
-            if (anchorBinaryContinuation && parenthesizedBinary) {
-                int precedence = SyntaxFacts::getPrecedence(node.kind);
-                auto containsNestedPrecedenceGroup = [&](auto&& self,
-                                                         const NormalizedNode& current) -> bool {
-                    for (const auto& child : current.children) {
-                        auto nested = childNode(child);
-                        if (!nested || !isBinaryKind(nested->kind))
-                            continue;
-                        int nestedPrecedence = SyntaxFacts::getPrecedence(nested->kind);
-                        if (nestedPrecedence != precedence) {
-                            if (!isComparisonKind(nested->kind))
-                                return true;
-                            continue;
-                        }
-                        if (self(self, *nested))
-                            return true;
-                    }
-                    return false;
-                };
-                if (containsNestedPrecedenceGroup(containsNestedPrecedenceGroup, node))
-                    binaryContinuationAnchorOffset = 0;
-            }
-            if (addBinaryContinuationIndent && !anchorBinaryContinuation &&
-                !PropertyExprSyntax::isKind(node.kind) && !SequenceExprSyntax::isKind(node.kind)) {
-                binaryContinuationIndent += static_cast<int>(config.indentWidth.get());
-            }
-            allowComparisonBreak = !isComparisonKind(node.kind);
-            allowCurrentBinaryBreak = true;
-            const NormalizedNode* left = nullptr;
-            const NormalizedNode* right = nullptr;
-            for (const auto& child : node.children) {
-                if (auto nested = childNode(child); nested && isExpressionKind(nested->kind)) {
-                    if (!left)
-                        left = nested;
-                    else {
-                        right = nested;
-                        break;
+                if (!node.children.empty() && childContainsMacro(node.children.front()))
+                    addBinaryContinuationIndent = false;
+                if (anchorBinaryContinuation) {
+                    auto first = firstTokenIndex(node, 0, node.children.size());
+                    if (first && std::ranges::any_of(
+                                     normalized.tokens().at(*first).leading,
+                                     [](const NormalizedTrivia& trivia) {
+                                         return trivia.kind == NormalizedTriviaKind::Comment &&
+                                                trivia.placement == TriviaPlacement::Standalone;
+                                     }
+                                 )) {
+                        anchorBinaryContinuation = false;
                     }
                 }
-            }
-            if (left)
-                allowCurrentBinaryBreak = flatWidth(node.children.front()) >= 4;
-            if (isComparisonKind(node.kind)) {
-                allowComparisonBreak = (left && isParenthesizedBinary(*left)) ||
-                                       (right && isParenthesizedBinary(*right));
-            }
-            hardBreakCurrentBinary = right && containsMultilineList(*right) &&
-                                     config.columnLimit.get() &&
-                                     formattedFlatWidth(*right) > config.columnLimit.get() * 3 / 5;
+                if (anchorBinaryContinuation && parenthesizedBinary) {
+                    int precedence = SyntaxFacts::getPrecedence(node.kind);
+                    auto containsNestedPrecedenceGroup =
+                        [&](auto&& self, const NormalizedNode& current) -> bool {
+                        for (const auto& child : current.children) {
+                            auto nested = childNode(child);
+                            if (!nested || !isBinaryKind(nested->kind))
+                                continue;
+                            int nestedPrecedence = SyntaxFacts::getPrecedence(nested->kind);
+                            if (nestedPrecedence != precedence) {
+                                if (!isComparisonKind(nested->kind))
+                                    return true;
+                                continue;
+                            }
+                            if (self(self, *nested))
+                                return true;
+                        }
+                        return false;
+                    };
+                    if (containsNestedPrecedenceGroup(containsNestedPrecedenceGroup, node))
+                        binaryContinuationAnchorOffset = 0;
+                }
+                if (addBinaryContinuationIndent && !anchorBinaryContinuation &&
+                    !PropertyExprSyntax::isKind(node.kind) &&
+                    !SequenceExprSyntax::isKind(node.kind)) {
+                    binaryContinuationIndent += static_cast<int>(config.indentWidth.get());
+                }
+                allowComparisonBreak = !isComparisonKind(node.kind);
+                allowCurrentBinaryBreak = true;
+                const NormalizedNode* left = nullptr;
+                const NormalizedNode* right = nullptr;
+                for (const auto& child : node.children) {
+                    if (auto nested = childNode(child); nested && isExpressionKind(nested->kind)) {
+                        if (!left)
+                            left = nested;
+                        else {
+                            right = nested;
+                            break;
+                        }
+                    }
+                }
+                if (left)
+                    allowCurrentBinaryBreak = flatWidth(node.children.front()) >= 4;
+                if (isComparisonKind(node.kind)) {
+                    allowComparisonBreak = (left && isParenthesizedBinary(*left)) ||
+                                           (right && isParenthesizedBinary(*right));
+                }
+                hardBreakCurrentBinary = right && containsMultilineList(*right) &&
+                                         config.columnLimit.get() &&
+                                         formattedFlatWidth(*right) >
+                                             config.columnLimit.get() * 3 / 5;
+            }();
         }
         if (node.kind == SyntaxKind::ConditionalStatement)
             lowerConditional(node);
@@ -3548,39 +3557,41 @@ private:
                   currentMemberKind == SyntaxKind::NamedPortConnection ||
                   currentMemberKind == SyntaxKind::NamedParamAssignment ||
                   currentMemberKind == SyntaxKind::NamedArgument)) {
-            castAssignmentRhs = assignmentRhsRoot == &node;
-            for (const auto& child : node.children) {
-                auto nested = childNode(child);
-                if (!nested || nested->kind != SyntaxKind::ParenthesizedExpression) {
-                    lowerChild(child, node.kind);
-                    continue;
-                }
+            [&] {
+                castAssignmentRhs = assignmentRhsRoot == &node;
+                for (const auto& child : node.children) {
+                    auto nested = childNode(child);
+                    if (!nested || nested->kind != SyntaxKind::ParenthesizedExpression) {
+                        lowerChild(child, node.kind);
+                        continue;
+                    }
 
-                castWithOperandBreak = true;
-                size_t operandBegin = SIZE_MAX;
-                bool savedAssignmentCastOperand = inAssignmentCastOperand;
-                for (size_t i = 0; i < nested->children.size(); i++) {
-                    lowerChild(nested->children[i], nested->kind);
-                    if (i == 0) {
-                        if (castRequiresOperandBreak(node)) {
-                            operandBegin = mark();
-                            hardLine(1, !castAssignmentRhs);
-                            inAssignmentCastOperand = castAssignmentRhs;
-                        }
-                        else {
-                            append(builder.softLine(0, ""));
-                            spacingProvided = true;
+                    castWithOperandBreak = true;
+                    size_t operandBegin = SIZE_MAX;
+                    bool savedAssignmentCastOperand = inAssignmentCastOperand;
+                    for (size_t i = 0; i < nested->children.size(); i++) {
+                        lowerChild(nested->children[i], nested->kind);
+                        if (i == 0) {
+                            if (castRequiresOperandBreak(node)) {
+                                operandBegin = mark();
+                                hardLine(1, !castAssignmentRhs);
+                                inAssignmentCastOperand = castAssignmentRhs;
+                            }
+                            else {
+                                append(builder.softLine(0, ""));
+                                spacingProvided = true;
+                            }
                         }
                     }
+                    inAssignmentCastOperand = savedAssignmentCastOperand;
+                    if (operandBegin != SIZE_MAX && castAssignmentRhs) {
+                        auto operand = capture(operandBegin);
+                        append(builder.indentIfBreak(
+                            assignmentRhsLine, static_cast<int>(config.indentWidth.get()), operand
+                        ));
+                    }
                 }
-                inAssignmentCastOperand = savedAssignmentCastOperand;
-                if (operandBegin != SIZE_MAX && castAssignmentRhs) {
-                    auto operand = capture(operandBegin);
-                    append(builder.indentIfBreak(
-                        assignmentRhsLine, static_cast<int>(config.indentWidth.get()), operand
-                    ));
-                }
-            }
+            }();
         }
         else if (node.kind == SyntaxKind::ImplicationPropertyExpr && config.columnLimit.get() &&
                  formattedFlatWidth(node) > config.columnLimit.get())

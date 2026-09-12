@@ -612,19 +612,30 @@ private:
     }
 
     void markFormatRegions(NormalizedNode& node, size_t& unmatchedCount) {
-        for (auto& child : node.children) {
-            if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&child.value)) {
-                markFormatRegions(**nested, unmatchedCount);
+        // Process each list after its descendants, in source order. Collapsing a
+        // disabled region moves its children, so no descendant work can remain pending.
+        std::vector<std::variant<NormalizedNode*, NormalizedList*>> pending{&node};
+        while (!pending.empty()) {
+            auto work = pending.back();
+            pending.pop_back();
+            if (auto current = std::get_if<NormalizedNode*>(&work)) {
+                for (auto& child : std::views::reverse((*current)->children)) {
+                    if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&child.value)) {
+                        pending.emplace_back(nested->get());
+                    }
+                    else if (auto list =
+                                 std::get_if<std::unique_ptr<NormalizedList>>(&child.value)) {
+                        pending.emplace_back(list->get());
+                        for (auto& item : std::views::reverse((*list)->children)) {
+                            if (auto nested =
+                                    std::get_if<std::unique_ptr<NormalizedNode>>(&item.value))
+                                pending.emplace_back(nested->get());
+                        }
+                    }
+                }
                 continue;
             }
-            auto listPtr = std::get_if<std::unique_ptr<NormalizedList>>(&child.value);
-            if (!listPtr)
-                continue;
-            auto& list = **listPtr;
-            for (auto& item : list.children) {
-                if (auto nested = std::get_if<std::unique_ptr<NormalizedNode>>(&item.value))
-                    markFormatRegions(**nested, unmatchedCount);
-            }
+            auto& list = *std::get<NormalizedList*>(work);
             if (list.style == ListStyle::Inline)
                 continue;
 

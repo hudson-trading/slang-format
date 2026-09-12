@@ -510,6 +510,20 @@ TEST_CASE("off and on handle empty lists, port lists, and unmatched off markers"
     }
 }
 
+TEST_CASE("nested disabled regions finish before their containing lists collapse") {
+    std::string preserved = "initial begin\n// slang-format: off\na=1;b=2;\n"
+                            "// slang-format: on\nc=3;\nend";
+    std::string input = "module foo;\n// slang-format: off\n" + preserved +
+                        "\n// slang-format: on\nlogic value;\nendmodule\n";
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        auto result = format::format("nested_regions.sv", input, {}, stage);
+        REQUIRE(result.isUsable());
+        CHECK(result.diagnostics.empty());
+        CHECK(result.formatted.find(preserved) != std::string::npos);
+        CHECK(result.formatted.find("    logic value;\nendmodule") != std::string::npos);
+    }
+}
+
 TEST_CASE("unmatched on markers warn without blocking formatting") {
     for (std::string_view input :
          {"module foo;\n// slang-format: on\nlogic x;endmodule\n",
@@ -952,13 +966,27 @@ TEST_CASE("deep flat expressions fail safely without replacing the input") {
 TEST_CASE("formatting on small worker stacks handles supported and excessive depth") {
     struct Task {
         bool passed = false;
+        bool parserNesting = false;
         std::exception_ptr error;
     } task;
+    SECTION("flat syntax trees") {
+    }
+    SECTION("parser nesting") {
+        task.parserNesting = true;
+    }
     auto run = [](void* data) -> void* {
         auto& task = *static_cast<Task*>(data);
         try {
             format::Config config;
             config.columnLimit = 0;
+            if (task.parserNesting) {
+                std::string nested = "module foo; assign value = " + std::string(1024, '(') +
+                                     "signal_a" + std::string(1024, ')') + "; endmodule\n";
+                auto result = format::format("nested.sv", nested, config);
+                task.passed = result.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit) &&
+                              result.formatted == nested;
+                return nullptr;
+            }
             for (size_t operands : {504u, 2040u, 30000u}) {
                 std::string source = "module foo; assign value = signal_a";
                 for (size_t i = 1; i < operands; i++)
@@ -978,11 +1006,7 @@ TEST_CASE("formatting on small worker stacks handles supported and excessive dep
                         return nullptr;
                 }
             }
-            std::string nested = "module foo; assign value = " + std::string(1024, '(') +
-                                 "signal_a" + std::string(1024, ')') + "; endmodule\n";
-            auto result = format::format("nested.sv", nested, config);
-            task.passed = result.hasDiagnostic(format::FormatDiagnosticKind::DepthLimit) &&
-                          result.formatted == nested;
+            task.passed = true;
         }
         catch (...) {
             task.error = std::current_exception();
