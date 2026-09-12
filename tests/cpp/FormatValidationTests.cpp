@@ -980,6 +980,15 @@ TEST_CASE("formatting on small worker stacks handles supported and excessive dep
             format::Config config;
             config.columnLimit = 0;
             if (task.parserNesting) {
+#ifndef NDEBUG
+                // Slang's unoptimized parser needs more stack per nesting level.
+                config.maxSyntaxDepth = 128;
+#endif
+                size_t depth = config.maxSyntaxDepth.get() - 8;
+                std::string supported = "module foo; assign value = " + std::string(depth, '(') +
+                                        "signal_a" + std::string(depth, ')') + "; endmodule\n";
+                if (!format::format("nested.sv", supported, config).isUsable())
+                    return nullptr;
                 std::string nested = "module foo; assign value = " + std::string(1024, '(') +
                                      "signal_a" + std::string(1024, ')') + "; endmodule\n";
                 auto result = format::format("nested.sv", nested, config);
