@@ -4,7 +4,7 @@
 
 Some things are preserved from the original source:
 
-- **Macro definitions and argument contents** — these are emitted verbatim since modifying them could change macro expansion, including stringification. Whitespace within a macro argument at a usage is preserved.
+- **Macro definitions and argument contents** — these are emitted verbatim since modifying them could change macro expansion, including stringification. Whitespace within an argument in a macro invocation is preserved.
 - **Blank lines within lists** — blank lines between module members, port declarations, etc. are kept as authored to respect logical groupings.
 
 ## Formatter Passes
@@ -17,11 +17,11 @@ Formatting is split into three conceptual passes:
 
 ## Lists
 
-Lists are either always vertical, always inline (like array dimensions), or dynamic based on heuristics like children count or length. Bin packing (adding tokens until line limit is hit) is generally avoided, since it is less readable and creates bad diffs when the list is modified.
+Lists are either always vertical, always inline (like array dimensions), or dynamic based on heuristics like the number or length of their children. Bin packing (adding tokens until the line limit is reached) is generally avoided, since it is less readable and creates bad diffs when the list is modified.
 
 ## Ifdef Indentation
 
-In member lists, preprocessor conditional directives (`ifdef`/`ifndef`/`else`/`elsif`/`endif`) are indented as structural blocks, not left-flushed to column 0. The content between an `ifdef` and its matching `else`/`endif` is indented one level deeper:
+In member lists, preprocessor conditional directives (`ifdef`/`ifndef`/`else`/`elsif`/`endif`) are indented as structural blocks, not placed flush left at column 0. The content between an `ifdef` and its matching `else`/`endif` is indented one level deeper:
 
 ```systemverilog
 module top;
@@ -39,10 +39,10 @@ endmodule
 
 This is done for a few reasons:
 
-- These behave nearly identically to generate blocks, which follow normal indenting.
-- Preprocessor branches can be nested, so indents help identify the branch ranges.
+- These branches are similar to generate branches, which follow normal indentation rules.
+- Preprocessor branches can be nested, so indentation helps identify the branch boundaries.
 
-In non-member lists like port lists or case items, ifdefs are dedented one level so that the list items across branches stay aligned. In these contexts, ifdefs tend to act as feature flags toggling individual entries rather than introducing structural blocks:
+In non-member lists like port lists or lists of case items, ifdefs are dedented one level so that the list items across branches stay aligned. In these contexts, ifdefs tend to act as feature flags toggling individual entries rather than introducing structural blocks:
 
 ```systemverilog
 module top (
@@ -87,8 +87,8 @@ that structure.
 
 1. Normalize the complete clean member into tokens, atomic text, hard lines, and prioritized soft lines.
 2. Try successively deeper priority tiers. The first tier that can satisfy the column limit wins.
-3. Within a tier, minimize worst overflow, total overflow, number of breaks, and raggedness, in that order.
-4. If no layout can fit because an atomic token is itself too wide, minimize worst overflow and still split around that token rather than leaving one giant line.
+3. Within a tier, minimize the worst overflow, total overflow, number of breaks, and raggedness, in that order.
+4. If no layout can fit because an atomic token is itself too wide, minimize the worst overflow and still split around that token rather than leaving one giant line.
 
 Candidate evaluation is bounded by the number of atoms in the member. If a pathological member exhausts that work budget, the solver deterministically takes the remaining breaks in the current priority tier before considering deeper tiers.
 
@@ -127,7 +127,7 @@ Operator continuations use one stable continuation indent for the member. Expres
 ### What Doesn't Wrap
 
 - **Data declarations** are not split — they stay on one line regardless of length.
-- **Concatenations** (`{a, b, c}`) and **function arguments** are handled by Dynamic list verticalization, not expression wrapping. When an overflowing function call is the sole assignment RHS, the whole call moves to the next indented line; short calls remain inline.
+- **Concatenations** (`{a, b, c}`) and **function arguments** are handled by dynamic list verticalization, not expression wrapping. When an overflowing function call is the sole assignment RHS, the whole call moves to the next indented line; short calls remain inline.
 - **Macro invocations** are emitted as raw text and are not individually wrapped.
 
 ## Alignment
@@ -142,7 +142,7 @@ output logic [15:0] data_out
 
 ### Alignment Model
 
-Each alignable row produces a tree of `AlignCell`s derived from its syntax. Consecutive compatible rows form a group, and the framework computes per-column max widths and emits each row with padding between columns. When sub-tree shapes diverge within a group, the framework collapses the divergent sub-tree so top-level columns (names) still align even when deeper details differ.
+Each alignable row produces a tree of `AlignCell`s derived from its syntax. Consecutive compatible rows form a group, and the framework computes maximum widths per column and emits each row with padding between columns. When subtree shapes diverge within a group, the framework collapses the divergent subtree so top-level columns (names) still align even when deeper details differ.
 
 Member kinds the formatter currently understands:
 
@@ -197,11 +197,11 @@ always_comb begin
 end
 ```
 
-**Structural interruptions** — preprocessor directives, macro invocations, and comments attached to directives — always break a group, since alignment columns can't meaningfully span across conditional code.
+**Structural interruptions** — preprocessor directives, macro invocations, and comments attached to directives — always break a group, since alignment columns can't meaningfully span conditional code.
 
 **Kind changes** also break groups. A port declaration followed by a data declaration starts a new group, since they have different column layouts.
 
-**Maximum padding** (`alignment.paddingLimit`, default: `null`) optionally splits a group when aligning would require an excessive gap. By default no gap-based splitting happens — all otherwise-compatible rows align together. Setting `paddingLimit` to a positive integer reinstates the cap: when any column would need that many or more spaces of padding for a new member, that member starts a fresh group instead. This is useful when one member has a much longer type or name than the rest and forcing every other line to pad out to match would produce unreadable code:
+**Maximum padding** (`alignment.paddingLimit`, default: `null`) optionally splits a group when aligning would require an excessive gap. By default, no gap-based splitting happens — all otherwise compatible rows align together. Setting `paddingLimit` to a positive integer reinstates the cap: when any column would need that many or more spaces of padding for a new member, that member starts a fresh group instead. This is useful when one member has a much longer type or name than the rest and forcing every other line to pad out to match would produce unreadable code:
 
 ```systemverilog
 // Default (paddingLimit = null) — everything aligns:

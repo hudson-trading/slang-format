@@ -102,13 +102,13 @@ formatted 0 files, 3998 unchanged, 0 excluded, 3 skipped (input parse errors), 0
 These counts describe what happened to each file, independently of exit policy.
 `--strict` can make a skipped file fail the command without changing its outcome.
 
-An unmatched `slang-format: on` produces a warning and formatting continues.
+An unmatched `slang-format: on` produces a warning, and formatting continues.
 The warning alone does not change the exit status. An unmatched `off` silently
 preserves the rest of its list scope, allowing a top-of-file `off` to disable
 the whole file.
 See [disabling formatting](format-markers.md) for scope rules.
 
-`--dry-run` performs the same checks and uses the same exit status rules, but
+`--dry-run` performs the same checks and uses the same exit-status rules, but
 never writes source files or emits source on stdout. It keeps the normal verbosity,
 using "would format" in the batch summary, and does not fail for formatting
 differences alone. `--verbose` enables the usual per-file progress and timing.
@@ -152,7 +152,7 @@ slang-format --force top.sv
 slang-format --force -i top.sv
 ```
 
-Diagnostics remain visible and the exit status is still `1` for forced invalid candidates.
+Diagnostics remain visible, and the exit status is still `1` for forced invalid candidates.
 Depth-limit skips follow the normal skip policy described above.
 Force permits output; it does not make that output pass validation. Conflict
 markers and the surrounding source may be reformatted.

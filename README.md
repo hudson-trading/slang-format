@@ -13,7 +13,7 @@ for published versions and release notes.
 
 See the [documentation](https://hudson-trading.github.io/slang-format/) for
 [installation](https://hudson-trading.github.io/slang-format/start/installing/),
-[Workflow Integration](https://hudson-trading.github.io/slang-format/start/workflow-integration/),
+[workflow integration](https://hudson-trading.github.io/slang-format/start/workflow-integration/),
 [configuration](https://hudson-trading.github.io/slang-format/features/configuration/), and
 [embedding](https://hudson-trading.github.io/slang-format/start/workflow-integration/#embedding).
 

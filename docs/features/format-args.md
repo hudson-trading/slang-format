@@ -1,4 +1,4 @@
-# Command Line Reference
+# Command-Line Reference
 
 ## Usage
 
@@ -6,11 +6,12 @@
 slang-format [options] [<file-or-dir> ...]
 ```
 
-If no files are specified, or the sole input is `-`, reads stdin and writes stdout.
+If no files are specified or the sole input is `-`, `slang-format` reads from stdin
+and writes to stdout.
 Stdin cannot be combined with other inputs or `-i`.
-If files are specified without `-i`, prints formatted output to stdout.
-With `-i`, modifies files in-place. Multiple files require `-i`, `--dry-run`, or `--check`.
-Directories recursively collect `.sv`, `.svh`, `.v`, and `.vh` files. Each directory
+If files are specified without `-i`, it prints formatted output to stdout.
+With `-i`, it modifies files in place. Multiple files require `-i`, `--dry-run`, or `--check`.
+Directory inputs recursively collect `.sv`, `.svh`, `.v`, and `.vh` files. Each directory
 argument's config controls `excludeDirectoryNames` (directory names) and
 `projectPaths` (files or subtrees when targeting the project root containing
 `.slang/`). Each collected file resolves its own formatting config.
@@ -22,7 +23,7 @@ and [disabling formatting](format-markers.md) for preserving source formatting.
 
 ### `-h`, `--help`
 
-Display help message and exit.
+Display a help message and exit.
 
 ---
 
@@ -34,12 +35,12 @@ Display version information and exit.
 
 ### `-i`, `--inplace`
 
-Edit files in-place. Cannot be used with stdin. Unchanged files retain their
+Edit files in place. This option cannot be used with stdin. Unchanged files retain their
 contents and timestamps. Changed files are written completely to a temporary file
 in the destination directory, then renamed over the destination. A failed write
 leaves the original in place. Symlinks remain symlinks and their targets are
 updated; permission bits are preserved. Replacement creates a new file, so other
-hard links retain the old contents, and ownership/extended metadata are not copied.
+hard links retain the old contents, and ownership and extended metadata are not copied.
 The destination directory must be writable. Read-only files are rejected when
 changes are needed.
 
@@ -47,8 +48,8 @@ Batch summaries count each file once: formatted, unchanged, excluded, skipped, o
 failed. `--dry-run` counts actual changes as "would format". Skipped files retain
 their original contents; the summary distinguishes depth limits, input parse errors, and output
 validation failures. When multiple reasons occur in a batch, the reason counts show how many
-skipped files had each problem; a file can have both reasons. Failed files are
-aborted operations or config, read, or write errors.
+skipped files had each problem; a file can have multiple reasons. Files are counted
+as failed when operations abort or config, read, or write errors occur.
 
 Forced output counts as formatted or unchanged when the operation completes, even
 when input or output checks fail. Diagnostics and exit status still report those
@@ -71,21 +72,21 @@ explicit formatting markers remain respected.
 
 ### `-n`, `--dry-run`
 
-Run formatting and validation without writing source files or source to stdout.
-Uses the same verbosity as a normal run: diagnostics and a batch summary, with
+Run formatting and validation without writing to source files or emitting source on stdout.
+This mode uses the same verbosity as a normal run: diagnostics and a batch summary, with
 per-file progress and timing only when `--verbose` is enabled. The summary says
 "would format" for files that would change. Differences alone return status 0.
-Can be used with multiple files and combined with `--force` to check forced formatting.
+It can be used with multiple files and combined with `--force` to check forced formatting.
 
 ---
 
 ### `--check`, `--verify`
 
-Check that files are already formatted and pass validation. Return 0 on success,
+Check that files are already formatted and pass validation. Return 0 on success or
 1 if any file needs formatting, fails validation, or cannot be processed.
-Reports `<path>: needs formatting` on stderr for each file that would change.
-Supports stdin, multiple files, and directories. Never writes source files or source
-to stdout, including with `-i` or `--force`. An explicit `--stats-csv` report is still written. Generated files and explicitly disabled
+This mode reports `<path>: needs formatting` on stderr for each file that would change.
+It supports stdin, multiple files, and directories. It never writes to source files or emits source
+on stdout, including with `-i` or `--force`. An explicit `--stats-csv` report is still written. Generated files and explicitly disabled
 formatting regions are respected. Batch results do not depend on file order.
 
 ### `--Werror`
@@ -100,12 +101,14 @@ Without `--dry-run`, this changes exit status without suppressing normal output.
 ### `--strict`, `--fail-on-incomplete-format`
 
 Return status 1 on every validation failure, including structural parse failures,
-CST mismatches, and non-idempotent output that normally preserve the input and
-return 0. Output handling is unchanged: rejected candidates remain unapplied unless
+CST mismatches, and non-idempotent output. When these failures occur, the formatter
+normally preserves the input and returns 0. Output handling is unchanged:
+rejected candidates remain unapplied unless
 `--force` is also given. Formatting differences and unmatched `on` warnings alone
 are not failures. This is validation of formatting safety, not compilation.
 
-The default is `true`; it cannot override `--strict`, `--check`, or `--Werror`.
+`--failsafe_success` defaults to `true`; setting it to `true` cannot override
+`--strict`, `--check`, or `--Werror`.
 
 ---
 
@@ -145,10 +148,10 @@ an explicit config.
 
 Give stdin a filename for config discovery and diagnostic locations. The file need
 not exist, so unsaved editor buffers work. Relative paths resolve against the
-current directory. Searches for `.slang/format.json` from the filename's parent,
+current directory. The formatter searches for `.slang/format.json` from the filename's parent,
 then falls back to the current directory. `--config` or `--config-json` takes precedence.
-Ignored for actual file inputs. Without this option stdin uses the current
-directory's config and diagnostics identify `<stdin>`.
+This option is ignored for actual file inputs. Without it, stdin uses the current
+directory's config, and diagnostics identify `<stdin>`.
 
 ```sh
 slang-format --assume-filename rtl/top.sv - < editor-buffer.sv
@@ -186,13 +189,13 @@ hold up reports from other workers. Output order can vary between runs. Use `-j1
 to isolate one active file at a time. Single-file and stdin modes also report progress.
 Elapsed time measures wall-clock milliseconds spent reading, formatting, and
 validating that input, including blocked reads. It excludes config discovery,
-worker queue wait, result reporting, and output writes. For stdin it includes
+time spent waiting in the worker queue, result reporting, and output writes. For stdin, it includes
 waiting for input/EOF. Timings use a monotonic clock.
 
 ### `--stats-csv <path>`
 
 Write per-file timing and outcomes to a CSV file, independently of `--verbose`.
-Works for files, directory batches, stdin, both formatter stages, checks, and dry
+This option works for files, directory batches, stdin, both formatter stages, checks, and dry
 runs. An explicitly requested report is written even when source writes are disabled
 by `--check` or `--dry-run`. Source stdout remains unchanged.
 
@@ -201,7 +204,7 @@ The report has these columns:
 | Column | Meaning |
 | --- | --- |
 | `path` | Input filename, or `<stdin>` / `--assume-filename` for stdin. |
-| `elapsed_ms` | Read, format, and validation wall time in milliseconds, with three decimals; same measurement as verbose output. |
+| `elapsed_ms` | Wall-clock time spent reading, formatting, and validating, in milliseconds, with three decimal places; the same measurement as verbose output. |
 | `input_bytes` | Number of source bytes read, or zero when input was not read. |
 | `status` | `changed`, `unchanged`, `excluded`, `skipped`, or `error`. |
 | `validation_failed` | `true` if an input check or output validation failed; otherwise `false`. |
@@ -220,7 +223,7 @@ only the header. Errors before input processing, such as invalid arguments or a
 missing input path, can prevent report creation entirely.
 
 Paths are CSV-quoted with embedded quotes doubled. The report cannot overwrite an
-input or loaded configuration, including aliases through symlinks/hard links.
+input or loaded configuration, including aliases through symlinks or hard links.
 `-` is rejected as a report path. Failure to open the report stops formatting;
 a later report write failure makes the command exit 1 while processing continues.
 
@@ -231,13 +234,13 @@ slang-format -v -j8 --dry-run --stats-csv timings.csv rtl/
 ## Examples
 
 ```bash
-# Format a file and print to stdout
+# Format a file and print it to stdout
 slang-format top.sv
 
-# Format in-place
+# Format in place
 slang-format -i top.sv
 
-# Format multiple files in-place with 8 threads
+# Format multiple files in place with 8 threads
 slang-format -i -j 8 src/**/*.sv
 
 # Pipe from stdin

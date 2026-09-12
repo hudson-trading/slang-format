@@ -13,7 +13,6 @@ module example;
 endmodule
 ```
 
-
 The `MASK` declaration keeps its existing spacing. The `other` declaration is
 formatted normally. A skipped declaration also separates the alignment groups
 on either side of it.
@@ -24,7 +23,8 @@ block. It is not a general way to skip an arbitrary expression or port-list
 entry. Use the exact, case-sensitive spelling `slang-format: skip`; a block
 comment containing the same marker is also accepted.
 
-This should generally be preferred over on/off directives, since those can leak.
+Prefer `skip` to off/on directives, since an unmatched `off` can disable formatting
+for the rest of its list.
 
 ## Disable a region
 
@@ -71,7 +71,7 @@ slang-format: on has no preceding off in the same list scope. Did you put the of
 ```
 
 An unmatched `off` silently preserves the rest of its list. An unmatched `on`
-produces the warning above and formatting continues; the warning does not reject
+produces the warning above, and formatting continues; the warning does not reject
 the file or change the exit status. Repeated `off` markers in the same list do
 not nest: the next `on` resumes formatting. Both markers also work in standalone
 block comments.
@@ -88,7 +88,7 @@ module second;logic b;endmodule
 
 No final `on` is needed, and this produces no warning. To resume formatting later
 in the file, put `on` between top-level declarations; placing it inside a module
-would be a different list scope.
+would put it in a different list scope.
 
 ## Generated files
 

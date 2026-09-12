@@ -76,7 +76,9 @@ directives, disabled preprocessor branches, and other source trivia remain
 available throughout formatting. The core pipeline has three steps:
 
 1. `src/NormalizedFormat.cpp` converts the slang CST into a lossless,
-   formatter-owned tree. It classifies trivia, for example attaching trailing comments to the preceding token, multiline comments as their own nodes, and represents conditional preprocessor branches explicitly.
+   formatter-owned tree. It classifies trivia, attaching trailing comments to the
+   preceding token and representing multiline comments as their own nodes. It also
+   represents conditional preprocessor branches explicitly.
 2. `src/Layout.cpp` lowers the normalized tree into the document IR declared
    in `include/format/FormatDocument.h`. This is where syntax-specific spacing,
    indentation, wrapping, and alignment anchors are chosen.
@@ -202,4 +204,4 @@ Unmatched `on` markers are reported as warnings; `isUsable()` and
 `outputAction()` allow output when these are the only diagnostics.
 An unmatched `off` silently preserves the rest of its list scope.
 
-See [validation](docs/features/format-validation.md) for CLI output and exit status behavior.
+See [validation](docs/features/format-validation.md) for CLI output and exit-status behavior.

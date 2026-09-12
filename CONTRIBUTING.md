@@ -8,7 +8,7 @@ generated files, and embedding instructions.
 Instead of immediately adding a style change, please raise an issue to discuss whether it should be
 a formatter change or a config-gated change.
 
-Submit formatter behavior changes as two stacked pull requests, or two commits in a PR.
+Submit formatter behavior changes as two stacked pull requests or two commits in a PR.
 
 1. The first change adds a focused input under `tests/format/` and the
    generated `.layout.out.sv` and `.out.sv` goldens that record the formatter's
