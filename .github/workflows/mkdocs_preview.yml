@@ -24,8 +24,6 @@ concurrency:
 
 jobs:
     deploy-preview:
-        # TODO: Remove this guard to re-enable PR previews when the repo is public.
-        if: ${{ false }}
         runs-on: ubuntu-latest
         steps:
             - name: Checkout repo
