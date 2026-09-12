@@ -1,0 +1,1160 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An opinionated SystemVerilog formatter based on slang">
+      
+      
+        <meta name="author" content="Hudson River Trading">
+      
+      
+        <link rel="canonical" href="https://hudson-trading.github.io/slang-format/features/format-args/">
+      
+      
+        <link rel="prev" href="../configuration/">
+      
+      
+        <link rel="next" href="../format-validation/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.19">
+    
+    
+      
+        <title>Command Line Reference - slang-format</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.7e37652d.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#command-line-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="slang-format" class="md-header__button md-logo" aria-label="slang-format" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            slang-format
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Command Line Reference
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-2.69L23.31 12 20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="hrt" data-md-color-accent="hrt"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_2" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 2c-1.82 0-3.53.5-5 1.35C8 5.08 10 8.3 10 12s-2 6.92-5 8.65C6.47 21.5 8.18 22 10 22a10 10 0 0 0 10-10A10 10 0 0 0 10 2"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="hrt" data-md-color-accent="hrt"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_2">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18V6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-2.69L23.31 12 20 8.69V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/hudson-trading/slang-format" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hudson-trading/slang-format
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="slang-format" class="md-nav__button md-logo" aria-label="slang-format" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    slang-format
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/hudson-trading/slang-format" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.0.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path fill="currentColor" d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    hudson-trading/slang-format
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    slang-format
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/installing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Installation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../start/workflow-integration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Workflow Integration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configuration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Configuration
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Command Line Reference
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Command Line Reference
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+  
+
+<nav class="md-nav md-nav--secondary" aria-label="Page contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Page contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Options
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-h-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      -h, --help
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      --version
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-i-inplace" class="md-nav__link">
+    <span class="md-ellipsis">
+      -i, --inplace
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-f-force" class="md-nav__link">
+    <span class="md-ellipsis">
+      -f, --force
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-n-dry-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      -n, --dry-run
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-check-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      --check, --verify
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-werror" class="md-nav__link">
+    <span class="md-ellipsis">
+      --Werror
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-strict-fail-on-incomplete-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      --strict, --fail-on-incomplete-format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-config-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      --config &lt;path&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-config-json-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      --config-json &lt;json&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-assume-filename-path-stdin_name-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      --assume-filename &lt;path&gt;, --stdin_name &lt;path&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-dump-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      --dump-config
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-stage-layoutaligned" class="md-nav__link">
+    <span class="md-ellipsis">
+      --stage &lt;layout|aligned&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-j-jobs-n" class="md-nav__link">
+    <span class="md-ellipsis">
+      -j, --jobs &lt;n&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-v-verbose" class="md-nav__link">
+    <span class="md-ellipsis">
+      -v, --verbose
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-stats-csv-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      --stats-csv &lt;path&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Examples
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../format-validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Validation
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../format-markers/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Disabling formatting
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../format-philosophy/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Formatting Philosophy
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+  
+
+<nav class="md-nav md-nav--secondary" aria-label="Page contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Page contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Options
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-h-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      -h, --help
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      --version
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-i-inplace" class="md-nav__link">
+    <span class="md-ellipsis">
+      -i, --inplace
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-f-force" class="md-nav__link">
+    <span class="md-ellipsis">
+      -f, --force
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-n-dry-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      -n, --dry-run
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-check-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      --check, --verify
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-werror" class="md-nav__link">
+    <span class="md-ellipsis">
+      --Werror
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-strict-fail-on-incomplete-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      --strict, --fail-on-incomplete-format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-config-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      --config &lt;path&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-config-json-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      --config-json &lt;json&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-assume-filename-path-stdin_name-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      --assume-filename &lt;path&gt;, --stdin_name &lt;path&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-dump-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      --dump-config
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-stage-layoutaligned" class="md-nav__link">
+    <span class="md-ellipsis">
+      --stage &lt;layout|aligned&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-j-jobs-n" class="md-nav__link">
+    <span class="md-ellipsis">
+      -j, --jobs &lt;n&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-v-verbose" class="md-nav__link">
+    <span class="md-ellipsis">
+      -v, --verbose
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-stats-csv-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      --stats-csv &lt;path&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Examples
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="command-line-reference">Command Line Reference<a class="headerlink" href="#command-line-reference" title="Permanent link">&para;</a></h1>
+<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
+<div class="language-text highlight"><pre><span></span><code>slang-format [options] [&lt;file-or-dir&gt; ...]
+</code></pre></div>
+<p>If no files are specified, or the sole input is <code>-</code>, reads stdin and writes stdout.
+Stdin cannot be combined with other inputs or <code>-i</code>.
+If files are specified without <code>-i</code>, prints formatted output to stdout.
+With <code>-i</code>, modifies files in-place. Multiple files require <code>-i</code>, <code>--dry-run</code>, or <code>--check</code>.
+Directories recursively collect <code>.sv</code>, <code>.svh</code>, <code>.v</code>, and <code>.vh</code> files. Each directory
+argument's config controls <code>excludeDirectoryNames</code> (directory names) and
+<code>projectPaths</code> (files or subtrees when targeting the project root containing
+<code>.slang/</code>). Each collected file resolves its own formatting config.</p>
+<p>See <a href="../format-validation/">validation</a> for checks, rejected files, and exit statuses,
+and <a href="../format-markers/">disabling formatting</a> for preserving source formatting.</p>
+<h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">&para;</a></h2>
+<h3 id="-h-help"><code>-h</code>, <code>--help</code><a class="headerlink" href="#-h-help" title="Permanent link">&para;</a></h3>
+<p>Display help message and exit.</p>
+<hr />
+<h3 id="-version"><code>--version</code><a class="headerlink" href="#-version" title="Permanent link">&para;</a></h3>
+<p>Display version information and exit.</p>
+<hr />
+<h3 id="-i-inplace"><code>-i</code>, <code>--inplace</code><a class="headerlink" href="#-i-inplace" title="Permanent link">&para;</a></h3>
+<p>Edit files in-place. Cannot be used with stdin. Unchanged files retain their
+contents and timestamps. Changed files are written completely to a temporary file
+in the destination directory, then renamed over the destination. A failed write
+leaves the original in place. Symlinks remain symlinks and their targets are
+updated; permission bits are preserved. Replacement creates a new file, so other
+hard links retain the old contents, and ownership/extended metadata are not copied.
+The destination directory must be writable. Read-only files are rejected when
+changes are needed.</p>
+<p>Batch summaries count each file once: formatted, unchanged, excluded, skipped, or
+failed. <code>--dry-run</code> counts actual changes as "would format". Skipped files retain
+their original contents; the summary distinguishes depth limits, input parse errors, and output
+validation failures. When multiple reasons occur in a batch, the reason counts show how many
+skipped files had each problem; a file can have both reasons. Failed files are
+aborted operations or config, read, or write errors.</p>
+<p>Forced output counts as formatted or unchanged when the operation completes, even
+when input or output checks fail. Diagnostics and exit status still report those
+failures. Strict/check modes can also return status 1 for skipped files without
+counting them again as failed.</p>
+<hr />
+<h3 id="-f-force"><code>-f</code>, <code>--force</code><a class="headerlink" href="#-f-force" title="Permanent link">&para;</a></h3>
+<p>Use the formatter's output despite validation failures, including Git merge
+conflict markers. Diagnostics are still printed to stderr, and the command exits
+with status 1 when validation fails. See <a href="../format-validation/">validation</a>.
+Depth-limit skips always preserve the input, including with <code>--force</code>.</p>
+<p><code>--force</code> overrides validation, while <code>--dry-run</code> still suppresses writes and
+explicit formatting markers remain respected.</p>
+<hr />
+<h3 id="-n-dry-run"><code>-n</code>, <code>--dry-run</code><a class="headerlink" href="#-n-dry-run" title="Permanent link">&para;</a></h3>
+<p>Run formatting and validation without writing source files or source to stdout.
+Uses the same verbosity as a normal run: diagnostics and a batch summary, with
+per-file progress and timing only when <code>--verbose</code> is enabled. The summary says
+"would format" for files that would change. Differences alone return status 0.
+Can be used with multiple files and combined with <code>--force</code> to check forced formatting.</p>
+<hr />
+<h3 id="-check-verify"><code>--check</code>, <code>--verify</code><a class="headerlink" href="#-check-verify" title="Permanent link">&para;</a></h3>
+<p>Check that files are already formatted and pass validation. Return 0 on success,
+1 if any file needs formatting, fails validation, or cannot be processed.
+Reports <code>&lt;path&gt;: needs formatting</code> on stderr for each file that would change.
+Supports stdin, multiple files, and directories. Never writes source files or source
+to stdout, including with <code>-i</code> or <code>--force</code>. An explicit <code>--stats-csv</code> report is still written. Generated files and explicitly disabled
+formatting regions are respected. Batch results do not depend on file order.</p>
+<h3 id="-werror"><code>--Werror</code><a class="headerlink" href="#-werror" title="Permanent link">&para;</a></h3>
+<p>Treat diagnostic warnings as failures. With <code>--dry-run</code>, also fail when formatting
+would change a file and report each such file on stderr. <code>--dry-run --Werror</code> is the stricter, clang-format-compatible
+check spelling; unlike <code>--check</code>, it also fails on unmatched <code>on</code> warnings.
+Without <code>--dry-run</code>, this changes exit status without suppressing normal output.</p>
+<hr />
+<h3 id="-strict-fail-on-incomplete-format"><code>--strict</code>, <code>--fail-on-incomplete-format</code><a class="headerlink" href="#-strict-fail-on-incomplete-format" title="Permanent link">&para;</a></h3>
+<p>Return status 1 on every validation failure, including structural parse failures,
+CST mismatches, and non-idempotent output that normally preserve the input and
+return 0. Output handling is unchanged: rejected candidates remain unapplied unless
+<code>--force</code> is also given. Formatting differences and unmatched <code>on</code> warnings alone
+are not failures. This is validation of formatting safety, not compilation.</p>
+<p>The default is <code>true</code>; it cannot override <code>--strict</code>, <code>--check</code>, or <code>--Werror</code>.</p>
+<hr />
+<h3 id="-config-path"><code>--config &lt;path&gt;</code><a class="headerlink" href="#-config-path" title="Permanent link">&para;</a></h3>
+<p>Path to a JSON config file. Without <code>--config</code> or <code>--config-json</code>, <code>slang-format</code> searches upward from each file independently, then from the current directory, for <code>.slang/format.json</code>. An explicit config applies to every file. Nested configs replace parent configs; missing settings use defaults. Unknown keys are errors, including nested keys.</p>
+<p>See <a href="../configuration/">Configuration</a> for config file options.</p>
+<hr />
+<h3 id="-config-json-json"><code>--config-json &lt;json&gt;</code><a class="headerlink" href="#-config-json-json" title="Permanent link">&para;</a></h3>
+<p>Supply a JSON config directly on the command line:</p>
+<div class="language-sh highlight"><pre><span></span><code>slang-format<span class="w"> </span>--config-json<span class="w"> </span><span class="s1">&#39;{&quot;columnLimit&quot;:80,&quot;indentWidth&quot;:2}&#39;</span><span class="w"> </span>-i<span class="w"> </span>file.sv
+</code></pre></div>
+<p>The config applies to every input, including stdin, and overrides automatic config
+discovery. Omitted settings use built-in defaults. It cannot be combined with
+<code>--config</code>. Use <code>--dump-config</code> to inspect the resolved settings.</p>
+<p>Unknown keys (including nested keys), invalid value types, and malformed JSON
+produce an error on stderr and exit status 1 before any files are formatted or
+written. For example, <code>{"indentWidht":2}</code> reports
+<code>Unknown configuration key 'indentWidht'.</code> The same diagnostic is used for config
+files; nested errors also identify the containing field.</p>
+<p>As with <code>--config</code>, <code>excludeDirectoryNames</code> controls directory collection and
+<code>projectPaths</code> is ignored because no discovered project root is associated with
+an explicit config.</p>
+<hr />
+<h3 id="-assume-filename-path-stdin_name-path"><code>--assume-filename &lt;path&gt;</code>, <code>--stdin_name &lt;path&gt;</code><a class="headerlink" href="#-assume-filename-path-stdin_name-path" title="Permanent link">&para;</a></h3>
+<p>Give stdin a filename for config discovery and diagnostic locations. The file need
+not exist, so unsaved editor buffers work. Relative paths resolve against the
+current directory. Searches for <code>.slang/format.json</code> from the filename's parent,
+then falls back to the current directory. <code>--config</code> or <code>--config-json</code> takes precedence.
+Ignored for actual file inputs. Without this option stdin uses the current
+directory's config and diagnostics identify <code>&lt;stdin&gt;</code>.</p>
+<div class="language-sh highlight"><pre><span></span><code>slang-format<span class="w"> </span>--assume-filename<span class="w"> </span>rtl/top.sv<span class="w"> </span>-<span class="w"> </span>&lt;<span class="w"> </span>editor-buffer.sv
+</code></pre></div>
+<hr />
+<h3 id="-dump-config"><code>--dump-config</code><a class="headerlink" href="#-dump-config" title="Permanent link">&para;</a></h3>
+<p>Print the configuration for the first target (or stdin's assumed filename) as JSON and exit. Useful for inspecting defaults or verifying which config file is being picked up.</p>
+<hr />
+<h3 id="-stage-layoutaligned"><code>--stage &lt;layout|aligned&gt;</code><a class="headerlink" href="#-stage-layoutaligned" title="Permanent link">&para;</a></h3>
+<p>Select the last formatter pass to run. <code>layout</code> performs normalization, spacing, and line breaking without cross-row column alignment. <code>aligned</code> (the default) also runs the alignment pass. Both stages run CST validation and idempotency checks independently.</p>
+<hr />
+<h3 id="-j-jobs-n"><code>-j</code>, <code>--jobs &lt;n&gt;</code><a class="headerlink" href="#-j-jobs-n" title="Permanent link">&para;</a></h3>
+<p>Number of parallel formatting jobs. Defaults to the number of CPU cores. Used for file batches, including checks and dry runs.</p>
+<h3 id="-v-verbose"><code>-v</code>, <code>--verbose</code><a class="headerlink" href="#-v-verbose" title="Permanent link">&para;</a></h3>
+<p>Report <code>formatting &lt;path&gt; ...</code> when a worker starts reading and formatting a file,
+then <code>finished &lt;path&gt; (12.345 ms)</code> after its result has been handled. Starts without matching
+finishes identify outstanding work when investigating a stall. <code>finished</code> also
+appears for rejected or failed files; diagnostics and the summary report failures.</p>
+<p>Formatting runs in parallel using <code>--jobs</code> (or the default CPU count). Workers
+queue progress events; only the main thread prints progress and diagnostics and
+applies results. Events are reported as they arrive, so a stalled worker does not
+hold up reports from other workers. Output order can vary between runs. Use <code>-j1</code>
+to isolate one active file at a time. Single-file and stdin modes also report progress.
+Elapsed time measures wall-clock milliseconds spent reading, formatting, and
+validating that input, including blocked reads. It excludes config discovery,
+worker queue wait, result reporting, and output writes. For stdin it includes
+waiting for input/EOF. Timings use a monotonic clock.</p>
+<h3 id="-stats-csv-path"><code>--stats-csv &lt;path&gt;</code><a class="headerlink" href="#-stats-csv-path" title="Permanent link">&para;</a></h3>
+<p>Write per-file timing and outcomes to a CSV file, independently of <code>--verbose</code>.
+Works for files, directory batches, stdin, both formatter stages, checks, and dry
+runs. An explicitly requested report is written even when source writes are disabled
+by <code>--check</code> or <code>--dry-run</code>. Source stdout remains unchanged.</p>
+<p>The report has these columns:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>path</code></td>
+<td>Input filename, or <code>&lt;stdin&gt;</code> / <code>--assume-filename</code> for stdin.</td>
+</tr>
+<tr>
+<td><code>elapsed_ms</code></td>
+<td>Read, format, and validation wall time in milliseconds, with three decimals; same measurement as verbose output.</td>
+</tr>
+<tr>
+<td><code>input_bytes</code></td>
+<td>Number of source bytes read, or zero when input was not read.</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>changed</code>, <code>unchanged</code>, <code>excluded</code>, <code>skipped</code>, or <code>error</code>.</td>
+</tr>
+<tr>
+<td><code>validation_failed</code></td>
+<td><code>true</code> if an input check or output validation failed; otherwise <code>false</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><code>changed</code> means output changed, or would change in a check/dry run. <code>excluded</code>
+identifies generated files; unchanged disabled regions are <code>unchanged</code>. <code>skipped</code>
+means an input check or output validation kept the original. <code>error</code> covers aborts and file/config/write
+failures. Forced failed output can be <code>changed</code> with <code>validation_failed=true</code>.
+These fields describe outcomes, not the command's exit status: strictness and
+checking flags still control that status.</p>
+<p>An existing report is overwritten. Rows are written and flushed by the main thread
+as results are handled, in completion order, so finished rows remain available if
+another worker stalls. An interrupted operation has no row. An empty batch writes
+only the header. Errors before input processing, such as invalid arguments or a
+missing input path, can prevent report creation entirely.</p>
+<p>Paths are CSV-quoted with embedded quotes doubled. The report cannot overwrite an
+input or loaded configuration, including aliases through symlinks/hard links.
+<code>-</code> is rejected as a report path. Failure to open the report stops formatting;
+a later report write failure makes the command exit 1 while processing continues.</p>
+<div class="language-sh highlight"><pre><span></span><code>slang-format<span class="w"> </span>-v<span class="w"> </span>-j8<span class="w"> </span>--dry-run<span class="w"> </span>--stats-csv<span class="w"> </span>timings.csv<span class="w"> </span>rtl/
+</code></pre></div>
+<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span class="c1"># Format a file and print to stdout</span>
+slang-format<span class="w"> </span>top.sv
+
+<span class="c1"># Format in-place</span>
+slang-format<span class="w"> </span>-i<span class="w"> </span>top.sv
+
+<span class="c1"># Format multiple files in-place with 8 threads</span>
+slang-format<span class="w"> </span>-i<span class="w"> </span>-j<span class="w"> </span><span class="m">8</span><span class="w"> </span>src/**/*.sv
+
+<span class="c1"># Pipe from stdin</span>
+cat<span class="w"> </span>top.sv<span class="w"> </span><span class="p">|</span><span class="w"> </span>slang-format
+
+<span class="c1"># Check current config</span>
+slang-format<span class="w"> </span>--dump-config
+
+<span class="c1"># Use a specific config file</span>
+slang-format<span class="w"> </span>--config<span class="w"> </span>path/to/format.json<span class="w"> </span>top.sv
+
+<span class="c1"># Force output despite validation warnings</span>
+slang-format<span class="w"> </span>-f<span class="w"> </span>top.sv
+
+<span class="c1"># Inspect independently testable pre-alignment output</span>
+slang-format<span class="w"> </span>--stage<span class="w"> </span>layout<span class="w"> </span>top.sv
+</code></pre></div>
+<div class="language-sh highlight"><pre><span></span><code><span class="c1"># CI: fail if any file needs formatting or cannot be validated</span>
+slang-format<span class="w"> </span>--check<span class="w"> </span>rtl/
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": "../..", "features": ["content.code.copy", "navigation.instant", "navigation.top", "search.suggest", "toc.follow"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.92b07e13.min.js"></script>
+      
+    
+  </body>
+</html>
