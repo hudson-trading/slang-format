@@ -363,7 +363,7 @@
   
   
   <span class="md-ellipsis">
-    Command Line Reference
+    Command-Line Reference
     
   </span>
   
@@ -774,7 +774,7 @@
 <p><code>slang-format</code> is an <strong>opinionated</strong> formatter — configuration is kept to a minimum, and formatting decisions are driven almost entirely by the concrete syntax tree (CST) rather than existing whitespace or user style. The goal is consistent, readable SystemVerilog with zero bikeshedding.</p>
 <p>Some things are preserved from the original source:</p>
 <ul>
-<li><strong>Macro definitions and argument contents</strong> — these are emitted verbatim since modifying them could change macro expansion, including stringification. Whitespace within a macro argument at a usage is preserved.</li>
+<li><strong>Macro definitions and argument contents</strong> — these are emitted verbatim since modifying them could change macro expansion, including stringification. Whitespace within an argument in a macro invocation is preserved.</li>
 <li><strong>Blank lines within lists</strong> — blank lines between module members, port declarations, etc. are kept as authored to respect logical groupings.</li>
 </ul>
 <h2 id="formatter-passes">Formatter Passes<a class="headerlink" href="#formatter-passes" title="Permanent link">&para;</a></h2>
@@ -785,9 +785,9 @@
 <li><strong>Align</strong> groups compatible first-line anchors and adds padding. Alignment is split-only relative to layout: it may retain or add line breaks, but cannot join a member that the layout pass split.</li>
 </ol>
 <h2 id="lists">Lists<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
-<p>Lists are either always vertical, always inline (like array dimensions), or dynamic based on heuristics like children count or length. Bin packing (adding tokens until line limit is hit) is generally avoided, since it is less readable and creates bad diffs when the list is modified.</p>
+<p>Lists are either always vertical, always inline (like array dimensions), or dynamic based on heuristics like the number or length of their children. Bin packing (adding tokens until the line limit is reached) is generally avoided, since it is less readable and creates bad diffs when the list is modified.</p>
 <h2 id="ifdef-indentation">Ifdef Indentation<a class="headerlink" href="#ifdef-indentation" title="Permanent link">&para;</a></h2>
-<p>In member lists, preprocessor conditional directives (<code>ifdef</code>/<code>ifndef</code>/<code>else</code>/<code>elsif</code>/<code>endif</code>) are indented as structural blocks, not left-flushed to column 0. The content between an <code>ifdef</code> and its matching <code>else</code>/<code>endif</code> is indented one level deeper:</p>
+<p>In member lists, preprocessor conditional directives (<code>ifdef</code>/<code>ifndef</code>/<code>else</code>/<code>elsif</code>/<code>endif</code>) are indented as structural blocks, not placed flush left at column 0. The content between an <code>ifdef</code> and its matching <code>else</code>/<code>endif</code> is indented one level deeper:</p>
 <div class="language-systemverilog highlight"><pre><span></span><code><span class="k">module</span><span class="w"> </span><span class="n">top</span><span class="p">;</span>
 <span class="w">    </span><span class="no">`ifdef</span><span class="w"> </span><span class="n">FEATURE_A</span>
 <span class="w">        </span><span class="kt">logic</span><span class="w"> </span><span class="n">a</span><span class="p">;</span>
@@ -802,10 +802,10 @@
 </code></pre></div>
 <p>This is done for a few reasons:</p>
 <ul>
-<li>These behave nearly identically to generate blocks, which follow normal indenting.</li>
-<li>Preprocessor branches can be nested, so indents help identify the branch ranges.</li>
+<li>These branches are similar to generate branches, which follow normal indentation rules.</li>
+<li>Preprocessor branches can be nested, so indentation helps identify the branch boundaries.</li>
 </ul>
-<p>In non-member lists like port lists or case items, ifdefs are dedented one level so that the list items across branches stay aligned. In these contexts, ifdefs tend to act as feature flags toggling individual entries rather than introducing structural blocks:</p>
+<p>In non-member lists like port lists or lists of case items, ifdefs are dedented one level so that the list items across branches stay aligned. In these contexts, ifdefs tend to act as feature flags toggling individual entries rather than introducing structural blocks:</p>
 <div class="language-systemverilog highlight"><pre><span></span><code><span class="k">module</span><span class="w"> </span><span class="n">top</span><span class="w"> </span><span class="p">(</span>
 <span class="w">    </span><span class="k">input</span><span class="w"> </span><span class="kt">logic</span><span class="w"> </span><span class="n">clk</span><span class="p">,</span>
 <span class="w">    </span><span class="k">input</span><span class="w"> </span><span class="kt">logic</span><span class="w"> </span><span class="n">rst</span><span class="p">,</span>
@@ -839,8 +839,8 @@ that structure.</p>
 <ol>
 <li>Normalize the complete clean member into tokens, atomic text, hard lines, and prioritized soft lines.</li>
 <li>Try successively deeper priority tiers. The first tier that can satisfy the column limit wins.</li>
-<li>Within a tier, minimize worst overflow, total overflow, number of breaks, and raggedness, in that order.</li>
-<li>If no layout can fit because an atomic token is itself too wide, minimize worst overflow and still split around that token rather than leaving one giant line.</li>
+<li>Within a tier, minimize the worst overflow, total overflow, number of breaks, and raggedness, in that order.</li>
+<li>If no layout can fit because an atomic token is itself too wide, minimize the worst overflow and still split around that token rather than leaving one giant line.</li>
 </ol>
 <p>Candidate evaluation is bounded by the number of atoms in the member. If a pathological member exhausts that work budget, the solver deterministically takes the remaining breaks in the current priority tier before considering deeper tiers.</p>
 <p>Dynamic lists are represented as consistent soft-line groups, so all comma boundaries split together; the solver never bin-packs only part of a list. Lists and specialized ternary layouts continue through their syntax-specific renderers while their alignment anchors are migrated to the shared IR.</p>
@@ -870,7 +870,7 @@ that structure.</p>
 <h3 id="what-doesnt-wrap">What Doesn't Wrap<a class="headerlink" href="#what-doesnt-wrap" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Data declarations</strong> are not split — they stay on one line regardless of length.</li>
-<li><strong>Concatenations</strong> (<code>{a, b, c}</code>) and <strong>function arguments</strong> are handled by Dynamic list verticalization, not expression wrapping. When an overflowing function call is the sole assignment RHS, the whole call moves to the next indented line; short calls remain inline.</li>
+<li><strong>Concatenations</strong> (<code>{a, b, c}</code>) and <strong>function arguments</strong> are handled by dynamic list verticalization, not expression wrapping. When an overflowing function call is the sole assignment RHS, the whole call moves to the next indented line; short calls remain inline.</li>
 <li><strong>Macro invocations</strong> are emitted as raw text and are not individually wrapped.</li>
 </ul>
 <h2 id="alignment">Alignment<a class="headerlink" href="#alignment" title="Permanent link">&para;</a></h2>
@@ -880,7 +880,7 @@ that structure.</p>
 <span class="k">output</span><span class="w"> </span><span class="kt">logic</span><span class="w"> </span><span class="p">[</span><span class="mi">15</span><span class="o">:</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="n">data_out</span>
 </code></pre></div>
 <h3 id="alignment-model">Alignment Model<a class="headerlink" href="#alignment-model" title="Permanent link">&para;</a></h3>
-<p>Each alignable row produces a tree of <code>AlignCell</code>s derived from its syntax. Consecutive compatible rows form a group, and the framework computes per-column max widths and emits each row with padding between columns. When sub-tree shapes diverge within a group, the framework collapses the divergent sub-tree so top-level columns (names) still align even when deeper details differ.</p>
+<p>Each alignable row produces a tree of <code>AlignCell</code>s derived from its syntax. Consecutive compatible rows form a group, and the framework computes maximum widths per column and emits each row with padding between columns. When subtree shapes diverge within a group, the framework collapses the divergent subtree so top-level columns (names) still align even when deeper details differ.</p>
 <p>Member kinds the formatter currently understands:</p>
 <table>
 <thead>
@@ -949,9 +949,9 @@ that structure.</p>
 <span class="w">    </span><span class="n">bb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">4</span><span class="p">;</span>
 <span class="k">end</span>
 </code></pre></div>
-<p><strong>Structural interruptions</strong> — preprocessor directives, macro invocations, and comments attached to directives — always break a group, since alignment columns can't meaningfully span across conditional code.</p>
+<p><strong>Structural interruptions</strong> — preprocessor directives, macro invocations, and comments attached to directives — always break a group, since alignment columns can't meaningfully span conditional code.</p>
 <p><strong>Kind changes</strong> also break groups. A port declaration followed by a data declaration starts a new group, since they have different column layouts.</p>
-<p><strong>Maximum padding</strong> (<code>alignment.paddingLimit</code>, default: <code>null</code>) optionally splits a group when aligning would require an excessive gap. By default no gap-based splitting happens — all otherwise-compatible rows align together. Setting <code>paddingLimit</code> to a positive integer reinstates the cap: when any column would need that many or more spaces of padding for a new member, that member starts a fresh group instead. This is useful when one member has a much longer type or name than the rest and forcing every other line to pad out to match would produce unreadable code:</p>
+<p><strong>Maximum padding</strong> (<code>alignment.paddingLimit</code>, default: <code>null</code>) optionally splits a group when aligning would require an excessive gap. By default, no gap-based splitting happens — all otherwise compatible rows align together. Setting <code>paddingLimit</code> to a positive integer reinstates the cap: when any column would need that many or more spaces of padding for a new member, that member starts a fresh group instead. This is useful when one member has a much longer type or name than the rest and forcing every other line to pad out to match would produce unreadable code:</p>
 <div class="language-systemverilog highlight"><pre><span></span><code><span class="c1">// Default (paddingLimit = null) — everything aligns:</span>
 <span class="kt">logic</span><span class="w"> </span><span class="p">[</span><span class="n">VERY_LONG_PARAMETER</span><span class="o">-</span><span class="mi">1</span><span class="o">:</span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="n">some_very_long_signal_name</span><span class="p">;</span>
 <span class="kt">logic</span><span class="w">                           </span><span class="n">x</span><span class="p">;</span>

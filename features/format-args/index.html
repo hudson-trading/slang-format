@@ -26,7 +26,7 @@
     
     
       
-        <title>Command Line Reference - slang-format</title>
+        <title>Command-Line Reference - slang-format</title>
       
     
     
@@ -114,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Command Line Reference
+              Command-Line Reference
             
           </span>
         </div>
@@ -374,7 +374,7 @@
   
   
   <span class="md-ellipsis">
-    Command Line Reference
+    Command-Line Reference
     
   </span>
   
@@ -387,7 +387,7 @@
   
   
   <span class="md-ellipsis">
-    Command Line Reference
+    Command-Line Reference
     
   </span>
   
@@ -886,15 +886,16 @@
   
 
 
-<h1 id="command-line-reference">Command Line Reference<a class="headerlink" href="#command-line-reference" title="Permanent link">&para;</a></h1>
+<h1 id="command-line-reference">Command-Line Reference<a class="headerlink" href="#command-line-reference" title="Permanent link">&para;</a></h1>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">&para;</a></h2>
 <div class="language-text highlight"><pre><span></span><code>slang-format [options] [&lt;file-or-dir&gt; ...]
 </code></pre></div>
-<p>If no files are specified, or the sole input is <code>-</code>, reads stdin and writes stdout.
+<p>If no files are specified or the sole input is <code>-</code>, <code>slang-format</code> reads from stdin
+and writes to stdout.
 Stdin cannot be combined with other inputs or <code>-i</code>.
-If files are specified without <code>-i</code>, prints formatted output to stdout.
-With <code>-i</code>, modifies files in-place. Multiple files require <code>-i</code>, <code>--dry-run</code>, or <code>--check</code>.
-Directories recursively collect <code>.sv</code>, <code>.svh</code>, <code>.v</code>, and <code>.vh</code> files. Each directory
+If files are specified without <code>-i</code>, it prints formatted output to stdout.
+With <code>-i</code>, it modifies files in place. Multiple files require <code>-i</code>, <code>--dry-run</code>, or <code>--check</code>.
+Directory inputs recursively collect <code>.sv</code>, <code>.svh</code>, <code>.v</code>, and <code>.vh</code> files. Each directory
 argument's config controls <code>excludeDirectoryNames</code> (directory names) and
 <code>projectPaths</code> (files or subtrees when targeting the project root containing
 <code>.slang/</code>). Each collected file resolves its own formatting config.</p>
@@ -902,26 +903,26 @@ argument's config controls <code>excludeDirectoryNames</code> (directory names) 
 and <a href="../format-markers/">disabling formatting</a> for preserving source formatting.</p>
 <h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">&para;</a></h2>
 <h3 id="-h-help"><code>-h</code>, <code>--help</code><a class="headerlink" href="#-h-help" title="Permanent link">&para;</a></h3>
-<p>Display help message and exit.</p>
+<p>Display a help message and exit.</p>
 <hr />
 <h3 id="-version"><code>--version</code><a class="headerlink" href="#-version" title="Permanent link">&para;</a></h3>
 <p>Display version information and exit.</p>
 <hr />
 <h3 id="-i-inplace"><code>-i</code>, <code>--inplace</code><a class="headerlink" href="#-i-inplace" title="Permanent link">&para;</a></h3>
-<p>Edit files in-place. Cannot be used with stdin. Unchanged files retain their
+<p>Edit files in place. This option cannot be used with stdin. Unchanged files retain their
 contents and timestamps. Changed files are written completely to a temporary file
 in the destination directory, then renamed over the destination. A failed write
 leaves the original in place. Symlinks remain symlinks and their targets are
 updated; permission bits are preserved. Replacement creates a new file, so other
-hard links retain the old contents, and ownership/extended metadata are not copied.
+hard links retain the old contents, and ownership and extended metadata are not copied.
 The destination directory must be writable. Read-only files are rejected when
 changes are needed.</p>
 <p>Batch summaries count each file once: formatted, unchanged, excluded, skipped, or
 failed. <code>--dry-run</code> counts actual changes as "would format". Skipped files retain
 their original contents; the summary distinguishes depth limits, input parse errors, and output
 validation failures. When multiple reasons occur in a batch, the reason counts show how many
-skipped files had each problem; a file can have both reasons. Failed files are
-aborted operations or config, read, or write errors.</p>
+skipped files had each problem; a file can have multiple reasons. Files are counted
+as failed when operations abort or config, read, or write errors occur.</p>
 <p>Forced output counts as formatted or unchanged when the operation completes, even
 when input or output checks fail. Diagnostics and exit status still report those
 failures. Strict/check modes can also return status 1 for skipped files without
@@ -936,18 +937,18 @@ Depth-limit skips always preserve the input, including with <code>--force</code>
 explicit formatting markers remain respected.</p>
 <hr />
 <h3 id="-n-dry-run"><code>-n</code>, <code>--dry-run</code><a class="headerlink" href="#-n-dry-run" title="Permanent link">&para;</a></h3>
-<p>Run formatting and validation without writing source files or source to stdout.
-Uses the same verbosity as a normal run: diagnostics and a batch summary, with
+<p>Run formatting and validation without writing to source files or emitting source on stdout.
+This mode uses the same verbosity as a normal run: diagnostics and a batch summary, with
 per-file progress and timing only when <code>--verbose</code> is enabled. The summary says
 "would format" for files that would change. Differences alone return status 0.
-Can be used with multiple files and combined with <code>--force</code> to check forced formatting.</p>
+It can be used with multiple files and combined with <code>--force</code> to check forced formatting.</p>
 <hr />
 <h3 id="-check-verify"><code>--check</code>, <code>--verify</code><a class="headerlink" href="#-check-verify" title="Permanent link">&para;</a></h3>
-<p>Check that files are already formatted and pass validation. Return 0 on success,
+<p>Check that files are already formatted and pass validation. Return 0 on success or
 1 if any file needs formatting, fails validation, or cannot be processed.
-Reports <code>&lt;path&gt;: needs formatting</code> on stderr for each file that would change.
-Supports stdin, multiple files, and directories. Never writes source files or source
-to stdout, including with <code>-i</code> or <code>--force</code>. An explicit <code>--stats-csv</code> report is still written. Generated files and explicitly disabled
+This mode reports <code>&lt;path&gt;: needs formatting</code> on stderr for each file that would change.
+It supports stdin, multiple files, and directories. It never writes to source files or emits source
+on stdout, including with <code>-i</code> or <code>--force</code>. An explicit <code>--stats-csv</code> report is still written. Generated files and explicitly disabled
 formatting regions are respected. Batch results do not depend on file order.</p>
 <h3 id="-werror"><code>--Werror</code><a class="headerlink" href="#-werror" title="Permanent link">&para;</a></h3>
 <p>Treat diagnostic warnings as failures. With <code>--dry-run</code>, also fail when formatting
@@ -957,11 +958,13 @@ Without <code>--dry-run</code>, this changes exit status without suppressing nor
 <hr />
 <h3 id="-strict-fail-on-incomplete-format"><code>--strict</code>, <code>--fail-on-incomplete-format</code><a class="headerlink" href="#-strict-fail-on-incomplete-format" title="Permanent link">&para;</a></h3>
 <p>Return status 1 on every validation failure, including structural parse failures,
-CST mismatches, and non-idempotent output that normally preserve the input and
-return 0. Output handling is unchanged: rejected candidates remain unapplied unless
+CST mismatches, and non-idempotent output. When these failures occur, the formatter
+normally preserves the input and returns 0. Output handling is unchanged:
+rejected candidates remain unapplied unless
 <code>--force</code> is also given. Formatting differences and unmatched <code>on</code> warnings alone
 are not failures. This is validation of formatting safety, not compilation.</p>
-<p>The default is <code>true</code>; it cannot override <code>--strict</code>, <code>--check</code>, or <code>--Werror</code>.</p>
+<p><code>--failsafe_success</code> defaults to <code>true</code>; setting it to <code>true</code> cannot override
+<code>--strict</code>, <code>--check</code>, or <code>--Werror</code>.</p>
 <hr />
 <h3 id="-config-path"><code>--config &lt;path&gt;</code><a class="headerlink" href="#-config-path" title="Permanent link">&para;</a></h3>
 <p>Path to a JSON config file. Without <code>--config</code> or <code>--config-json</code>, <code>slang-format</code> searches upward from each file independently, then from the current directory, for <code>.slang/format.json</code>. An explicit config applies to every file. Nested configs replace parent configs; missing settings use defaults. Unknown keys are errors, including nested keys.</p>
@@ -986,10 +989,10 @@ an explicit config.</p>
 <h3 id="-assume-filename-path-stdin_name-path"><code>--assume-filename &lt;path&gt;</code>, <code>--stdin_name &lt;path&gt;</code><a class="headerlink" href="#-assume-filename-path-stdin_name-path" title="Permanent link">&para;</a></h3>
 <p>Give stdin a filename for config discovery and diagnostic locations. The file need
 not exist, so unsaved editor buffers work. Relative paths resolve against the
-current directory. Searches for <code>.slang/format.json</code> from the filename's parent,
+current directory. The formatter searches for <code>.slang/format.json</code> from the filename's parent,
 then falls back to the current directory. <code>--config</code> or <code>--config-json</code> takes precedence.
-Ignored for actual file inputs. Without this option stdin uses the current
-directory's config and diagnostics identify <code>&lt;stdin&gt;</code>.</p>
+This option is ignored for actual file inputs. Without it, stdin uses the current
+directory's config, and diagnostics identify <code>&lt;stdin&gt;</code>.</p>
 <div class="language-sh highlight"><pre><span></span><code>slang-format<span class="w"> </span>--assume-filename<span class="w"> </span>rtl/top.sv<span class="w"> </span>-<span class="w"> </span>&lt;<span class="w"> </span>editor-buffer.sv
 </code></pre></div>
 <hr />
@@ -1013,11 +1016,11 @@ hold up reports from other workers. Output order can vary between runs. Use <cod
 to isolate one active file at a time. Single-file and stdin modes also report progress.
 Elapsed time measures wall-clock milliseconds spent reading, formatting, and
 validating that input, including blocked reads. It excludes config discovery,
-worker queue wait, result reporting, and output writes. For stdin it includes
+time spent waiting in the worker queue, result reporting, and output writes. For stdin, it includes
 waiting for input/EOF. Timings use a monotonic clock.</p>
 <h3 id="-stats-csv-path"><code>--stats-csv &lt;path&gt;</code><a class="headerlink" href="#-stats-csv-path" title="Permanent link">&para;</a></h3>
 <p>Write per-file timing and outcomes to a CSV file, independently of <code>--verbose</code>.
-Works for files, directory batches, stdin, both formatter stages, checks, and dry
+This option works for files, directory batches, stdin, both formatter stages, checks, and dry
 runs. An explicitly requested report is written even when source writes are disabled
 by <code>--check</code> or <code>--dry-run</code>. Source stdout remains unchanged.</p>
 <p>The report has these columns:</p>
@@ -1035,7 +1038,7 @@ by <code>--check</code> or <code>--dry-run</code>. Source stdout remains unchang
 </tr>
 <tr>
 <td><code>elapsed_ms</code></td>
-<td>Read, format, and validation wall time in milliseconds, with three decimals; same measurement as verbose output.</td>
+<td>Wall-clock time spent reading, formatting, and validating, in milliseconds, with three decimal places; the same measurement as verbose output.</td>
 </tr>
 <tr>
 <td><code>input_bytes</code></td>
@@ -1063,19 +1066,19 @@ another worker stalls. An interrupted operation has no row. An empty batch write
 only the header. Errors before input processing, such as invalid arguments or a
 missing input path, can prevent report creation entirely.</p>
 <p>Paths are CSV-quoted with embedded quotes doubled. The report cannot overwrite an
-input or loaded configuration, including aliases through symlinks/hard links.
+input or loaded configuration, including aliases through symlinks or hard links.
 <code>-</code> is rejected as a report path. Failure to open the report stops formatting;
 a later report write failure makes the command exit 1 while processing continues.</p>
 <div class="language-sh highlight"><pre><span></span><code>slang-format<span class="w"> </span>-v<span class="w"> </span>-j8<span class="w"> </span>--dry-run<span class="w"> </span>--stats-csv<span class="w"> </span>timings.csv<span class="w"> </span>rtl/
 </code></pre></div>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span class="c1"># Format a file and print to stdout</span>
+<div class="language-bash highlight"><pre><span></span><code><span class="c1"># Format a file and print it to stdout</span>
 slang-format<span class="w"> </span>top.sv
 
-<span class="c1"># Format in-place</span>
+<span class="c1"># Format in place</span>
 slang-format<span class="w"> </span>-i<span class="w"> </span>top.sv
 
-<span class="c1"># Format multiple files in-place with 8 threads</span>
+<span class="c1"># Format multiple files in place with 8 threads</span>
 slang-format<span class="w"> </span>-i<span class="w"> </span>-j<span class="w"> </span><span class="m">8</span><span class="w"> </span>src/**/*.sv
 
 <span class="c1"># Pipe from stdin</span>

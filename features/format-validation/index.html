@@ -365,7 +365,7 @@
   
   
   <span class="md-ellipsis">
-    Command Line Reference
+    Command-Line Reference
     
   </span>
   
@@ -815,12 +815,12 @@ configuration errors, and file I/O errors count as failed. For example:</p>
 </code></pre></div>
 <p>These counts describe what happened to each file, independently of exit policy.
 <code>--strict</code> can make a skipped file fail the command without changing its outcome.</p>
-<p>An unmatched <code>slang-format: on</code> produces a warning and formatting continues.
+<p>An unmatched <code>slang-format: on</code> produces a warning, and formatting continues.
 The warning alone does not change the exit status. An unmatched <code>off</code> silently
 preserves the rest of its list scope, allowing a top-of-file <code>off</code> to disable
 the whole file.
 See <a href="../format-markers/">disabling formatting</a> for scope rules.</p>
-<p><code>--dry-run</code> performs the same checks and uses the same exit status rules, but
+<p><code>--dry-run</code> performs the same checks and uses the same exit-status rules, but
 never writes source files or emits source on stdout. It keeps the normal verbosity,
 using "would format" in the batch summary, and does not fail for formatting
 differences alone. <code>--verbose</code> enables the usual per-file progress and timing.</p>
@@ -853,7 +853,7 @@ slang-format<span class="w"> </span>--force<span class="w"> </span>top.sv
 <span class="c1"># Apply it in place</span>
 slang-format<span class="w"> </span>--force<span class="w"> </span>-i<span class="w"> </span>top.sv
 </code></pre></div>
-<p>Diagnostics remain visible and the exit status is still <code>1</code> for forced invalid candidates.
+<p>Diagnostics remain visible, and the exit status is still <code>1</code> for forced invalid candidates.
 Depth-limit skips follow the normal skip policy described above.
 Force permits output; it does not make that output pass validation. Conflict
 markers and the surrounding source may be reformatted.</p>

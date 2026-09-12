@@ -365,7 +365,7 @@
   
   
   <span class="md-ellipsis">
-    Command Line Reference
+    Command-Line Reference
     
   </span>
   
@@ -640,7 +640,8 @@ contents. For example, place it before an <code>always</code> block to preserve 
 block. It is not a general way to skip an arbitrary expression or port-list
 entry. Use the exact, case-sensitive spelling <code>slang-format: skip</code>; a block
 comment containing the same marker is also accepted.</p>
-<p>This should generally be preferred over on/off directives, since those can leak.</p>
+<p>Prefer <code>skip</code> to off/on directives, since an unmatched <code>off</code> can disable formatting
+for the rest of its list.</p>
 <h2 id="disable-a-region">Disable a region<a class="headerlink" href="#disable-a-region" title="Permanent link">&para;</a></h2>
 <p>Put the markers on their own comment lines, between items in the same list:</p>
 <div class="language-systemverilog highlight"><pre><span></span><code><span class="k">module</span><span class="w"> </span><span class="n">example</span><span class="p">;</span>
@@ -674,7 +675,7 @@ formatter warns:</p>
 <div class="language-text highlight"><pre><span></span><code>slang-format: on has no preceding off in the same list scope. Did you put the off directive in the wrong scope?
 </code></pre></div>
 <p>An unmatched <code>off</code> silently preserves the rest of its list. An unmatched <code>on</code>
-produces the warning above and formatting continues; the warning does not reject
+produces the warning above, and formatting continues; the warning does not reject
 the file or change the exit status. Repeated <code>off</code> markers in the same list do
 not nest: the next <code>on</code> resumes formatting. Both markers also work in standalone
 block comments.</p>
@@ -686,7 +687,7 @@ block comments.</p>
 </code></pre></div>
 <p>No final <code>on</code> is needed, and this produces no warning. To resume formatting later
 in the file, put <code>on</code> between top-level declarations; placing it inside a module
-would be a different list scope.</p>
+would put it in a different list scope.</p>
 <h2 id="generated-files">Generated files<a class="headerlink" href="#generated-files" title="Permanent link">&para;</a></h2>
 <p>For generated source, put <code>@generated</code> in a leading comment:</p>
 <div class="language-systemverilog highlight"><pre><span></span><code><span class="c1">// @generated</span>
