@@ -138,7 +138,7 @@ def main() -> None:
                 Path(temp_dir),
             )
         )
-    (repo / "docs" / "features" / "format-config.md").write_text(
+    (repo / "docs" / "features" / "configuration.md").write_text(
         generate_markdown(schema, defaults)
     )
 

@@ -1,14 +1,8 @@
 # Disabling formatting
 
-Prefer `// slang-format: skip` when preserving a single declaration or statement:
-it needs no matching marker and makes the affected construct explicit. Use
-`// slang-format: off` and `// slang-format: on` for a region of list items,
-or a top-of-file `off` to preserve the whole file. The rest of the source is
-formatted normally.
+## Skip one declaration, statement, or group
 
-## Skip one declaration or statement
-
-Place the marker in a comment immediately before the construct to preserve:
+Place the marker in a comment immediately before the construct or group to preserve:
 
 ```systemverilog
 module example;
@@ -18,6 +12,7 @@ module example;
     localparam int other=2;
 endmodule
 ```
+
 
 The `MASK` declaration keeps its existing spacing. The `other` declaration is
 formatted normally. A skipped declaration also separates the alignment groups
@@ -29,20 +24,7 @@ block. It is not a general way to skip an arbitrary expression or port-list
 entry. Use the exact, case-sensitive spelling `slang-format: skip`; a block
 comment containing the same marker is also accepted.
 
-## Skip at the top of a file
-
-A top-of-file skip marker applies to the first declaration, **not the entire
-file**. If that declaration is a module, its whole body is preserved:
-
-```systemverilog
-// slang-format: skip
-module first;logic a;endmodule
-module second;logic b;endmodule
-```
-
-The first module stays as written. The second module is formatted normally.
-For a file containing only one module or package, skipping that declaration can
-therefore preserve nearly all of the file.
+This should generally be preferred over on/off directives, since those can leak.
 
 ## Disable a region
 

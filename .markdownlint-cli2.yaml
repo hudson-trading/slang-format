@@ -1,0 +1,6 @@
+config:
+    default: false
+    MD032: true
+
+ignores:
+    - external/**

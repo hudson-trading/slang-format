@@ -48,11 +48,12 @@ validation:
 nav:
     - index.md
     - start/installing.md
-    - features/format-philosophy.md
+    - start/workflow-integration.md
+    - features/configuration.md
     - features/format-args.md
     - features/format-validation.md
     - features/format-markers.md
-    - Configuration: features/format-config.md
+    - features/format-philosophy.md
 
 markdown_extensions:
     - tables

@@ -105,7 +105,6 @@ return 0. Output handling is unchanged: rejected candidates remain unapplied unl
 `--force` is also given. Formatting differences and unmatched `on` warnings alone
 are not failures. This is validation of formatting safety, not compilation.
 
-`--failsafe_success=false` is an equivalent spelling for Verible integrations.
 The default is `true`; it cannot override `--strict`, `--check`, or `--Werror`.
 
 ---
@@ -114,7 +113,7 @@ The default is `true`; it cannot override `--strict`, `--check`, or `--Werror`.
 
 Path to a JSON config file. Without `--config` or `--config-json`, `slang-format` searches upward from each file independently, then from the current directory, for `.slang/format.json`. An explicit config applies to every file. Nested configs replace parent configs; missing settings use defaults. Unknown keys are errors, including nested keys.
 
-See [Configuration](format-config.md) for config file options.
+See [Configuration](configuration.md) for config file options.
 
 ---
 

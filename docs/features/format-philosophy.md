@@ -38,8 +38,9 @@ endmodule
 ```
 
 This is done for a few reasons:
- - these behave nearly identically to generate blocks, which follow normal indenting.
- - Preprocessor branches can be nested, so indents help identify the branch ranges.
+
+- These behave nearly identically to generate blocks, which follow normal indenting.
+- Preprocessor branches can be nested, so indents help identify the branch ranges.
 
 In non-member lists like port lists or case items, ifdefs are dedented one level so that the list items across branches stay aligned. In these contexts, ifdefs tend to act as feature flags toggling individual entries rather than introducing structural blocks:
 

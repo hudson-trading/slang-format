@@ -6,9 +6,10 @@ CMake target for applications that want to format in-process.
 
 Start with:
 
-- [Installing](start/installing.md)
-- [Formatting philosophy](features/format-philosophy.md)
+- [Installation](start/installing.md)
+- [Workflow Integration](start/workflow-integration.md)
+- [Configuration](features/configuration.md)
 - [Command Line Reference](features/format-args.md)
 - [Validation](features/format-validation.md)
 - [Disabling formatting](features/format-markers.md)
-- [Configuration](features/format-config.md)
+- [Formatting philosophy](features/format-philosophy.md)

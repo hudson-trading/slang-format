@@ -1,9 +1,7 @@
-# Installing
+# Installation
 
-<!-- Uncomment after the first release is published.
 Prebuilt archives are available on the
 [GitHub releases page](https://github.com/hudson-trading/slang-format/releases).
--->
 
 ## Build from source
 
