@@ -1148,6 +1148,43 @@ TEST_CASE("unlimited columns keep short case clauses inline") {
     }
 }
 
+TEST_CASE("assertion wrapping includes labels and active or inactive branch indentation") {
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        for (bool active : {false, true}) {
+            for (uint32_t limit : {120u, 128u, 0u}) {
+                CAPTURE(stage, active, limit);
+                format::Config config;
+                config.columnLimit = limit;
+                std::string source = active ? "`define FEATURE_A\n" : "";
+                source += "module demo;\n`ifdef FEATURE_A\n"
+                          "property_a: assert property (@(posedge baz) disable iff(bar) "
+                          "some_other_function(foo) == some_other_function(bar_baz));\n"
+                          "`endif\nendmodule\n";
+                auto result = format::format("assertions.sv", source, config, stage);
+                REQUIRE(result.isUsable());
+                if (limit == 120) {
+                    CHECK(
+                        result.formatted.find(
+                            "        property_a: assert property (\n"
+                            "            @(posedge baz) disable iff(bar)\n"
+                            "            some_other_function(foo) == some_other_function(bar_baz)\n"
+                            "        );"
+                        ) != std::string::npos
+                    );
+                }
+                else {
+                    CHECK(
+                        result.formatted.find("property_a: assert property (@") != std::string::npos
+                    );
+                }
+                auto repeated = format::format("assertions.sv", result.formatted, config, stage);
+                CHECK(repeated.isUsable());
+                CHECK(repeated.formatted == result.formatted);
+            }
+        }
+    }
+}
+
 TEST_CASE("off and skip regions retain internal trailing whitespace") {
     for (auto marker : {"off", "skip"}) {
         std::string preserved = "module foo;  \n  \t\n  logic value; \t\nendmodule";

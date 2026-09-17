@@ -256,11 +256,24 @@ private:
                                         diagnostic.code != slang::diag::NotAllowedInCU;
                              });
         if (tree && !hasParseError) {
+            Config branchConfig = config;
+            if (config.columnLimit.get()) {
+                // Branch text is rendered at column zero and reindented into its parent later.
+                size_t branchIndent = structuralIndent +
+                                      conditionalDepth * config.indentWidth.get();
+                if (dedentListConditionalDirective && branchIndent >= config.indentWidth.get())
+                    branchIndent -= config.indentWidth.get();
+                branchConfig.columnLimit = static_cast<uint32_t>(
+                    config.columnLimit.get() > branchIndent
+                        ? config.columnLimit.get() - branchIndent
+                        : 1
+                );
+            }
             auto subparsed = NormalizedFormatDocument::build(
                 tree->root(), &sourceManager, config.maxSyntaxDepth.get()
             );
-            auto document = Lowerer(subparsed, config, stage).build();
-            DocumentRenderer renderer(config);
+            auto document = Lowerer(subparsed, branchConfig, stage).build();
+            DocumentRenderer renderer(branchConfig);
             auto layout = renderer.renderLayout(document);
             subparsedText = stage == FormatStage::Layout
                                 ? std::move(layout.text)
@@ -2077,7 +2090,9 @@ private:
         pendingAssignmentBreak = false;
         pendingRecoveredAssignmentBreak = false;
         size_t begin = mark();
+        structuralIndent += config.indentWidth.get();
         lowerChild(child);
+        structuralIndent -= config.indentWidth.get();
         auto contents = capture(begin);
         append(builder.indent(
             static_cast<int>(config.indentWidth.get()),
@@ -2740,8 +2755,7 @@ private:
             return nullptr;
         };
         auto implication = findImplication(findImplication, node);
-        if (!implication || !config.columnLimit.get() ||
-            formattedFlatWidth(node) <= config.columnLimit.get()) {
+        if (!config.columnLimit.get()) {
             for (const auto& child : node.children)
                 lowerChild(child);
             return;
@@ -2768,14 +2782,42 @@ private:
         }
 
         lowerChildren(node, 0, openParen + 1);
+        GroupId group = builder.createConsistentGroup();
+        bool forceVertical = formattedFlatWidth(node) > config.columnLimit.get();
+        for (size_t i = openParen + 1; i <= closeParen; i++)
+            forceVertical = forceVertical || childHasForcingComment(node.children[i]);
+        auto propertyLine = [&](std::string_view flatText) {
+            if (forceVertical)
+                hardLine();
+            else {
+                append(builder.softLine(0, flatText, group));
+                spacingProvided = true;
+            }
+        };
         size_t bodyBegin = mark();
-        hardLine();
+        propertyLine("");
         const NormalizedNode* savedWrappedImplication = verticallyWrappedImplication;
         verticallyWrappedImplication = implication;
-        lowerChildren(node, openParen + 1, closeParen);
+        for (size_t i = openParen + 1; i < closeParen; i++) {
+            auto spec = childNode(node.children[i]);
+            if (!spec || spec->kind != SyntaxKind::PropertySpec) {
+                lowerChild(node.children[i]);
+                continue;
+            }
+
+            bool hasPrefix = false;
+            for (const auto& child : spec->children) {
+                auto nested = childNode(child);
+                if (nested && PropertyExprSyntax::isKind(nested->kind) && hasPrefix)
+                    propertyLine(" ");
+                lowerChild(child);
+                hasPrefix = hasPrefix || (nested && (TimingControlSyntax::isKind(nested->kind) ||
+                                                     nested->kind == SyntaxKind::DisableIff));
+            }
+        }
         verticallyWrappedImplication = savedWrappedImplication;
         append(builder.indent(static_cast<int>(config.indentWidth.get()), capture(bodyBegin)));
-        hardLine();
+        propertyLine("");
         lowerChildren(node, closeParen, node.children.size());
     }
 
@@ -2883,6 +2925,8 @@ private:
             return;
         }
 
+        if (!rootList)
+            structuralIndent += config.indentWidth.get();
         size_t i = 0;
         bool first = true;
         size_t listConditionalDepth = conditionalDepth;
@@ -3061,6 +3105,7 @@ private:
         }
 
         if (!rootList) {
+            structuralIndent -= config.indentWidth.get();
             hardLine();
             awaitingClosingTrivia = true;
         }
@@ -3536,8 +3581,7 @@ private:
                 }
             }
         }
-        else if (node.kind == SyntaxKind::AssertPropertyStatement ||
-                 node.kind == SyntaxKind::AssumePropertyStatement)
+        else if (ConcurrentAssertionStatementSyntax::isKind(node.kind))
             lowerConcurrentAssertion(node);
         else if (node.kind == SyntaxKind::LoopStatement ||
                  node.kind == SyntaxKind::ForLoopStatement ||
@@ -3680,6 +3724,8 @@ private:
     bool dynamicListForceVertical = false;
     bool dynamicListLikelyVertical = false;
     size_t conditionalDepth = 0;
+    /// Indentation from enclosing lists and statement bodies, excluding preprocessor branches.
+    size_t structuralIndent = 0;
     size_t classDepth = 0;
     size_t subroutineDepth = 0;
     size_t parameterPortDepth = 0;
