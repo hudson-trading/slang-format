@@ -8,8 +8,10 @@ module assertions (
 );
     // Immediate assertions
     always_comb begin
-        assert (req || !ack) else $error("ack without req");
-        assume (valid -> ready) else $warning("valid without ready");
+        assert (req || !ack)
+            else $error("ack without req");
+        assume (valid -> ready)
+            else $warning("valid without ready");
     end
 
     // Concurrent assertions
@@ -21,7 +23,8 @@ module assertions (
         @(posedge clk) disable iff(!rst_n) valid && ready |=> !valid;
     endproperty
 
-    assert_req_ack: assert property (req_ack_p) else $error("req not followed by ack");
+    assert_req_ack: assert property (req_ack_p)
+        else $error("req not followed by ack");
 
     assume_handshake: assume property (handshake_p);
 

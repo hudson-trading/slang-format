@@ -48,7 +48,8 @@ module demo;
     check_action: assert property (
         @(posedge baz) disable iff(flag0)
         some_function_a(some_input_a) == some_function_a(second_input_b)
-    ) else $error("mismatch");
+    )
+        else $error("mismatch");
     check_implication: assert property (
         @(posedge baz) disable iff(flag0)
         some_signal_a |-> some_signal_b == some_signal_c

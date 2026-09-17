@@ -3536,6 +3536,16 @@ private:
             lowerProceduralBlock(node);
         else if (node.kind == SyntaxKind::TimingControlStatement)
             lowerTimingControlStatement(node);
+        else if (node.kind == SyntaxKind::ActionBlock && node.syntax &&
+                 !node.syntax->as<ActionBlockSyntax>().statement &&
+                 node.syntax->as<ActionBlockSyntax>().elseClause) {
+            for (const auto& child : node.children) {
+                if (childNode(child))
+                    lowerIndentedChild(child);
+                else
+                    lowerChild(child);
+            }
+        }
         else if (node.kind == SyntaxKind::ActionBlock &&
                  std::ranges::any_of(node.children, [&](const auto& child) {
                      auto statement = childNode(child);
