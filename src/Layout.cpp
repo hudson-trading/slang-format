@@ -13,6 +13,7 @@
 #include "format/FormatValidation.h"
 #include "format/FormatterUtils.h"
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <unordered_map>
 
@@ -3109,7 +3110,13 @@ private:
         size_t listWidth = 0;
         for (const auto& child : list.children)
             listWidth += flatWidth(child) + (listWidth ? 1 : 0);
-        if ((itemCount <= 1 && !hasComment && !hasEscapedIdentifier && !hasMacro) ||
+        // Recovered macros can sit outside the argument subtree; their boundaries must stay flat.
+        bool singleArgumentWrap = itemCount == 1 && list.parentKind == SyntaxKind::ArgumentList &&
+                                  !hasComment && !hasEscapedIdentifier && !hasMacro &&
+                                  !currentMemberContainsMacro && bracketDepth == 0 && lastToken &&
+                                  !lastToken->inDataType;
+        if ((itemCount <= 1 && !singleArgumentWrap && !hasComment && !hasEscapedIdentifier &&
+             !hasMacro) ||
             (noNameInstantiation && list.parentKind == SyntaxKind::HierarchicalInstance &&
              itemCount <= 1)) {
             for (const auto& child : list.children)
@@ -3119,8 +3126,10 @@ private:
 
         size_t begin = mark();
         GroupId group = builder.createConsistentGroup();
-        int listPriority = isListHandledExpression(list.parentKind) ? expressionBreakPriority + 10
-                                                                    : 1;
+        // Keep a lone argument attached when breaks in the surrounding expression suffice.
+        int listPriority = singleArgumentWrap ? std::numeric_limits<int>::max()
+                           : isListHandledExpression(list.parentKind) ? expressionBreakPriority + 10
+                                                                      : 1;
         bool prefixComment = !list.children.empty() &&
                              childStartsWithInlineBlockComment(list.children.front());
         if (hasEscapedIdentifier || forceVertical)
@@ -3512,10 +3521,14 @@ private:
                 if (left)
                     allowCurrentBinaryBreak = flatWidth(node.children.front()) >= 4;
                 if (isComparisonKind(node.kind)) {
-                    allowComparisonBreak = (left && isParenthesizedBinary(*left)) ||
-                                           (right && isParenthesizedBinary(*right));
+                    allowComparisonBreak =
+                        (left && isParenthesizedBinary(*left)) ||
+                        (right && isParenthesizedBinary(*right)) ||
+                        (left && left->kind == SyntaxKind::InvocationExpression) ||
+                        (right && right->kind == SyntaxKind::InvocationExpression);
                 }
-                hardBreakCurrentBinary = right && containsMultilineList(*right) &&
+                hardBreakCurrentBinary = !isComparisonKind(node.kind) && right &&
+                                         containsMultilineList(*right) &&
                                          config.columnLimit.get() &&
                                          formattedFlatWidth(*right) >
                                              config.columnLimit.get() * 3 / 5;
