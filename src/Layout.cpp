@@ -3267,6 +3267,23 @@ private:
                     lowerDynamicList(list);
                 break;
             case ListStyle::Inline:
+                if (list.parentKind == SyntaxKind::ModportSimplePortList) {
+                    if (!lineStart && !spacingProvided)
+                        append(builder.text(" "));
+                    spacingProvided = true;
+                    size_t begin = mark();
+                    for (const auto& child : list.children) {
+                        lowerChild(child);
+                        if (auto index = std::get_if<size_t>(&child.value);
+                            index &&
+                            normalized.tokens().at(*index).token.kind == TokenKind::Comma) {
+                            append(builder.softLine(1));
+                            spacingProvided = true;
+                        }
+                    }
+                    append(builder.relativeAnchor(0, capture(begin)));
+                    break;
+                }
                 for (const auto& child : list.children)
                     lowerChild(child);
                 break;
