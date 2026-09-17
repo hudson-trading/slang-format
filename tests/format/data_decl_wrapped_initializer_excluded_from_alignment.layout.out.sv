@@ -4,7 +4,7 @@ module wrapped_initializer;
     logic short_flag;
     processing_metadata_pkg::available_count_t count_distance;
     wire packet_count_care = packet_check.valid & packet_check.start
-                                 & packet_meta.start.free_status[index].valid;
+                             & packet_meta.start.free_status[index].valid;
 endmodule
 
 module inline_initializer;

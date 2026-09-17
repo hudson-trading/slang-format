@@ -87,12 +87,17 @@ that structure.
 
 1. Normalize the complete clean member into tokens, atomic text, hard lines, and prioritized soft lines.
 2. Try successively deeper priority tiers. The first tier that can satisfy the column limit wins.
-3. Within a tier, minimize the worst overflow, total overflow, number of breaks, and raggedness, in that order.
+3. Within a tier, minimize the worst overflow, total overflow, number of breaks, breaks marked as less preferred, and raggedness, in that order.
 4. If no layout can fit because an atomic token is itself too wide, minimize the worst overflow and still split around that token rather than leaving one giant line.
 
 Candidate evaluation is bounded by the number of atoms in the member. If a pathological member exhausts that work budget, the solver deterministically takes the remaining breaks in the current priority tier before considering deeper tiers.
 
 Dynamic lists are represented as consistent soft-line groups, so all comma boundaries split together; the solver never bin-packs only part of a list. Lists and specialized ternary layouts continue through their syntax-specific renderers while their alignment anchors are migrated to the shared IR.
+
+For assignments with a binary expression on the right, the break after the assignment
+operator competes with breaks in the outer expression chain. Moving the RHS onto its
+own indented line is preferred only when it reduces the total number of lines needed
+to fit. Equal line counts keep the first operand beside the assignment operator.
 
 ### Examples
 
@@ -122,11 +127,13 @@ assign out = (sel == 2'b00)
 
 ### Continuation Indentation
 
-Operator continuations use one stable continuation indent for the member. Expression depth affects break priority, not indentation, so nested CST wrappers do not create staircase indentation. First-line alignment anchors likewise do not push continuation lines farther right.
+Continuations in an assignment's outer binary chain align with the first token of
+the RHS. If the RHS moves below the assignment operator, the whole chain uses one
+indent from the statement. Nested expressions retain their own continuation anchors.
 
 ### What Doesn't Wrap
 
-- **Data declarations** are not split — they stay on one line regardless of length.
+- **Declaration types and names** stay on one line; initializer expressions can wrap.
 - **Concatenations** (`{a, b, c}`) and **function arguments** are handled by dynamic list verticalization, not expression wrapping. When an overflowing function call is the sole assignment RHS, the whole call moves to the next indented line; short calls remain inline.
 - **Macro invocations** are emitted as raw text and are not individually wrapped.
 

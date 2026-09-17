@@ -54,6 +54,7 @@ struct FlatAtom {
     size_t minimumPadding = 0;
     AlignmentGroupId alignmentGroup = 0;
     bool preserveWhitespace = false;
+    bool preferFlat = false;
 };
 
 struct FlattenContext {
@@ -136,6 +137,7 @@ void flatten(
                 result.back().anchorIndent = context.anchorIndent;
                 result.back().conditionalIndentBreak = context.conditionalIndentBreak;
                 result.back().conditionalIndent = context.conditionalIndent;
+                result.back().preferFlat = node.preferFlat;
                 break;
             case DocKind::HardLine:
                 result.push_back(
@@ -231,10 +233,13 @@ struct Cost {
     size_t totalOverflow = 0;
     size_t overflowingLines = 0;
     size_t breaks = 0;
+    size_t penalizedBreaks = 0;
     size_t raggedness = 0;
 
     auto tie() const {
-        return std::tie(worstOverflow, totalOverflow, overflowingLines, breaks, raggedness);
+        return std::tie(
+            worstOverflow, totalOverflow, overflowingLines, breaks, penalizedBreaks, raggedness
+        );
     }
     bool operator<(const Cost& rhs) const { return tie() < rhs.tie(); }
 };
@@ -483,8 +488,11 @@ struct RenderRun {
                         {atom.breakId, collectText ? result.rendered.text.size() : 0, atom.memberId}
                     );
                     result.cost.breaks++;
-                    if (atom.memberId)
+                    result.cost.penalizedBreaks += atom.preferFlat;
+                    if (atom.memberId) {
                         result.memberCosts[atom.memberId].breaks++;
+                        result.memberCosts[atom.memberId].penalizedBreaks += atom.preferFlat;
+                    }
                 }
                 else {
                     append(atom.text, atom.memberId);
@@ -603,6 +611,7 @@ struct Action {
     MemberId member = 0;
     int priority = 0;
     std::vector<BreakId> breaks;
+    bool preferFlat = false;
 };
 
 struct MemberRange {
@@ -620,7 +629,7 @@ std::vector<Action> collectActions(
         if (atom.kind != FlatAtom::Kind::SoftLine || fixed.contains(atom.breakId))
             continue;
         if (!atom.groupId) {
-            actions.push_back({atom.memberId, atom.priority, {atom.breakId}});
+            actions.push_back({atom.memberId, atom.priority, {atom.breakId}, atom.preferFlat});
             continue;
         }
         auto& action = groups[atom.groupId];
@@ -631,6 +640,7 @@ std::vector<Action> collectActions(
         else {
             action.priority = std::min(action.priority, atom.priority);
         }
+        action.preferFlat = action.preferFlat || atom.preferFlat;
         action.breaks.push_back(atom.breakId);
     }
     for (auto& [id, action] : groups)
@@ -641,6 +651,9 @@ std::vector<Action> collectActions(
             std::tie(left.member, left.priority) != std::tie(right.member, right.priority)) {
             return ordering;
         }
+        // Explore the assignment alternative before pruning combinations of expression breaks.
+        if (left.preferFlat != right.preferFlat)
+            return left.preferFlat;
         return left.breaks.front() > right.breaks.front();
     });
     return actions;
@@ -1417,7 +1430,8 @@ DocId DocumentBuilder::softLine(
     int priority,
     std::string_view flatText,
     GroupId group,
-    bool global
+    bool global,
+    bool preferFlat
 ) {
     DocNode node;
     node.kind = DocKind::SoftLine;
@@ -1426,6 +1440,7 @@ DocId DocumentBuilder::softLine(
     node.id = nextBreak_++;
     node.group = group;
     node.global = global;
+    node.preferFlat = preferFlat;
     return add(std::move(node));
 }
 

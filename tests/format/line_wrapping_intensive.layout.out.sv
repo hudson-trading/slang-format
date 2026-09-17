@@ -4,10 +4,10 @@ module line_wrapping_intensive;
     always_comb aaaaaaaaaaa[BBBBBBBBBBBBBBBBBBBBBB] =
         ((aaaaaaaaa::BBBBBBBB(ccccccccccccccccc[1]) || aaaaaaaaa::CCCCCCCC(ccccccccccccccccc[1]))
              && dddddddddddddddddd && ((eeeeeeeeeeeeee & (1 << ffffffffffff.gggg.hhhhhh)) == 0))
-            || (aaaaaaaaa::DDDDDDD(ccccccccccccccccc[1])
-                    && ((eeeeeeeeeeeeee & (1 << ccccccccccccccccc[1].iiii.jjjjjj.kkkk)) == 0))
-            || (aaaaaaaaa::isDDDDDDD(ccccccccccccccccc[1])
-                    && ((eeeeeeeeeeeeee & (1 << ccccccccccccccccc[1].lllllll.mmmmmmmmm)) == 0));
+        || (aaaaaaaaa::DDDDDDD(ccccccccccccccccc[1])
+                && ((eeeeeeeeeeeeee & (1 << ccccccccccccccccc[1].iiii.jjjjjj.kkkk)) == 0))
+        || (aaaaaaaaa::isDDDDDDD(ccccccccccccccccc[1])
+                && ((eeeeeeeeeeeeee & (1 << ccccccccccccccccc[1].lllllll.mmmmmmmmm)) == 0));
 
     // Module port wrap with ternary
     SomeModule #(
@@ -33,30 +33,30 @@ module line_wrapping_intensive;
 
     // Dec with newline
     wire a = bbbbbbbbbb && ccccccccccccccccccccccc
-                 && (dddddddddddddddddddddd || eeeeeeeeeeeeeeeeeeeee);
+             && (dddddddddddddddddddddd || eeeeeeeeeeeeeeeeeeeee);
 
     // Dec with more newlines
     wire a = bbbbbbbbbb && ccccccccccccccccccccccc
-                 && (dddddddddddddddddddddd || eeeeeeeeeeeeeeeeeeeee);
+             && (dddddddddddddddddddddd || eeeeeeeeeeeeeeeeeeeee);
 
     // Long expression
     always_ff @(posedge clk) begin
         aaaaaaaaaaaaaa <=
             bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-                && (((cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc == ddddddddddddddddddddddddd)
-                         && (eeeeeeeeeeeeeeeeee(fffffffffffffffffffffffffffffffff)))
-                        || ((gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg == hhhhhhhhhhhhhhhhhhhhhhhhh)
-                                && (iiiiiiiiiiiiiiiiii(jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj)))
-                        || ((kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk == llllllllllllllllllllllllllllllllllllllll)
-                                && (mmmmmmmmmmmmmmmmmm(nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn))));
+            && (((cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc == ddddddddddddddddddddddddd)
+                     && (eeeeeeeeeeeeeeeeee(fffffffffffffffffffffffffffffffff)))
+                    || ((gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg == hhhhhhhhhhhhhhhhhhhhhhhhh)
+                            && (iiiiiiiiiiiiiiiiii(jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj)))
+                    || ((kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk == llllllllllllllllllllllllllllllllllllllll)
+                            && (mmmmmmmmmmmmmmmmmm(nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn))));
     end
 
     // 100 character variable name
     always_comb begin
         aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa =
             bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-                * cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-                * dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd;
+            * cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+            * dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd;
     end
 
     // Ternary with expression line wrap

@@ -9,6 +9,6 @@ module example;
             (32'(unscaled_symbol_score) * `WIDTH
                 > 32'hffff) ? 32'hffff : 32'(unscaled_symbol_score) * `WIDTH;
         command_is_internal = command_opcode == READ_VALUE && `ENABLED
-                                  && is_recognized_internal_command(command_opcode);
+                              && is_recognized_internal_command(command_opcode);
     endfunction
 endmodule

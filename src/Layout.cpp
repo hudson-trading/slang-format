@@ -2360,40 +2360,7 @@ private:
                                          (peeledRhs &&
                                           (peeledRhs->kind == SyntaxKind::ConditionalExpression ||
                                            isComparisonKind(peeledRhs->kind)));
-            bool compareDataDeclarationBinaryBreaks = !followsSkippedMember &&
-                                                      dataDeclarationAssignment &&
-                                                      isBinaryKind(rhsNode->kind);
-            const NormalizedNode* binaryLeft = nullptr;
-            if (rhsNode && isBinaryKind(rhsNode->kind)) {
-                for (const auto& nested : rhsNode->children) {
-                    if (auto candidate = childNode(nested);
-                        candidate && isExpressionKind(candidate->kind)) {
-                        binaryLeft = candidate;
-                        break;
-                    }
-                }
-            }
-            const NormalizedNode* firstOperand = rhsNode;
-            while (firstOperand && isBinaryKind(firstOperand->kind)) {
-                const NormalizedNode* next = nullptr;
-                for (const auto& nested : firstOperand->children) {
-                    if (auto candidate = childNode(nested);
-                        candidate && isExpressionKind(candidate->kind)) {
-                        next = candidate;
-                        break;
-                    }
-                }
-                firstOperand = next;
-            }
-            bool forceOversizedFirstOperand =
-                rhsNode && isBinaryKind(rhsNode->kind) && firstOperand &&
-                firstOperand->kind != SyntaxKind::ParenthesizedExpression &&
-                config.columnLimit.get() &&
-                formattedFlatWidth(*firstOperand) > config.columnLimit.get() * 3 / 5;
-            bool forceLogicalAssignment =
-                currentMemberKind == SyntaxKind::ContinuousAssign && rhsNode && binaryLeft &&
-                rhsNode->kind == SyntaxKind::LogicalOrExpression && config.columnLimit.get() &&
-                formattedFlatWidth(*binaryLeft) > config.columnLimit.get() * 3 / 4;
+            bool compareBinaryBreaks = rhsNode && isBinaryKind(rhsNode->kind);
             bool forceTernaryTable = false;
             if (rhsNode && rhsNode->kind == SyntaxKind::ConditionalExpression &&
                 ternaryUsesTable(*rhsNode)) {
@@ -2422,24 +2389,22 @@ private:
             bool hugeRhs = rhsNode && config.columnLimit.get() &&
                            formattedFlatWidth(*rhsNode) > config.columnLimit.get() * 3;
             int assignmentPriority = 100;
-            if (compareDataDeclarationBinaryBreaks)
+            if (compareBinaryBreaks)
                 assignmentPriority = expressionBreakPriority + 1;
             else if (preferAssignmentBreak || hugeRhs)
                 assignmentPriority = 1;
-            else if (rhsNode && isBinaryKind(rhsNode->kind))
-                assignmentPriority = SyntaxFacts::getPrecedence(rhsNode->kind) + 1;
-            bool hardAssignmentLine = forcingInvocation || forceTernaryTable ||
-                                      forceOversizedFirstOperand || forceLogicalAssignment;
+            bool hardAssignmentLine = forcingInvocation || forceTernaryTable;
             bool keepMulticoncatHeader = parameterAssignment && rhsNode &&
                                          rhsNode->kind ==
                                              SyntaxKind::MultipleConcatenationExpression;
             bool assignmentAlreadyBroken = lineStart;
-            DocId assignmentLine = assignmentAlreadyBroken ? builder.empty()
-                                   : keepMulticoncatHeader ||
-                                           summarize(child).containsInlineConditional
-                                       ? builder.text(" ")
-                                   : hardAssignmentLine ? builder.hardLine()
-                                                        : builder.softLine(assignmentPriority);
+            DocId assignmentLine =
+                assignmentAlreadyBroken ? builder.empty()
+                : keepMulticoncatHeader || summarize(child).containsInlineConditional
+                    ? builder.text(" ")
+                : hardAssignmentLine
+                    ? builder.hardLine()
+                    : builder.softLine(assignmentPriority, " ", 0, false, compareBinaryBreaks);
             append(builder.indent(static_cast<int>(config.indentWidth.get()), assignmentLine));
             spacingProvided = true;
 
@@ -2456,7 +2421,7 @@ private:
             binaryContinuationScope = savedBinaryContinuationScope;
             auto rhs = capture(rhsBegin);
             if (rhsNode && isBinaryKind(rhsNode->kind)) {
-                rhs = builder.relativeAnchor(static_cast<int>(config.indentWidth.get()), rhs);
+                rhs = builder.relativeAnchor(0, rhs);
             }
             else if (rhsNode && rhsNode->kind != SyntaxKind::ParenthesizedExpression &&
                      !isListHandledExpression(rhsNode->kind) &&
@@ -3366,6 +3331,12 @@ private:
         int savedExpressionBreakPriority = expressionBreakPriority;
         bool savedBinaryContinuationScope = binaryContinuationScope;
         int savedBinaryContinuationIndent = binaryContinuationIndent;
+        bool savedAssignmentCastOperand = inAssignmentCastOperand;
+        if (inAssignmentCastOperand && node.kind == SyntaxKind::ConditionalExpression) {
+            // Branches establish their own anchors even when the cast operand starts a new line.
+            inAssignmentCastOperand = false;
+            binaryContinuationScope = false;
+        }
         bool savedMultipleConcatenation = inMultipleConcatenation;
         bool savedForceTernaryBranches = forceTernaryBranches;
         bool savedForceInlineLists = forceInlineLists;
@@ -3687,6 +3658,7 @@ private:
         expressionBreakPriority = savedExpressionBreakPriority;
         binaryContinuationScope = savedBinaryContinuationScope;
         binaryContinuationIndent = savedBinaryContinuationIndent;
+        inAssignmentCastOperand = savedAssignmentCastOperand;
         inMultipleConcatenation = savedMultipleConcatenation;
         forceTernaryBranches = savedForceTernaryBranches;
         forceInlineLists = savedForceInlineLists;

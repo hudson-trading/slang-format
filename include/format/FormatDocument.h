@@ -56,6 +56,8 @@ struct DocNode {
     AlignmentGroupId alignmentGroup = 0;
     uint32_t width = 0;
     bool global = false;
+    /// Prefer keeping this soft line flat when candidate layouts use the same number of breaks.
+    bool preferFlat = false;
     /// Text belongs to an explicit off/skip region; retain its internal whitespace.
     bool preserveWhitespace = false;
     slang::syntax::SyntaxKind syntaxKind = slang::syntax::SyntaxKind::Unknown;
@@ -80,11 +82,13 @@ public:
     DocId absoluteText(std::string_view value);
     /// Emit an off/skip region without trailing-whitespace cleanup; absolute bypasses indentation.
     DocId preservedText(std::string_view value, bool absolute = false);
+    /// Create a break candidate; preferFlat breaks lose ties before considering line balance.
     DocId softLine(
         int priority,
         std::string_view flatText = " ",
         GroupId group = 0,
-        bool global = false
+        bool global = false,
+        bool preferFlat = false
     );
     DocId hardLine(int count = 1, bool useAnchor = false);
     DocId concat(std::vector<DocId> children);

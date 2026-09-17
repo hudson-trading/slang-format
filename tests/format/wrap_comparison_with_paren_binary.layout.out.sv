@@ -18,6 +18,6 @@ module test;
     always_ff @(posedge clk) begin
         match_result[i] =
             lookup_response.data.entry.slots[i].valid
-                && lookup_response.data.entry.slots[i].reference == request_input.current_reference;
+            && lookup_response.data.entry.slots[i].reference == request_input.current_reference;
     end
 endmodule

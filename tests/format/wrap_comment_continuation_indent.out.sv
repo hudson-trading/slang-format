@@ -12,11 +12,11 @@ package test_pkg;
     // Internal trailing comment after `+` — should align continuation to
     // column-after-`=`, not parent block indent.
     parameter int num_in_flight_events = 2 +  // Input pipe with double buffer
-                                             2;  // Decode processing pipeline
+                                         2;  // Decode processing pipeline
 
     // Same shape with `&&` — RHS is a binary chain with comments.
     parameter bit cond = a_flag &&  // first criterion
-                             b_flag;  // second criterion
+                         b_flag;  // second criterion
 
     // A sole-RHS call made multiline by argument comments moves below `=`,
     // with its argument list nested beneath the call.

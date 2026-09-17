@@ -5,7 +5,7 @@ module separated_declarations;
 
     // This declaration belongs to a separate section.
     wire substantially_longer_condition = enabled && (input_channel == saved_channel)
-                                              && input_valid && input_ready;
+                                          && input_valid && input_ready;
 
     localparam int SHORT_DELAY = 1;
 
@@ -17,5 +17,5 @@ endmodule
 module adjacent_declarations;
     wire ready = input_valid & output_ready;
     wire substantially_longer_condition = enabled && (input_channel == saved_channel)
-                                              && input_valid && input_ready;
+                                          && input_valid && input_ready;
 endmodule

@@ -8,8 +8,7 @@ module m;
     // slang-format: skip
     localparam foo_pkg::addr_t start_addr_a = foo_pkg::addr_t'(start_addr);
     localparam foo_pkg::addr_t control_end_addr = start_addr_a
-                                                      + foo_pkg::addr_t'(depth
-                                                                             << $clog2(alignment));
+                                                  + foo_pkg::addr_t'(depth << $clog2(alignment));
 
     // Contrast: consecutive un-skipped localparams still align normally.
     localparam int aa = 1;

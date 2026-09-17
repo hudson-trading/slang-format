@@ -20,8 +20,8 @@ package test_pkg;
     localparam int total_offset =
         5 + computeOffset(QueueConfig_pkg::getDepth(QueueConfig_pkg::DEFAULT_QUEUE));
 
-    // Even with a multi-token shift LHS, the member DP prefers the shallower
-    // assignment boundary when that is enough to fit the line.
-    localparam int shifted =
-        (alpha + beta) << shift_amount_that_is_intentionally_kind_of_long_too_so_it_must_wrap;
+    // With a multi-token shift LHS, both layouts fit in two lines;
+    // keep the first operand beside the assignment.
+    localparam int shifted = (alpha + beta)
+                             << shift_amount_that_is_intentionally_kind_of_long_too_so_it_must_wrap;
 endpackage

@@ -6,7 +6,7 @@ module binary_precedence_relative_indent;
 
     // A flat same-precedence chain keeps one continuation anchor.
     always_comb flat_result = first_long_operand + second_long_operand
-                                  + third_long_operand + fourth_long_operand;
+                              + third_long_operand + fourth_long_operand;
 
     // Contrast: a short mixed-precedence expression remains inline.
     always_comb short_result = left * scale + right;

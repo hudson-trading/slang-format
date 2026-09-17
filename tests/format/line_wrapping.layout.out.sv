@@ -45,53 +45,53 @@ module line_wrapping;
     // ---- Edge case 5: Mixed precedence ----
     // Lower precedence (+) breaks before higher precedence (*)
     assign result = alpha_long_signal + beta_long_signal * gamma_long_signal
-                        + delta_long_signal * epsilon_long_signal;
+                    + delta_long_signal * epsilon_long_signal;
 
     // Mixed logical and arithmetic: || breaks before &&
     assign output_val =
         (alpha_long_signal > beta_long_signal) && (gamma_long_signal < delta_long_signal)
-            || (epsilon_long_signal != '0);
+        || (epsilon_long_signal != '0);
 
     // ---- Binary chain wrapping (same precedence) ----
     // Long chain of && operators — rightmost break that fits
     assign output_val = condition_long_flag && enable_long_flag && ready_long_flag
-                            && (alpha_long_signal > beta_long_signal)
-                            && (gamma_long_signal < delta_long_signal);
+                        && (alpha_long_signal > beta_long_signal)
+                        && (gamma_long_signal < delta_long_signal);
 
     // Long chain of + operators
     assign result = alpha_long_signal + beta_long_signal + gamma_long_signal
-                        + delta_long_signal + epsilon_long_signal;
+                    + delta_long_signal + epsilon_long_signal;
 
     // Long chain of + operators but user split across lines
     assign result = alpha_long_signal + beta_long_signal + gamma_long_signal
-                        + delta_long_signal + epsilon_long_signal;
+                    + delta_long_signal + epsilon_long_signal;
 
     // User break inside higher-precedence subexpression — formatter should
     // prefer the lower-precedence (+) break over the user's (*) break
     assign result = alpha_long_signal + beta_long_signal * gamma_long_signal
-                        + delta_long_signal + epsilon_long_signal;
+                    + delta_long_signal + epsilon_long_signal;
 
     // User break early in chain — formatter respects it instead of rightmost-that-fits
     assign result = alpha_long_signal + beta_long_signal + gamma_long_signal
-                        + delta_long_signal + epsilon_long_signal;
+                    + delta_long_signal + epsilon_long_signal;
 
     // User break in && chain — respected at same precedence
     assign output_val = condition_long_flag && enable_long_flag && ready_long_flag
-                            && (alpha_long_signal > beta_long_signal);
+                        && (alpha_long_signal > beta_long_signal);
 
     // User break matches where formatter would break — same output
     assign result = alpha_long_signal + beta_long_signal + gamma_long_signal
-                        + delta_long_signal + epsilon_long_signal;
+                    + delta_long_signal + epsilon_long_signal;
 
     // No user break — formatter uses rightmost-that-fits
     assign result = alpha_long_signal + beta_long_signal + gamma_long_signal
-                        + delta_long_signal + epsilon_long_signal;
+                    + delta_long_signal + epsilon_long_signal;
 
     // ---- Assignment wrapping ----
     // Non-blocking assignment wraps after <=
     always_ff @(posedge condition_long_flag) begin
         result <= alpha_long_signal + beta_long_signal + gamma_long_signal
-                      + delta_long_signal + epsilon_long_signal;
+                  + delta_long_signal + epsilon_long_signal;
     end
 
     // Blocking assignment with ternary RHS
@@ -140,8 +140,8 @@ module line_wrapping;
     always_comb begin
         status_flags[0] = ((mode_select == 32'h01 || mode_select == 32'h02)
                                && info_valid && ((active_bitmap & (1 << field_a)) == 0))
-                              || (mode_select == 32'h03 && ((active_bitmap & (1 << field_b)) == 0))
-                              || (mode_select == 32'h04 && ((active_bitmap & (1 << field_c)) == 0));
+                          || (mode_select == 32'h03 && ((active_bitmap & (1 << field_b)) == 0))
+                          || (mode_select == 32'h04 && ((active_bitmap & (1 << field_c)) == 0));
     end
 
     // ---- Outermost chain no-bump: simple && that stays flat ----
@@ -158,25 +158,24 @@ module line_wrapping;
     logic [31:0] check_result_alpha, check_result_beta, check_result_gamma;
     parameter int num_stages = 4;
     always_ff @(posedge clk) begin
-        valid_result <= stage_valid && (((category_field_alpha == alpha_long_signal)
-                                             && (check_result_alpha != '0))
-                                            || ((category_field_beta == beta_long_signal)
-                                                    && (check_result_beta != '0))
-                                            || ((category_field_gamma == gamma_long_signal)
-                                                    && (check_result_gamma != '0)));
+        valid_result <=
+            stage_valid
+            && (((category_field_alpha == alpha_long_signal) && (check_result_alpha != '0))
+                    || ((category_field_beta == beta_long_signal) && (check_result_beta != '0))
+                    || ((category_field_gamma == gamma_long_signal) && (check_result_gamma != '0)));
     end
 
     // ---- Nothing fits: first operand already exceeds column limit ----
     // When no break point keeps the left side under the limit, the formatter
     // picks the lowest-precedence operator anyway to make progress.
     logic [31:0] extremely_long_variable_name_that_exceeds_the_column_limit_on_its_own;
-    assign result =
-        extremely_long_variable_name_that_exceeds_the_column_limit_on_its_own + alpha_long_signal;
+    assign result = extremely_long_variable_name_that_exceeds_the_column_limit_on_its_own
+                    + alpha_long_signal;
 
     // Nothing fits with nested precedence
     assign result =
         extremely_long_variable_name_that_exceeds_the_column_limit_on_its_own * alpha_long_signal
-            + beta_long_signal;
+        + beta_long_signal;
 
     // ========================================================================
     // Wrappable Syntax Structure tests (1-7 from Formatter_wrap.cpp)
@@ -185,44 +184,44 @@ module line_wrapping;
     // ---- Structure 1: BinaryExpression (arithmetic, logical, bitwise) ----
     // Arithmetic chain
     assign result = alpha_long_signal + beta_long_signal + gamma_long_signal
-                        + delta_long_signal + epsilon_long_signal;
+                    + delta_long_signal + epsilon_long_signal;
 
     // Logical chain
     assign output_val = condition_long_flag || enable_long_flag || ready_long_flag
-                            || (alpha_long_signal > beta_long_signal);
+                        || (alpha_long_signal > beta_long_signal);
 
     // Bitwise chain
     assign result = alpha_long_signal | beta_long_signal | gamma_long_signal
-                        | delta_long_signal | epsilon_long_signal;
+                    | delta_long_signal | epsilon_long_signal;
 
     // Shift expression
     assign result = alpha_long_signal + (beta_long_signal << gamma_long_signal)
-                        + (delta_long_signal >> epsilon_long_signal);
+                    + (delta_long_signal >> epsilon_long_signal);
 
     // Comparison
     always_comb begin
         output_val = (alpha_long_signal >= beta_long_signal)
-                         && (gamma_long_signal <= delta_long_signal)
-                         && (epsilon_long_signal != zeta_long_signal);
+                     && (gamma_long_signal <= delta_long_signal)
+                     && (epsilon_long_signal != zeta_long_signal);
     end
 
     // ---- Structure 2: AssignmentExpression (=, +=, <=) ----
     // Blocking assignment
     always_comb begin
         result = alpha_long_signal + beta_long_signal + gamma_long_signal
-                     + delta_long_signal + epsilon_long_signal;
+                 + delta_long_signal + epsilon_long_signal;
     end
 
     // Non-blocking assignment
     always_ff @(posedge clk) begin
         result <= alpha_long_signal + beta_long_signal + gamma_long_signal
-                      + delta_long_signal + epsilon_long_signal;
+                  + delta_long_signal + epsilon_long_signal;
     end
 
     // Compound assignment
     always_comb begin
         result += alpha_long_signal + beta_long_signal + gamma_long_signal
-                      + delta_long_signal + epsilon_long_signal;
+                  + delta_long_signal + epsilon_long_signal;
     end
 
     // ---- Structure 3: ConditionalExpression (ternary) ----
@@ -269,12 +268,12 @@ module line_wrapping;
     // ---- Structure 6: ContinuousAssign ----
     // assign with long expression (wrapping happens in the expression)
     assign result = alpha_long_signal + beta_long_signal + gamma_long_signal
-                        + delta_long_signal + epsilon_long_signal;
+                    + delta_long_signal + epsilon_long_signal;
 
     // ---- Structure 7: DataDeclaration with initializer ----
     // Variable declaration with long initializer expression
     logic [31:0] initialized_var = alpha_long_signal + beta_long_signal + gamma_long_signal
-                                       + delta_long_signal + epsilon_long_signal;
+                                   + delta_long_signal + epsilon_long_signal;
 
     // ---- Short expressions that fit inline (no wrapping) ----
     assign result = alpha_long_signal + beta_long_signal;

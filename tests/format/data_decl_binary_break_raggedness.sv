@@ -1,5 +1,5 @@
 // Assignment and binary breaks in an initialized declaration compete at the
-// same priority so equal-cost layouts are selected by raggedness.
+// same priority; equal line counts keep the RHS beside the assignment.
 module data_decl_binary_break_raggedness;
     wire process_event_syncs_raw = held_metadata.flags.start.process_event_syncs_raw && held_metadata.valid;
 

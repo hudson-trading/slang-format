@@ -13,7 +13,7 @@ package test_pkg;
             // `reference == current_reference` even if it overflows.
             match_result[i] =
                 lookup_response.data.entry.slots[i].valid
-                    && lookup_response.data.entry.slots[i].reference == request_input.current_reference;
+                && lookup_response.data.entry.slots[i].reference == request_input.current_reference;
         end
     endfunction
 

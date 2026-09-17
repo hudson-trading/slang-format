@@ -27,11 +27,11 @@ module sole_rhs_invocation_align;
         // Contrast: the invocation is not the sole RHS when another expression
         // precedes it, so ordinary expression-continuation indentation applies.
         combined_result = initial_value
-                              + example_pkg::build_record(
-                                  .record_kind    (example_pkg::RECORD_REPLACE),
-                                  .operation_mode (example_pkg::OPERATION_REUSE),
-                                  .update_policy  (example_pkg::UPDATE_IN_PLACE)
-                              );
+                          + example_pkg::build_record(
+                              .record_kind    (example_pkg::RECORD_REPLACE),
+                              .operation_mode (example_pkg::OPERATION_REUSE),
+                              .update_policy  (example_pkg::UPDATE_IN_PLACE)
+                          );
     end
 
     // Contrast: pending member indentation is not a newline inside either call.
