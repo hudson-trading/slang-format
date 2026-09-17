@@ -16,6 +16,9 @@
 
 namespace format {
 
+/// Detect Jinja control or comment delimiters outside SystemVerilog comments and strings.
+bool hasJinjaTemplateDirective(std::string_view text);
+
 /// Find the next newline character, or return string_view::npos if none remains.
 size_t findNewline(std::string_view text, size_t offset = 0);
 

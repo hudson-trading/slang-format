@@ -184,6 +184,13 @@ static FormatResult formatImpl(
         offset = input.find_first_of("<=>|", markerEnd);
     }
 
+    // Template branches can deliberately contain incomplete SystemVerilog syntax.
+    // Preserve them before parsing, retaining any conflict diagnostic from preflight.
+    if (hasJinjaTemplateDirective(input)) {
+        result.formatted = input;
+        return result;
+    }
+
     // Parse the source ourselves (mirroring SyntaxTree::create) so we can
     // inspect the parser's delimiter stack before it is destroyed.
     if (!filename.empty())

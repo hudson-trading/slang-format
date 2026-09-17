@@ -150,23 +150,40 @@ std::optional<std::string> canonicalSkippedAssignment(const Trivia& trivia) {
 
     std::string result;
     bool pendingSpace = false;
+    auto append = [&](std::string_view text) {
+        if (pendingSpace && (result.empty() || !isWhitespace(result.back())))
+            result.push_back(' ');
+        result.append(text);
+        pendingSpace = false;
+    };
     for (auto token : tokens) {
         if (token.kind == TokenKind::Directive)
             return std::nullopt;
         for (const auto& nested : token.trivia()) {
-            if (nested.kind != TriviaKind::Whitespace && nested.kind != TriviaKind::EndOfLine)
+            if (nested.kind == TriviaKind::Whitespace || nested.kind == TriviaKind::EndOfLine) {
+                pendingSpace = pendingSpace || !nested.getRawText().empty();
+                continue;
+            }
+            auto syntax = nested.syntax();
+            if (nested.kind != TriviaKind::Directive || !syntax ||
+                syntax->kind != SyntaxKind::MacroUsage)
                 return std::nullopt;
-            pendingSpace = pendingSpace || !nested.getRawText().empty();
+            for (const auto& leading : syntax->getFirstToken().trivia()) {
+                if (leading.kind != TriviaKind::Whitespace && leading.kind != TriviaKind::EndOfLine)
+                    return std::nullopt;
+                pendingSpace = pendingSpace || !leading.getRawText().empty();
+            }
+            // Normalize around macro invocations without changing their argument text.
+            append(syntaxText(*syntax, nullptr));
         }
-        if (pendingSpace && (result.empty() || !isWhitespace(result.back())))
-            result.push_back(' ');
-        result.append(token.rawText());
-        pendingSpace = false;
+        append(token.rawText());
     }
     return result;
 }
 
 bool hasForeignTemplateDirective(std::string_view text) {
+    if (hasJinjaTemplateDirective(text))
+        return true;
     if (text.find("${") != std::string_view::npos ||
         text.find("`systemc_header") != std::string_view::npos ||
         text.find("`systemc_interface") != std::string_view::npos ||
@@ -258,6 +275,24 @@ int recoveredConditionalDepthChange(std::string_view text) {
 }
 
 } // namespace
+
+bool hasJinjaTemplateDirective(std::string_view text) {
+    if (text.find("{%") == std::string_view::npos && text.find("{#") == std::string_view::npos)
+        return false;
+
+    SourceManager sm;
+    BumpAllocator allocator;
+    Diagnostics diagnostics;
+    Lexer lexer(sm.assignText(text), allocator, diagnostics, sm);
+    for (auto token = lexer.lex(); token.kind != TokenKind::EndOfFile; token = lexer.lex()) {
+        if (token.kind != TokenKind::OpenBrace)
+            continue;
+        auto delimiter = text.substr(token.location().offset(), 2);
+        if (delimiter == "{%" || delimiter == "{#")
+            return true;
+    }
+    return false;
+}
 
 size_t findNewline(std::string_view text, size_t offset) {
     if (offset >= text.size())

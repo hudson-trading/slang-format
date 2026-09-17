@@ -55,7 +55,7 @@ enum class FormatOutputAction {
 
 /// Formatted source and the diagnostics that determine whether it can be applied.
 struct FormatResult {
-    /// Formatted source, or unchanged input for generated files or a rendering failure.
+    /// Formatted source, or unchanged input for templates, generated files, or a rendering failure.
     std::string formatted;
     /// The leading comments mark this file as @generated.
     bool generated = false;

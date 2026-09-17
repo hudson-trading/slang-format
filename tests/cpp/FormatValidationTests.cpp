@@ -631,7 +631,7 @@ TEST_CASE("Git conflict markers reject formatting in both stages") {
 
 TEST_CASE("Git conflict detection includes trivia and incomplete conflicts") {
     for (std::string_view prefix :
-         {"", "\xef\xbb\xbf", "/*\n", "`ifdef DISABLED\n", "// @generated\n",
+         {"", "\xef\xbb\xbf", "/*\n", "`ifdef DISABLED\n", "// @generated\n", "{% if enabled %}\n",
           "`line 100 \"other.sv\" 0\n", "module foo; string s = \"\"\"\n", "`define FOO \\\n"}) {
         std::string input = std::string(prefix) + std::string(7, '<') + " HEAD";
         auto result = format::format("conflict.sv", input, {});
@@ -1216,12 +1216,41 @@ TEST_CASE("foreign syntax detection ignores comments and strings") {
     for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
         auto result = format::format(
             "text.sv",
-            "// ${name} `systemc_header \\\n"
-            "module foo; string value=\"${name} `systemc_interface\"; endmodule\n",
+            "// ${name} {% if enabled %} {# comment #} `systemc_header \\\n"
+            "/* {% endif %} */\n"
+            "module foo; string value=\"${name} {% if enabled %} {# comment #} "
+            "`systemc_interface\"; "
+            "wire [3:0] bits={{2{1'b0}}, {2{1'b1}}}; endmodule\n",
             {}, stage
         );
         CHECK(result.isUsable());
-        CHECK(result.formatted.find("\n    string value =") != std::string::npos);
+        CHECK(result.formatted.find("\n    string ") != std::string::npos);
+        CHECK(result.formatted.find("\n    wire") != std::string::npos);
+    }
+}
+
+TEST_CASE("Jinja preflight preserves source without parsing template branches") {
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        for (std::string_view directive : {"{% if enabled %}\n", "{# template comment #}\n"}) {
+            std::string source = std::string(directive) + "module {{name}};\n";
+            auto result = format::format("template.sv", source, {}, stage);
+            CHECK(result.isUsable());
+            CHECK(result.diagnostics.empty());
+            CHECK(result.parseErrorCount == 0);
+            CHECK(result.formatted == source);
+
+            auto tree = parse(source);
+            CHECK(format::Formatter({}, &sm, stage).format(tree->root()) == source);
+
+            format::Config config;
+            config.maxSyntaxDepth = 32;
+            source += "assign value = " + std::string(1000, '(') + "value;\n";
+            result = format::format("deep_template.sv", source, config, stage);
+            CHECK(result.isUsable());
+            CHECK(result.diagnostics.empty());
+            CHECK(result.parseErrorCount == 0);
+            CHECK(result.formatted == source);
+        }
     }
 }
 
