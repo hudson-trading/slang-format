@@ -1,9 +1,5 @@
-// Data-declaration alignment is purely cosmetic (lines up the type
-// column) and should stay aligned across the group even if one row's
-// packed-dim / name pushes the line past the column limit. The
-// alignment speculation only applies to assignment-like rows
-// (ExpressionStatement, ParameterDeclarationStatement) where breaking
-// after `=`/`<=` actually reshapes the RHS.
+// Mixed declaration types retain alignment when every padded row fits,
+// including a row with a wider unpacked dimension.
 
 module test;
     logic sample_valid;

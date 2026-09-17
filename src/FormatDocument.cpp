@@ -16,6 +16,7 @@
 #include <map>
 #include <optional>
 #include <ranges>
+#include <set>
 #include <tuple>
 
 #include "slang/text/CharInfo.h"
@@ -1019,7 +1020,13 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
 
     ComputedAlignment result;
     std::map<size_t, size_t> rowShifts;
+    std::map<std::pair<slang::syntax::SyntaxKind, AlignmentGroupId>, std::set<size_t>>
+        widthBoundaries;
     for (auto& [key, anchors] : groups) {
+        bool declarationColumn = key.kind == slang::syntax::SyntaxKind::DataDeclaration ||
+                                 key.kind == slang::syntax::SyntaxKind::TypedefDeclaration ||
+                                 key.kind == slang::syntax::SyntaxKind::StructUnionMember ||
+                                 key.kind == slang::syntax::SyntaxKind::ImplicitAnsiPort;
         if (key.column == 100) {
             std::unordered_set<MemberId> members;
             for (const auto* anchor : anchors)
@@ -1028,6 +1035,7 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                 continue;
         }
         std::ranges::sort(anchors, {}, [](const auto* anchor) { return anchor->line; });
+        auto& boundaries = widthBoundaries[{key.kind, key.group}];
         std::vector<const RenderedAlignmentAnchor*> rows;
         for (const auto* anchor : anchors) {
             if (key.kind == slang::syntax::SyntaxKind::DataDeclaration &&
@@ -1060,6 +1068,9 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
             size_t maximumColumn = minimumColumn;
             const auto& paddingLimit = config.alignment.get().paddingLimit.get();
             while (groupEnd < rows.size()) {
+                auto boundary = boundaries.upper_bound(rows[groupEnd - 1]->line);
+                if (boundary != boundaries.end() && *boundary <= rows[groupEnd]->line)
+                    break;
                 size_t nextColumn = rows[groupEnd]->column + rowShifts[rows[groupEnd]->line];
                 size_t nextMinimum = std::min(minimumColumn, nextColumn);
                 size_t nextMaximum = std::max(maximumColumn, nextColumn);
@@ -1082,7 +1093,9 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                         leadingIndent(rows[groupEnd]->line)) {
                     break;
                 }
-                if (key.column == 100) {
+                // Port and struct comments follow declaration groups despite varying name lengths.
+                if (key.column == 100 && key.kind != slang::syntax::SyntaxKind::ImplicitAnsiPort &&
+                    key.kind != slang::syntax::SyntaxKind::StructUnionMember) {
                     size_t previousColumn = rows[groupEnd - 1]->column +
                                             rowShifts[rows[groupEnd - 1]->line];
                     size_t nextColumn = rows[groupEnd]->column + rowShifts[rows[groupEnd]->line];
@@ -1174,7 +1187,8 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                     size_t currentWidth = lines[line].size() + rowShifts[line];
                     size_t padding = maxColumn - rows[i]->column - rowShifts[line] +
                                      rows[i]->minimumPadding;
-                    if (currentWidth <= config.columnLimit.get() &&
+                    if (padding &&
+                        (declarationColumn || currentWidth <= config.columnLimit.get()) &&
                         currentWidth + padding > config.columnLimit.get()) {
                         return true;
                     }
@@ -1188,6 +1202,25 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                         groupEnd = boundary;
                         break;
                     }
+                }
+            }
+            // Keep the longest contiguous prefix that fits, then regroup the remaining rows.
+            if (declarationColumn && rangeOverflows(groupBegin, groupEnd)) {
+                size_t begin = groupBegin + 1;
+                size_t end = groupEnd;
+                while (begin < end) {
+                    size_t middle = begin + (end - begin + 1) / 2;
+                    if (rangeOverflows(groupBegin, middle))
+                        end = middle - 1;
+                    else
+                        begin = middle;
+                }
+                if (begin < groupEnd)
+                    boundaries.insert(rows[begin]->line);
+                groupEnd = begin;
+                if (rangeOverflows(groupBegin, groupEnd)) {
+                    groupBegin = groupEnd;
+                    continue;
                 }
             }
             if (key.kind == slang::syntax::SyntaxKind::DataDeclaration && key.column > 1 &&

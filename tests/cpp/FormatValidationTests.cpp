@@ -848,6 +848,105 @@ TEST_CASE("alignment padding cap starts a new group for later short rows") {
     CHECK(result.formatted.find("aa        = 2;\n        b         = 3;") != std::string::npos);
 }
 
+TEST_CASE("declaration alignment respects the column limit across packed columns") {
+    const std::string source =
+        "module demo;\n"
+        "logic [example_layout_pkg::maximum_capacity-1:0] valid;\n"
+        "example_layout_pkg::control_t [example_layout_pkg::maximum_capacity-1:0] control;\n"
+        "logic [example_layout_pkg::maximum_capacity-1:0]"
+        "[$bits(example_layout_pkg::control_t)-1:0] control_mask;\n"
+        "endmodule\n";
+    format::Config config;
+    for (uint32_t limit : {120, 60, 0}) {
+        config.columnLimit = limit;
+        auto layout =
+            format::format("declarations.sv", source, config, format::FormatStage::Layout);
+        auto aligned = format::format("declarations.sv", source, config);
+        REQUIRE(layout.isUsable());
+        REQUIRE(aligned.isUsable());
+        if (limit == 120) {
+            std::string_view remaining = aligned.formatted;
+            while (!remaining.empty()) {
+                auto end = remaining.find('\n');
+                CHECK(remaining.substr(0, end).size() <= limit);
+                if (end == std::string_view::npos)
+                    break;
+                remaining.remove_prefix(end + 1);
+            }
+            CHECK(aligned.formatted.find("    logic [") != std::string::npos);
+        }
+        else if (limit == 60) {
+            CHECK(aligned.formatted == layout.formatted);
+        }
+        else {
+            CHECK(aligned.formatted.find("    logic [") == std::string::npos);
+        }
+        auto repeated = format::format("declarations.sv", aligned.formatted, config);
+        REQUIRE(repeated.isUsable());
+        CHECK(repeated.formatted == aligned.formatted);
+    }
+}
+
+TEST_CASE("port alignment regroups around a width conflict") {
+    const std::string shortPorts =
+        "input wire pending, // A request remains pending until its destination accepts it.\n"
+        "output logic accepted,\n";
+    const std::string widePort =
+        "input example_types_pkg::extended_metadata_record_t metadata_with_a_long_name,\n";
+    format::Config config;
+    config.columnLimit = 120;
+    for (const auto& ports :
+         {widePort + shortPorts, shortPorts + widePort, shortPorts + widePort + shortPorts}) {
+        auto source = "module demo (\n" + ports + "input wire last_port\n); endmodule\n";
+        auto result = format::format("ports.sv", source, config);
+        REQUIRE(result.isUsable());
+        CHECK(result.formatted.find("input  wire  pending,") != std::string::npos);
+        CHECK(result.formatted.find("output logic accepted,") != std::string::npos);
+        CHECK(result.formatted.find("record_t metadata_with_a_long_name,") != std::string::npos);
+        auto repeated = format::format("ports.sv", result.formatted, config);
+        REQUIRE(repeated.isUsable());
+        CHECK(repeated.formatted == result.formatted);
+    }
+}
+
+TEST_CASE("port comments align after declaration width regrouping") {
+    const std::string source =
+        "module demo (\n"
+        "output example_types_pkg::extended_metadata_record_t metadata,\n"
+        "input wire request_ready, // The consumer has started accepting the next record.\n"
+        "input wire done, // Record complete.\n"
+        "input wire item_done, // Item complete.\n"
+        "output logic fast_mode // Accelerated handling.\n"
+        "); endmodule\n";
+    format::Config config;
+    config.columnLimit = 120;
+    auto result = format::format("comments.sv", source, config);
+    REQUIRE(result.isUsable());
+    std::optional<size_t> commentColumn;
+    size_t comments = 0;
+    std::string_view remaining = result.formatted;
+    while (!remaining.empty()) {
+        auto end = remaining.find('\n');
+        auto line = remaining.substr(0, end);
+        CHECK(line.size() <= config.columnLimit.get());
+        auto comment = line.find("//");
+        if (comment != std::string_view::npos) {
+            if (commentColumn)
+                CHECK(comment == *commentColumn);
+            else
+                commentColumn = comment;
+            comments++;
+        }
+        if (end == std::string_view::npos)
+            break;
+        remaining.remove_prefix(end + 1);
+    }
+    CHECK(comments == 4);
+    auto repeated = format::format("comments.sv", result.formatted, config);
+    REQUIRE(repeated.isUsable());
+    CHECK(repeated.formatted == result.formatted);
+}
+
 TEST_CASE("malformed source keeps parser diagnostics") {
     for (auto [invalid, valid] :
          {std::pair{
