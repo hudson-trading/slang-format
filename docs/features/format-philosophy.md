@@ -19,6 +19,59 @@ Formatting is split into three conceptual passes:
 
 Lists are either always vertical, always inline (like array dimensions), or dynamic based on heuristics like the number or length of their children. Bin packing (adding tokens until the line limit is reached) is generally avoided, since it is less readable and creates bad diffs when the list is modified.
 
+### Ports and Instance Connections
+
+Module and interface declaration ports are always vertical. Instance connections
+can stay inline when there are at most two connections and they fit within the
+column limit. Three or more connections are always vertical, one per line.
+Comments, macros, escaped identifiers, and parameter overrides can also force a
+shorter connection list to become vertical.
+
+```systemverilog
+Child
+  u_small (.in(a), .out(b));
+
+Child
+  u_large (
+    .in    (a),
+    .out   (b),
+    .ready (ready)
+);
+```
+
+## Procedural Blocks
+
+A simple assignment or call stays on the same line as the keyword that starts its
+procedural block when it fits. This applies to `initial`, `final`, `always`, `always_comb`,
+`always_ff`, and `always_latch`. Event and delay controls such as `@(posedge clk)`
+and `#5` also keep a simple body inline:
+
+```systemverilog
+always_comb value = input_value;
+
+always_ff @(posedge clk) data <= next_data;
+
+initial #5 ready = 1'b1;
+```
+
+An `if`/`else` body starts on a new line, indented one level beneath the procedural
+keyword or timing control. This applies even without a surrounding `begin`/`end`.
+For a `begin`/`end` body, `begin` stays on the header line and the statements inside
+are indented:
+
+```systemverilog
+always_ff @(posedge clk)
+    if (rst)
+        valid <= 1'b0;
+    else
+        valid <= next_valid;
+
+always_comb begin
+    sum   = a + b;
+    carry = sum > limit;
+end
+```
+
 ## Ifdef Indentation
 
 In member lists, preprocessor conditional directives (`ifdef`/`ifndef`/`else`/`elsif`/`endif`) are indented as structural blocks, not placed flush left at column 0. The content between an `ifdef` and its matching `else`/`endif` is indented one level deeper:
