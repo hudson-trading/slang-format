@@ -212,7 +212,7 @@ class CliOptionsTests(unittest.TestCase):
     def test_csv_timings_and_outcomes(self):
         report = self.root / "stats.csv"
         generated = self.root / "generated.sv"
-        generated.write_bytes(b"// @generated\n" + self.source)
+        generated.write_bytes(b'// @generated\n`include "defs.svh"\n' + self.source)
         quoted = self.root / (
             'quoted,"file\n.sv' if os.name != "nt" else "quoted,file.sv"
         )

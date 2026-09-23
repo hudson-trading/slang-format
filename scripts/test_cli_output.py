@@ -19,6 +19,7 @@ def main():
         command = [binary, "--config", str(config)]
         sources = {
             "generated": b"// @generated\r\nmodule foo; endmodule",
+            "generated_include": b'// @generated\r\n`include "defs.svh"\r\nmodule foo;logic a;endmodule',
             "off": b"// slang-format: off\nmodule foo;logic a;endmodule\nmodule bar;logic b;endmodule\n",
             "rejected": (
                 b"module foo;\r\nnested_in_if: always @(posedge clk) "

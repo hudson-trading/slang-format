@@ -20,6 +20,7 @@
 #include "slang/diagnostics/Diagnostics.h"
 #include "slang/diagnostics/ParserDiags.h"
 #include "slang/diagnostics/PreprocessorDiags.h"
+#include "slang/parsing/Lexer.h"
 #include "slang/parsing/Parser.h"
 #include "slang/parsing/Preprocessor.h"
 #include "slang/syntax/SyntaxTree.h"
@@ -184,6 +185,23 @@ static FormatResult formatImpl(
         offset = input.find_first_of("<=>|", markerEnd);
     }
 
+    // Preprocessing nests leading comments inside directive trivia. Inspect the
+    // first raw token so a directive cannot hide a generated-file marker.
+    {
+        BumpAllocator alloc;
+        Diagnostics diagnostics;
+        Lexer lexer(buf, alloc, diagnostics, sm);
+        for (const auto& trivia : lexer.lex().trivia()) {
+            if (trivia.kind != TriviaKind::LineComment && trivia.kind != TriviaKind::BlockComment)
+                continue;
+            if (trivia.getRawText().find("@generated") != std::string_view::npos) {
+                result.generated = true;
+                result.formatted = input;
+                return result;
+            }
+        }
+    }
+
     // Template branches can deliberately contain incomplete SystemVerilog syntax.
     // Preserve them before parsing, retaining any conflict diagnostic from preflight.
     if (hasJinjaTemplateDirective(input)) {
@@ -211,21 +229,6 @@ static FormatResult formatImpl(
     Parser parser(preprocessor, optionsBag);
     auto& root = parser.parseCompilationUnit();
     auto unmatchedDelims = parser.getOpenDelims();
-
-    // Skip generated files: if the first token's leading trivia contains
-    // an `@generated` marker in a line/block comment, treat the file as
-    // excluded.
-    if (auto firstToken = *root.tokens_begin()) {
-        for (const auto& trivia : firstToken.trivia()) {
-            if (trivia.kind != TriviaKind::LineComment && trivia.kind != TriviaKind::BlockComment)
-                continue;
-            if (trivia.getRawText().find("@generated") != std::string_view::npos) {
-                result.generated = true;
-                result.formatted = input;
-                return result;
-            }
-        }
-    }
 
     if (std::ranges::any_of(diagnostics, [](const auto& diag) {
             return diag.code == diag::ParseTreeTooDeep;
