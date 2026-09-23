@@ -170,7 +170,12 @@ New kinds can be added by lowering alignment anchors in `src/Layout.cpp`.
 
 Consecutive alignable members form a group. Groups are broken intentionally so that alignment doesn't span unrelated sections of code.
 
-**Blank lines** are the primary way to control groups. Structural alignments (ports, instance/param connections, case items, struct fields, struct-pattern assigns) require **two** consecutive blank lines to split — a single blank line is preserved visually but keeps the group aligned. Body alignments (assignment statements, local declarations) use the user-configurable `alignment.groupSeparatorLines` setting (default: `1`), so a single blank line is enough to split assignment groups inside an always/initial/function body.
+**Blank lines** are the primary way to control groups. Two settings control how many existing separator lines split a group:
+
+- `alignment.statementGapLines` (default: `1`) applies to assignment statements and standalone variable, net, and parameter declarations. A single blank line splits these groups by default.
+- `alignment.listGapLines` (default: `2`) applies to ports, parameter ports, instance/param connections, case items, struct fields, assignment-pattern fields, and other non-statement rows. A single blank line is preserved visually but keeps these groups aligned by default.
+
+Set both options to `1` to split both kinds of alignment group on a single blank line. Neither option inserts blank lines; values below `1` use `1`.
 
 Standalone comment regions also contribute to that threshold, but their first physical line is free: an N-line comment region counts as N-1 separator lines. A one-line annotation such as `// meta: packet_t` therefore does not disturb alignment; a longer section header can combine with blank lines to split the group.
 

@@ -52,7 +52,8 @@ TEST_CASE("numeric configuration cannot wrap or request excessive padding") {
           R"({"spacesBeforeTrailingComment":4294967296})", R"({"indentWidth":2147483647})",
           R"({"spacesBeforeTrailingComment":4294967295})",
           R"({"alignment":{"paddingLimit":4294967296}})",
-          R"({"alignment":{"groupSeparatorLines":18446744073709551615}})", R"({"indentWidth":-1})",
+          R"({"alignment":{"statementGapLines":18446744073709551615}})",
+          R"({"alignment":{"listGapLines":18446744073709551615}})", R"({"indentWidth":-1})",
           R"({"columnLimit":1.5})", R"({"maxSyntaxDepth":0})", R"({"maxSyntaxDepth":-1})",
           R"({"maxSyntaxDepth":4294967296})", R"({"maxSyntaxDepth":1.5})"}) {
         INFO(json);

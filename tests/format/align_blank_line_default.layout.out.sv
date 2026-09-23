@@ -1,8 +1,7 @@
-// Structural alignment groups (case items, struct-pattern assigns, struct
-// fields) use the 2-blank default: a single blank line keeps them in one
-// aligned group. Body alignments (statements, local decls) use the
-// configurable `groupSeparatorLines` (default 1), so a single blank does
-// split those.
+// List alignments (case items, struct-pattern assigns, struct fields) use
+// listGapLines (default 2): a single blank keeps them aligned.
+// Statements and declarations use statementGapLines (default 1),
+// so a single blank splits those groups.
 
 package align_blank_pkg;
     // Struct fields: single blank line keeps them aligned.

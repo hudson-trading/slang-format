@@ -124,7 +124,8 @@ std::optional<Config> parseConfig(std::string_view json, std::string& error) {
         return std::nullopt;
     if (auto alignment = yyjson_obj_get(root, "alignment");
         alignment &&
-        (!fits(alignment, "paddingLimit", false) || !fits(alignment, "groupSeparatorLines", false)))
+        (!fits(alignment, "paddingLimit", false) || !fits(alignment, "statementGapLines", false) ||
+         !fits(alignment, "listGapLines", false)))
         return std::nullopt;
     try {
         validateConfig(result.value());

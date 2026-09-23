@@ -1055,9 +1055,11 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
         while (groupBegin < rows.size()) {
             size_t groupEnd = groupBegin + 1;
             bool proceduralBlock = constants::isProceduralBlockAlignKind(key.kind);
-            int threshold = constants::isBodyAlignKind(key.kind)
-                                ? config.alignment.get().groupSeparatorLines.get()
-                                : constants::defaultGroupSeparatorLines;
+            bool statement = key.kind == slang::syntax::SyntaxKind::ExpressionStatement ||
+                             key.kind == slang::syntax::SyntaxKind::ParameterDeclarationStatement ||
+                             key.kind == slang::syntax::SyntaxKind::DataDeclaration;
+            int threshold = statement ? config.alignment.get().statementGapLines.get()
+                                      : config.alignment.get().listGapLines.get();
             threshold = std::max(threshold, 1);
             if (isTerminalAssignmentAnchor(*rows[groupBegin])) {
                 groupBegin = groupEnd;

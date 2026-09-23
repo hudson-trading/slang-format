@@ -86,10 +86,18 @@ File or directory paths relative to the project root containing .slang/. When th
 
 Alignment padding threshold in spaces. Split a group when adding a row would require this many or more spaces of padding; do not apply padding at or above the threshold. null disables the limit
 
-### `alignment.groupSeparatorLines`
+### `alignment.statementGapLines`
 
 **Type:** `integer`
 
 **Default:** `1`
 
-Number of existing separator lines required to split an alignment group of in-body code (assignment statements, local declarations). Empty lines count once; a standalone N-line comment region counts N-1. Structural groups (ports, params, case items, struct members, struct-pattern assigns) always require 2 separator lines. Does not insert lines; values below 1 use 1.
+Number of existing separator lines required to split an alignment group of assignment statements or standalone variable, net, and parameter declarations. Empty lines count once; a standalone N-line comment region counts N-1. Does not insert lines; values below 1 use 1.
+
+### `alignment.listGapLines`
+
+**Type:** `integer`
+
+**Default:** `2`
+
+Number of existing separator lines required to split an alignment group of ports, parameter ports, connections, case items, struct fields, assignment-pattern fields, and other non-statement rows. Empty lines count once; a standalone N-line comment region counts N-1. Does not insert lines; values below 1 use 1.

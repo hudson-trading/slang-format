@@ -31,28 +31,6 @@ constexpr size_t maxInlineCaseItemLabelWidth = 30;
 /// single label is never split by this rule.
 constexpr size_t maxInlineMultiLabelWidth = 12;
 
-/// Default separator-line count required to split an alignment group. Empty
-/// lines count once; a standalone comment region contributes all but its first
-/// physical line. A threshold of two means a single blank line between e.g.
-/// ports, case items, or struct fields does NOT split the group. Body code
-/// overrides this with `AlignConfig::groupSeparatorLines` (default 1).
-constexpr int defaultGroupSeparatorLines = 2;
-
-/// True for row kinds that represent "body" code — statements and local
-/// declarations inside a function/always/initial block. These honor the user's
-/// `AlignConfig::groupSeparatorLines`; all other kinds use
-/// `defaultGroupSeparatorLines`.
-constexpr bool isBodyAlignKind(slang::syntax::SyntaxKind kind) {
-    switch (kind) {
-        case slang::syntax::SyntaxKind::ExpressionStatement:
-        case slang::syntax::SyntaxKind::ParameterDeclarationStatement:
-        case slang::syntax::SyntaxKind::DataDeclaration:
-            return true;
-        default:
-            return false;
-    }
-}
-
 /// True for module-level procedural blocks whose direct statement owns the row.
 constexpr bool isProceduralBlockAlignKind(slang::syntax::SyntaxKind kind) {
     switch (kind) {

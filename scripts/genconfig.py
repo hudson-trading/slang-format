@@ -16,6 +16,12 @@ def run(command: list[str], cwd: Path) -> str:
     ).stdout
 
 
+def write_if_changed(path: Path, contents: str) -> None:
+    """Preserve file metadata when generated contents are already current."""
+    if not path.exists() or path.read_text() != contents:
+        path.write_text(contents)
+
+
 def schema_type(value: dict) -> str:
     if "$ref" in value:
         return value["$ref"].split("/")[-1].split("__")[-1]
@@ -129,7 +135,7 @@ def main() -> None:
     schema = json.loads(schema_text)
     schema_path = repo / "schemas" / "format.schema.json"
     schema_path.parent.mkdir(parents=True, exist_ok=True)
-    schema_path.write_text(json.dumps(schema, indent=2) + "\n")
+    write_if_changed(schema_path, json.dumps(schema, indent=2) + "\n")
 
     with tempfile.TemporaryDirectory() as temp_dir:
         defaults = json.loads(
@@ -138,8 +144,9 @@ def main() -> None:
                 Path(temp_dir),
             )
         )
-    (repo / "docs" / "features" / "configuration.md").write_text(
-        generate_markdown(schema, defaults)
+    write_if_changed(
+        repo / "docs" / "features" / "configuration.md",
+        generate_markdown(schema, defaults),
     )
 
 

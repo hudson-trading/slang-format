@@ -503,7 +503,12 @@ class CliOptionsTests(unittest.TestCase):
         self.assertEqual(resolved["indentWidth"], 2)
         self.assertEqual(resolved["columnLimit"], 100)
         self.assertEqual(
-            resolved["alignment"], {"paddingLimit": 12, "groupSeparatorLines": 1}
+            resolved["alignment"],
+            {
+                "paddingLimit": 12,
+                "statementGapLines": 1,
+                "listGapLines": 2,
+            },
         )
         override = self.root / "override.json"
         override.write_text(options)
@@ -590,7 +595,11 @@ class CliOptionsTests(unittest.TestCase):
     def test_config_option_names(self):
         config = self.root / "format.json"
         options = {
-            "alignment": {"paddingLimit": 12, "groupSeparatorLines": 3},
+            "alignment": {
+                "paddingLimit": 12,
+                "statementGapLines": 3,
+                "listGapLines": 4,
+            },
             "excludeDirectoryNames": ["build"],
             "projectPaths": ["src", "top.sv"],
         }
@@ -604,6 +613,7 @@ class CliOptionsTests(unittest.TestCase):
         for obsolete, value in [
             ("maxSpaces", {"alignment": {"maxSpaces": 12}}),
             ("linesBetweenGroups", {"alignment": {"linesBetweenGroups": 3}}),
+            ("groupSeparatorLines", {"alignment": {"groupSeparatorLines": 3}}),
             ("excludeDirs", {"excludeDirs": ["build"]}),
             ("dirs", {"dirs": ["src"]}),
             ("respectUserFormatting", {"respectUserFormatting": False}),
@@ -614,6 +624,45 @@ class CliOptionsTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertEqual(result.stdout, b"")
                 self.assertIn(obsolete.encode(), result.stderr)
+
+    def test_alignment_separator_thresholds(self):
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "tests/format/group_separator_config/independent_separators.sv"
+        ).read_bytes()
+        for alignment, statement_spaces, list_spaces, last_statement_spaces in [
+            ({}, 2, 7, 2),
+            ({"statementGapLines": 2}, 9, 7, 2),
+            ({"listGapLines": 1}, 2, 1, 2),
+            (
+                {"statementGapLines": 3, "listGapLines": 1},
+                9,
+                1,
+                9,
+            ),
+            (
+                {"statementGapLines": 0, "listGapLines": 0},
+                2,
+                1,
+                2,
+            ),
+            (
+                {"statementGapLines": -1, "listGapLines": -1},
+                2,
+                1,
+                2,
+            ),
+        ]:
+            with self.subTest(alignment=alignment):
+                result = self.run_cli(
+                    "--config-json", json.dumps({"alignment": alignment}), source=source
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                lines = result.stdout.decode().splitlines()
+                self.assertIn("        b" + " " * statement_spaces + "= 3;", lines)
+                self.assertIn("    input logic" + " " * list_spaces + "c,", lines)
+                self.assertIn("        logic" + " " * list_spaces + "c;", lines)
+                self.assertIn("        d" + " " * last_statement_spaces + "= 5;", lines)
 
     def test_unknown_config_keys_have_user_facing_diagnostics(self):
         contents = '{"excludeDirs": [], "dirs": [], "alignment": {"paddingLmit": 4}}'

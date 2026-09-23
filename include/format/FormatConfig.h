@@ -33,13 +33,20 @@ struct AlignConfig {
 
     rfl::Description<
         "Number of existing separator lines required to split an alignment "
-        "group of in-body code (assignment statements, local "
-        "declarations). Empty lines count once; a standalone N-line "
-        "comment region counts N-1. Structural groups (ports, params, "
-        "case items, struct members, struct-pattern assigns) always "
-        "require 2 separator lines. Does not insert lines; values below 1 use 1.",
+        "group of assignment statements or standalone variable, net, and "
+        "parameter declarations. Empty lines count once; a standalone N-line "
+        "comment region counts N-1. Does not insert lines; values below 1 use 1.",
         int>
-        groupSeparatorLines = 1;
+        statementGapLines = 1;
+
+    rfl::Description<
+        "Number of existing separator lines required to split an alignment "
+        "group of ports, parameter ports, connections, case items, struct "
+        "fields, assignment-pattern fields, and other non-statement rows. "
+        "Empty lines count once; a standalone N-line comment region counts N-1. "
+        "Does not insert lines; values below 1 use 1.",
+        int>
+        listGapLines = 2;
 };
 
 /// Configuration for slang-format
