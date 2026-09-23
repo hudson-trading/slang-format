@@ -6,7 +6,7 @@ ListStyle getListStyle(SyntaxKind parentKind, size_t listIndex) {
         case SyntaxKind::AnsiPortList: return ListStyle::Vertical; // ports
         case SyntaxKind::AnsiUdpPortList: return ListStyle::Vertical; // ports
         case SyntaxKind::ArgumentList: return ListStyle::Dynamic; // parameters
-        case SyntaxKind::AssertionItemPortList: return ListStyle::Vertical; // ports
+        case SyntaxKind::AssertionItemPortList: return ListStyle::Dynamic; // ports
         case SyntaxKind::CaseGenerate: return listIndex == 1 ? ListStyle::Vertical : ListStyle::Inline; // items
         case SyntaxKind::CaseStatement: return listIndex == 1 ? ListStyle::Vertical : ListStyle::Inline; // items
         case SyntaxKind::CheckerDeclaration: return listIndex == 1 ? ListStyle::Body : ListStyle::Inline; // members

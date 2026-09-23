@@ -47,7 +47,6 @@ BODY_LISTS = [
 VERTICAL_LISTS = [
     ("AnsiPortList", "ports"),
     ("AnsiUdpPortList", "ports"),
-    ("AssertionItemPortList", "ports"),
     ("BlockStatement", "items"),
     ("CaseGenerate", "items"),
     ("CaseStatement", "items"),
@@ -71,6 +70,7 @@ VERTICAL_LISTS = [
 # the column limit, otherwise inline.
 DYNAMIC_LISTS = [
     ("ArgumentList", "parameters"),
+    ("AssertionItemPortList", "ports"),
     ("ConcatenationExpression", "expressions"),
     ("DistConstraintList", "items"),
     ("FunctionPortList", "ports"),
