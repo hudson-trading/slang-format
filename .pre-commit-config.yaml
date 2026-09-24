@@ -61,6 +61,8 @@ repos:
       rev: v4.0.0-alpha.8
       hooks:
           - id: prettier
+            # A batch can contain only tracked fixtures excluded by .gitignore.
+            args: [--no-error-on-unmatched-pattern]
             files: ^.*\.(ts|js|json|yml|yaml)$
             exclude: ^external/.*
 
