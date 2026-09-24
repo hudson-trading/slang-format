@@ -472,9 +472,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#alignmentgroupseparatorlines" class="md-nav__link">
+  <a href="#alignmentstatementgaplines" class="md-nav__link">
     <span class="md-ellipsis">
-      alignment.groupSeparatorLines
+      alignment.statementGapLines
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alignmentlistgaplines" class="md-nav__link">
+    <span class="md-ellipsis">
+      alignment.listGapLines
     </span>
   </a>
   
@@ -692,9 +701,18 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#alignmentgroupseparatorlines" class="md-nav__link">
+  <a href="#alignmentstatementgaplines" class="md-nav__link">
     <span class="md-ellipsis">
-      alignment.groupSeparatorLines
+      alignment.statementGapLines
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alignmentlistgaplines" class="md-nav__link">
+    <span class="md-ellipsis">
+      alignment.listGapLines
     </span>
   </a>
   
@@ -774,10 +792,14 @@ selects <code>project/src</code> when <code>project</code> is targeted.</p>
 <h3 id="alignmentpaddinglimit"><code>alignment.paddingLimit</code><a class="headerlink" href="#alignmentpaddinglimit" title="Permanent link">&para;</a></h3>
 <p><strong>Type:</strong> <code>integer | null</code></p>
 <p>Alignment padding threshold in spaces. Split a group when adding a row would require this many or more spaces of padding; do not apply padding at or above the threshold. null disables the limit</p>
-<h3 id="alignmentgroupseparatorlines"><code>alignment.groupSeparatorLines</code><a class="headerlink" href="#alignmentgroupseparatorlines" title="Permanent link">&para;</a></h3>
+<h3 id="alignmentstatementgaplines"><code>alignment.statementGapLines</code><a class="headerlink" href="#alignmentstatementgaplines" title="Permanent link">&para;</a></h3>
 <p><strong>Type:</strong> <code>integer</code></p>
 <p><strong>Default:</strong> <code>1</code></p>
-<p>Number of existing separator lines required to split an alignment group of in-body code (assignment statements, local declarations). Empty lines count once; a standalone N-line comment region counts N-1. Structural groups (ports, params, case items, struct members, struct-pattern assigns) always require 2 separator lines. Does not insert lines; values below 1 use 1.</p>
+<p>Number of existing separator lines required to split an alignment group of assignment statements or standalone variable, net, and parameter declarations. Empty lines count once; a standalone N-line comment region counts N-1. Does not insert lines; values below 1 use 1.</p>
+<h3 id="alignmentlistgaplines"><code>alignment.listGapLines</code><a class="headerlink" href="#alignmentlistgaplines" title="Permanent link">&para;</a></h3>
+<p><strong>Type:</strong> <code>integer</code></p>
+<p><strong>Default:</strong> <code>2</code></p>
+<p>Number of existing separator lines required to split an alignment group of ports, parameter ports, connections, case items, struct fields, assignment-pattern fields, and other non-statement rows. Empty lines count once; a standalone N-line comment region counts N-1. Does not insert lines; values below 1 use 1.</p>
 
 
 

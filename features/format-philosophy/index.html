@@ -491,6 +491,30 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Lists">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ports-and-instance-connections" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ports and Instance Connections
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#procedural-blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Procedural Blocks
+    </span>
+  </a>
+  
 </li>
       
         <li class="md-nav__item">
@@ -647,6 +671,30 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Lists">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ports-and-instance-connections" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ports and Instance Connections
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#procedural-blocks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Procedural Blocks
+    </span>
+  </a>
+  
 </li>
       
         <li class="md-nav__item">
@@ -786,6 +834,48 @@
 </ol>
 <h2 id="lists">Lists<a class="headerlink" href="#lists" title="Permanent link">&para;</a></h2>
 <p>Lists are either always vertical, always inline (like array dimensions), or dynamic based on heuristics like the number or length of their children. Bin packing (adding tokens until the line limit is reached) is generally avoided, since it is less readable and creates bad diffs when the list is modified.</p>
+<h3 id="ports-and-instance-connections">Ports and Instance Connections<a class="headerlink" href="#ports-and-instance-connections" title="Permanent link">&para;</a></h3>
+<p>Module and interface declaration ports are always vertical. Instance connections
+can stay inline when there are at most two connections and they fit within the
+column limit. Three or more connections are always vertical, one per line.
+Comments, macros, escaped identifiers, and parameter overrides can also force a
+shorter connection list to become vertical.</p>
+<div class="language-systemverilog highlight"><pre><span></span><code><span class="n">Child</span>
+<span class="w">  </span><span class="n">u_small</span><span class="w"> </span><span class="p">(.</span><span class="n">in</span><span class="p">(</span><span class="n">a</span><span class="p">),</span><span class="w"> </span><span class="p">.</span><span class="n">out</span><span class="p">(</span><span class="n">b</span><span class="p">));</span>
+
+<span class="n">Child</span>
+<span class="w">  </span><span class="n">u_large</span><span class="w"> </span><span class="p">(</span>
+<span class="w">    </span><span class="p">.</span><span class="n">in</span><span class="w">    </span><span class="p">(</span><span class="n">a</span><span class="p">),</span>
+<span class="w">    </span><span class="p">.</span><span class="n">out</span><span class="w">   </span><span class="p">(</span><span class="n">b</span><span class="p">),</span>
+<span class="w">    </span><span class="p">.</span><span class="n">ready</span><span class="w"> </span><span class="p">(</span><span class="n">ready</span><span class="p">)</span>
+<span class="p">);</span>
+</code></pre></div>
+<h2 id="procedural-blocks">Procedural Blocks<a class="headerlink" href="#procedural-blocks" title="Permanent link">&para;</a></h2>
+<p>A simple assignment or call stays on the same line as the keyword that starts its
+procedural block when it fits. This applies to <code>initial</code>, <code>final</code>, <code>always</code>, <code>always_comb</code>,
+<code>always_ff</code>, and <code>always_latch</code>. Event and delay controls such as <code>@(posedge clk)</code>
+and <code>#5</code> also keep a simple body inline:</p>
+<div class="language-systemverilog highlight"><pre><span></span><code><span class="k">always_comb</span><span class="w"> </span><span class="n">value</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">input_value</span><span class="p">;</span>
+
+<span class="k">always_ff</span><span class="w"> </span><span class="p">@(</span><span class="k">posedge</span><span class="w"> </span><span class="n">clk</span><span class="p">)</span><span class="w"> </span><span class="n">data</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">next_data</span><span class="p">;</span>
+
+<span class="k">initial</span><span class="w"> </span><span class="p">#</span><span class="mi">5</span><span class="w"> </span><span class="n">ready</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mb">1&#39;b1</span><span class="p">;</span>
+</code></pre></div>
+<p>An <code>if</code>/<code>else</code> body starts on a new line, indented one level beneath the procedural
+keyword or timing control. This applies even without a surrounding <code>begin</code>/<code>end</code>.
+For a <code>begin</code>/<code>end</code> body, <code>begin</code> stays on the header line and the statements inside
+are indented:</p>
+<div class="language-systemverilog highlight"><pre><span></span><code><span class="k">always_ff</span><span class="w"> </span><span class="p">@(</span><span class="k">posedge</span><span class="w"> </span><span class="n">clk</span><span class="p">)</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rst</span><span class="p">)</span>
+<span class="w">        </span><span class="n">valid</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mb">1&#39;b0</span><span class="p">;</span>
+<span class="w">    </span><span class="k">else</span>
+<span class="w">        </span><span class="n">valid</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">next_valid</span><span class="p">;</span>
+
+<span class="k">always_comb</span><span class="w"> </span><span class="k">begin</span>
+<span class="w">    </span><span class="n">sum</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="n">a</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">b</span><span class="p">;</span>
+<span class="w">    </span><span class="n">carry</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sum</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">limit</span><span class="p">;</span>
+<span class="k">end</span>
+</code></pre></div>
 <h2 id="ifdef-indentation">Ifdef Indentation<a class="headerlink" href="#ifdef-indentation" title="Permanent link">&para;</a></h2>
 <p>In member lists, preprocessor conditional directives (<code>ifdef</code>/<code>ifndef</code>/<code>else</code>/<code>elsif</code>/<code>endif</code>) are indented as structural blocks, not placed flush left at column 0. The content between an <code>ifdef</code> and its matching <code>else</code>/<code>endif</code> is indented one level deeper:</p>
 <div class="language-systemverilog highlight"><pre><span></span><code><span class="k">module</span><span class="w"> </span><span class="n">top</span><span class="p">;</span>
@@ -839,11 +929,15 @@ that structure.</p>
 <ol>
 <li>Normalize the complete clean member into tokens, atomic text, hard lines, and prioritized soft lines.</li>
 <li>Try successively deeper priority tiers. The first tier that can satisfy the column limit wins.</li>
-<li>Within a tier, minimize the worst overflow, total overflow, number of breaks, and raggedness, in that order.</li>
+<li>Within a tier, minimize the worst overflow, total overflow, number of breaks, breaks marked as less preferred, and raggedness, in that order.</li>
 <li>If no layout can fit because an atomic token is itself too wide, minimize the worst overflow and still split around that token rather than leaving one giant line.</li>
 </ol>
 <p>Candidate evaluation is bounded by the number of atoms in the member. If a pathological member exhausts that work budget, the solver deterministically takes the remaining breaks in the current priority tier before considering deeper tiers.</p>
 <p>Dynamic lists are represented as consistent soft-line groups, so all comma boundaries split together; the solver never bin-packs only part of a list. Lists and specialized ternary layouts continue through their syntax-specific renderers while their alignment anchors are migrated to the shared IR.</p>
+<p>For assignments with a binary expression on the right, the break after the assignment
+operator competes with breaks in the outer expression chain. Moving the RHS onto its
+own indented line is preferred only when it reduces the total number of lines needed
+to fit. Equal line counts keep the first operand beside the assignment operator.</p>
 <h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
 <p>Binary expressions break at the lowest-precedence operator:
 <div class="language-systemverilog highlight"><pre><span></span><code><span class="c1">// Before wrapping:</span>
@@ -866,10 +960,12 @@ that structure.</p>
 <span class="w">        </span><span class="o">:</span><span class="w"> </span><span class="n">input_c</span><span class="p">;</span>
 </code></pre></div></p>
 <h3 id="continuation-indentation">Continuation Indentation<a class="headerlink" href="#continuation-indentation" title="Permanent link">&para;</a></h3>
-<p>Operator continuations use one stable continuation indent for the member. Expression depth affects break priority, not indentation, so nested CST wrappers do not create staircase indentation. First-line alignment anchors likewise do not push continuation lines farther right.</p>
+<p>Continuations in an assignment's outer binary chain align with the first token of
+the RHS. If the RHS moves below the assignment operator, the whole chain uses one
+indent from the statement. Nested expressions retain their own continuation anchors.</p>
 <h3 id="what-doesnt-wrap">What Doesn't Wrap<a class="headerlink" href="#what-doesnt-wrap" title="Permanent link">&para;</a></h3>
 <ul>
-<li><strong>Data declarations</strong> are not split — they stay on one line regardless of length.</li>
+<li><strong>Declaration types and names</strong> stay on one line; initializer expressions can wrap.</li>
 <li><strong>Concatenations</strong> (<code>{a, b, c}</code>) and <strong>function arguments</strong> are handled by dynamic list verticalization, not expression wrapping. When an overflowing function call is the sole assignment RHS, the whole call moves to the next indented line; short calls remain inline.</li>
 <li><strong>Macro invocations</strong> are emitted as raw text and are not individually wrapped.</li>
 </ul>
@@ -924,7 +1020,12 @@ that structure.</p>
 <code>src/FormatDocument.cpp</code> groups compatible anchors and computes their padding.</p>
 <h3 id="group-breaking">Group Breaking<a class="headerlink" href="#group-breaking" title="Permanent link">&para;</a></h3>
 <p>Consecutive alignable members form a group. Groups are broken intentionally so that alignment doesn't span unrelated sections of code.</p>
-<p><strong>Blank lines</strong> are the primary way to control groups. Structural alignments (ports, instance/param connections, case items, struct fields, struct-pattern assigns) require <strong>two</strong> consecutive blank lines to split — a single blank line is preserved visually but keeps the group aligned. Body alignments (assignment statements, local declarations) use the user-configurable <code>alignment.groupSeparatorLines</code> setting (default: <code>1</code>), so a single blank line is enough to split assignment groups inside an always/initial/function body.</p>
+<p><strong>Blank lines</strong> are the primary way to control groups. Two settings control how many existing separator lines split a group:</p>
+<ul>
+<li><code>alignment.statementGapLines</code> (default: <code>1</code>) applies to assignment statements and standalone variable, net, and parameter declarations. A single blank line splits these groups by default.</li>
+<li><code>alignment.listGapLines</code> (default: <code>2</code>) applies to ports, parameter ports, instance/param connections, case items, struct fields, assignment-pattern fields, and other non-statement rows. A single blank line is preserved visually but keeps these groups aligned by default.</li>
+</ul>
+<p>Set both options to <code>1</code> to split both kinds of alignment group on a single blank line. Neither option inserts blank lines; values below <code>1</code> use <code>1</code>.</p>
 <p>Standalone comment regions also contribute to that threshold, but their first physical line is free: an N-line comment region counts as N-1 separator lines. A one-line annotation such as <code>// meta: packet_t</code> therefore does not disturb alignment; a longer section header can combine with blank lines to split the group.</p>
 <p>All alignable lists treat preserved blank/comment gaps below that threshold as soft boundaries. The columns continue across the gap when every row still fits; when shared alignment would add overflow or line breaks, the formatter partitions at a soft boundary and aligns the sections independently.</p>
 <p>Module-level one-line procedural blocks also use soft boundaries. Multi-row sections can keep a shared alignment across one, but a singleton section is isolated rather than padded to match a neighboring block.</p>
