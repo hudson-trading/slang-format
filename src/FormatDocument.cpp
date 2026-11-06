@@ -935,16 +935,25 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
         groups[{anchor.rowKind, anchor.columnIndex, anchor.group}].push_back(&anchor);
 
     std::vector<std::string_view> lines;
+    // Offset of each line's terminating '\n'; the final entry is the text size.
+    std::vector<size_t> lineEnds;
     size_t lineStart = 0;
     while (lineStart <= layout.text.size()) {
         size_t lineEnd = layout.text.find('\n', lineStart);
         if (lineEnd == std::string::npos)
             lineEnd = layout.text.size();
         lines.emplace_back(layout.text.data() + lineStart, lineEnd - lineStart);
+        lineEnds.push_back(lineEnd);
         if (lineEnd == layout.text.size())
             break;
         lineStart = lineEnd + 1;
     }
+    // Equivalent to layout.text.find('\n', offset) clamped to the text size, without
+    // rescanning a long line once per anchor.
+    auto lineEndAt = [&](size_t offset) {
+        auto it = std::ranges::lower_bound(lineEnds, offset);
+        return it == lineEnds.end() ? layout.text.size() : *it;
+    };
     auto separatorCount = [&](size_t previousLine, size_t nextLine, int limit,
                               bool ignoreContent = false) {
         int separators = 0;
@@ -985,20 +994,17 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
     auto isTerminalAssignmentAnchor = [&](const RenderedAlignmentAnchor& anchor) {
         if (anchor.columnIndex < 2 || anchor.outputOffset >= layout.text.size())
             return false;
-        size_t end = layout.text.find('\n', anchor.outputOffset);
-        if (end == std::string::npos)
-            end = layout.text.size();
+        size_t end = lineEndAt(anchor.outputOffset);
         auto suffix =
             std::string_view(layout.text).substr(anchor.outputOffset, end - anchor.outputOffset);
         while (!suffix.empty() && slang::isTabOrSpace(suffix.back()))
             suffix.remove_suffix(1);
+        // Test the cheap suffix first so long single-line lists are not rescanned per anchor.
         return suffix == "=" || suffix == "<=" ||
-               (suffix.find('=') != std::string_view::npos && suffix.ends_with('{'));
+               (suffix.ends_with('{') && suffix.find('=') != std::string_view::npos);
     };
     auto lineSuffix = [&](const RenderedAlignmentAnchor& anchor) {
-        size_t end = layout.text.find('\n', anchor.outputOffset);
-        if (end == std::string::npos)
-            end = layout.text.size();
+        size_t end = lineEndAt(anchor.outputOffset);
         return std::string_view(layout.text).substr(anchor.outputOffset, end - anchor.outputOffset);
     };
     std::unordered_set<MemberId> membersWithBreaks;
@@ -1225,7 +1231,8 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                     continue;
                 }
             }
-            if (key.kind == slang::syntax::SyntaxKind::DataDeclaration && key.column > 1 &&
+            if (groupEnd - groupBegin > 1 &&
+                key.kind == slang::syntax::SyntaxKind::DataDeclaration && key.column > 1 &&
                 key.column % 2 == 1) {
                 auto firstColumn = groups.find({key.kind, 1, key.group});
                 if (firstColumn != groups.end()) {
@@ -1240,9 +1247,12 @@ ComputedAlignment computeAlignment(const RenderedDocument& layout, const Config&
                     for (size_t i = groupBegin; i < groupEnd; i++)
                         currentColumnLines.insert(rows[i]->line);
                     bool mixedShape = firstColumnLines != currentColumnLines;
-                    for (const auto& [otherKey, otherAnchors] : groups) {
-                        if (otherKey.kind != key.kind || otherKey.group != key.group ||
-                            otherKey.column <= 1 || otherKey.column % 2 == 0) {
+                    // Groups are ordered by kind first, so only visit this kind's columns.
+                    for (auto other = groups.lower_bound({key.kind, 2, 0});
+                         other != groups.end() && other->first.kind == key.kind; ++other) {
+                        const auto& [otherKey, otherAnchors] = *other;
+                        if (otherKey.group != key.group || otherKey.column <= 1 ||
+                            otherKey.column % 2 == 0) {
                             continue;
                         }
                         std::unordered_set<size_t> otherLines;

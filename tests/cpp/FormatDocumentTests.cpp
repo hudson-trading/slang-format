@@ -4,6 +4,8 @@
 #include "format/FormatDocument.h"
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <string>
+#include <vector>
 
 #include "slang/syntax/SyntaxKind.h"
 
@@ -87,6 +89,34 @@ TEST_CASE("alignment uses stable line coordinates after whitespace normalization
     auto layout = renderer.renderLayout(document);
 
     CHECK_NOTHROW(renderer.renderAligned(document, layout));
+}
+
+TEST_CASE("alignment stays linear for a long single-line declarator list") {
+    // Generated netlists declare thousands of nets in one statement. Each declarator gets
+    // its own alignment column, so per-column scans of every group or of the remaining
+    // line made this quadratic (minutes for the EPFL arithmetic benchmarks).
+    format::DocumentBuilder builder;
+    auto group = builder.createAlignmentGroup();
+    constexpr size_t declaratorCount = 20000;
+    std::vector<format::DocId> parts{builder.text("wire")};
+    for (size_t i = 0; i < declaratorCount; i++) {
+        parts.push_back(builder.alignmentAnchor(
+            static_cast<uint32_t>(2 * i + 1), slang::syntax::SyntaxKind::DataDeclaration, group, 1
+        ));
+        parts.push_back(builder.text("n" + std::to_string(i)));
+        parts.push_back(builder.text(i + 1 == declaratorCount ? ";" : ","));
+    }
+    auto member = builder.member(
+        builder.concat(std::move(parts)), slang::syntax::SyntaxKind::DataDeclaration
+    );
+    auto document = std::move(builder).finish(member);
+    format::Config config;
+    format::DocumentRenderer renderer(config);
+    auto layout = renderer.renderLayout(document);
+    auto aligned = renderer.renderAligned(document, layout);
+
+    CHECK(std::ranges::count(layout.text, '\n') == 1);
+    CHECK(aligned.text == layout.text);
 }
 
 TEST_CASE("adjacent hard line requirements compose by maximum") {
