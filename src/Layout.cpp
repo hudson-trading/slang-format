@@ -166,14 +166,31 @@ private:
         inlineBlockCommentOnLine = false;
     }
 
+    bool directivesAtColumn0() const {
+        return config.directiveIndent.get() == DirectiveIndent::column0;
+    }
+
+    /// Columns one level of conditional nesting adds to the code inside it.
+    int conditionalIndentWidth() const {
+        return directivesAtColumn0() ? 0 : static_cast<int>(config.indentWidth.get());
+    }
+
     void reindentConditionalLine() {
         if (!lineStart || conditionalDepth == itemFinalConditionalDepth)
             return;
         int relativeDepth = static_cast<int>(conditionalDepth) -
                             static_cast<int>(itemFinalConditionalDepth);
-        append(builder.indent(
-            relativeDepth * static_cast<int>(config.indentWidth.get()), builder.hardLine()
-        ));
+        append(builder.indent(relativeDepth * conditionalIndentWidth(), builder.hardLine()));
+    }
+
+    /// True for a line of inactive branch text that column-0 mode moves to column 0.
+    bool isColumn0DirectiveLine(std::string_view line) const {
+        while (!line.empty() && slang::isTabOrSpace(line.front()))
+            line.remove_prefix(1);
+        return directivesAtColumn0() &&
+               (line.starts_with("`ifdef") || line.starts_with("`ifndef") ||
+                line.starts_with("`else") || line.starts_with("`elsif") ||
+                line.starts_with("`endif"));
     }
 
     void emitConditionalVerbatim(
@@ -206,7 +223,8 @@ private:
             }
             bool hasContent = lineStartOffset + indent < lineEnd &&
                               !slang::isNewline(text[lineStartOffset + indent]);
-            if (hasContent && !protectedLines.contains(lineStartOffset))
+            if (hasContent && !protectedLines.contains(lineStartOffset) &&
+                !isColumn0DirectiveLine(text.substr(lineStartOffset, lineEnd - lineStartOffset)))
                 subparseBaseline = std::min(subparseBaseline, indent);
             lineStartOffset = lineEnd == text.size() ? text.size() : lineEnd + 1;
         }
@@ -260,9 +278,11 @@ private:
             Config branchConfig = config;
             if (config.columnLimit.get()) {
                 // Branch text is rendered at column zero and reindented into its parent later.
-                size_t branchIndent = structuralIndent +
-                                      conditionalDepth * config.indentWidth.get();
-                if (dedentListConditionalDirective && branchIndent >= config.indentWidth.get())
+                size_t branchIndent =
+                    structuralIndent +
+                    conditionalDepth * static_cast<size_t>(conditionalIndentWidth());
+                if (!directivesAtColumn0() && dedentListConditionalDirective &&
+                    branchIndent >= config.indentWidth.get())
                     branchIndent -= config.indentWidth.get();
                 branchConfig.columnLimit = static_cast<uint32_t>(
                     config.columnLimit.get() > branchIndent
@@ -319,7 +339,8 @@ private:
                    slang::isTabOrSpace(text[lineStartOffset + indent])) {
                 indent++;
             }
-            if (lineStartOffset + indent < lineEnd) {
+            if (lineStartOffset + indent < lineEnd &&
+                !isColumn0DirectiveLine(text.substr(lineStartOffset, lineEnd - lineStartOffset))) {
                 baseline = indent;
                 break;
             }
@@ -329,7 +350,7 @@ private:
         std::vector<size_t> nestedConditionalIndents;
         size_t listIndent = !memberOwned && conditionalDepth > itemFinalConditionalDepth &&
                                     !dedentListConditionalDirective
-                                ? config.indentWidth.get()
+                                ? static_cast<size_t>(conditionalIndentWidth())
                                 : 0;
         lineStartOffset = 0;
         bool firstLine = true;
@@ -361,7 +382,14 @@ private:
             if (!nestedConditionalIndents.empty())
                 relativeIndent = std::max(relativeIndent, nestedConditionalIndents.back());
             relativeIndent += listIndent;
-            if (line.empty()) {
+            if (isColumn0DirectiveLine(line) && (!firstLine || lineStart)) {
+                if (!firstLine || !memberOwned)
+                    append(builder.hardLine());
+                append(builder.absoluteText(line));
+                blankLineRun = 0;
+                firstLine = false;
+            }
+            else if (line.empty()) {
                 blankLineRun++;
                 append(builder.indent(
                     static_cast<int>(relativeIndent),
@@ -395,8 +423,9 @@ private:
                                   )
                 );
             }
-            if (line.starts_with("`ifdef") || line.starts_with("`ifndef") ||
-                line.starts_with("`else") || line.starts_with("`elsif")) {
+            if (!directivesAtColumn0() &&
+                (line.starts_with("`ifdef") || line.starts_with("`ifndef") ||
+                 line.starts_with("`else") || line.starts_with("`elsif"))) {
                 nestedConditionalIndents.push_back(
                     relativeIndent - listIndent + config.indentWidth.get()
                 );
@@ -638,7 +667,7 @@ private:
                                         static_cast<int>(itemFinalConditionalDepth);
                     if (relativeDepth) {
                         directive = builder.indent(
-                            relativeDepth * static_cast<int>(config.indentWidth.get()), directive
+                            relativeDepth * conditionalIndentWidth(), directive
                         );
                     }
                     append(directive);
@@ -685,12 +714,15 @@ private:
                 if (kind == SyntaxKind::EndIfDirective && !conditionalAssignmentStack.empty()) {
                     conditionalAssignmentStack.pop_back();
                 }
-                auto directive =
-                    builder.concat({builder.hardLine(), builder.verbatim(trivia.text)});
+                // At column 0 the directive ignores the indent of its context.
+                auto directive = builder.concat(
+                    {builder.hardLine(), directivesAtColumn0() ? builder.absoluteText(trivia.text)
+                                                               : builder.verbatim(trivia.text)}
+                );
                 int relativeDepth = static_cast<int>(conditionalDepth) -
                                     static_cast<int>(itemFinalConditionalDepth) -
                                     (dedentListConditionalDirective ? 1 : 0);
-                if (relativeDepth) {
+                if (relativeDepth && !directivesAtColumn0()) {
                     directive = builder.indent(
                         relativeDepth * static_cast<int>(config.indentWidth.get()), directive
                     );
@@ -3009,7 +3041,8 @@ private:
             if (!item)
                 continue;
 
-            size_t relativeConditionalDepth = conditionalDepth > listConditionalDepth
+            size_t relativeConditionalDepth = conditionalDepth > listConditionalDepth &&
+                                                      !directivesAtColumn0()
                                                   ? conditionalDepth - listConditionalDepth
                                                   : 0;
             int itemIndent = 0;

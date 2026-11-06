@@ -50,6 +50,14 @@ Column limit for line wrapping (0 = no limit, maximum 1000000)
 
 Number of spaces before trailing comments (0-256)
 
+### `directiveIndent`
+
+**Type:** `string`
+
+**Default:** `"code"`
+
+Placement of conditional directives (ifdef, ifndef, elsif, else, endif) that start their own line. "code" indents them with the surrounding code and indents the code between them one more level; "column0" puts them at column 0 and leaves the code between them at its normal indent. Other directives, and conditional directives that share a line with code, are unaffected
+
 ### `maxSyntaxDepth`
 
 **Type:** `integer`
