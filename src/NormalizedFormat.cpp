@@ -1220,6 +1220,16 @@ private:
                     TriviaPlacement placement = !hadLineBreak && lineBreaks == 0 && previous
                                                     ? TriviaPlacement::Inline
                                                     : TriviaPlacement::Standalone;
+                    // A conditional directive written on the same line as a standalone
+                    // directive (`else `ifdef B, `endif `endif) is standalone too: placing it
+                    // inline would pull its branch onto the previous code line.
+                    if (placement == TriviaPlacement::Inline && isConditionalDirective(syntax.kind) &&
+                        !current.leading.empty() &&
+                        (current.leading.back().kind == NormalizedTriviaKind::ConditionalDirective ||
+                         current.leading.back().kind == NormalizedTriviaKind::Directive) &&
+                        current.leading.back().placement == TriviaPlacement::Standalone) {
+                        placement = TriviaPlacement::Standalone;
+                    }
                     if (isConditionalDirective(syntax.kind)) {
                         // Keep the whole conditional in the opening directive's
                         // context even when its body introduces line breaks.
