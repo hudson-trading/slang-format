@@ -21,6 +21,18 @@ namespace format {
 /// Default recursion budget for parsing and formatter syntax traversal.
 inline constexpr uint32_t defaultMaxSyntaxDepth = 512;
 
+/// Line endings of formatted output.
+enum class LineEnding {
+    /// Keep each line's ending from the input; mixed input stays mixed.
+    preserve,
+    /// The host's line ending: CRLF on Windows, LF elsewhere.
+    native,
+    /// LF.
+    lf,
+    /// CRLF.
+    crlf,
+};
+
 /// Controls alignment padding and separation into groups.
 struct AlignConfig {
 
@@ -58,6 +70,14 @@ struct Config {
 
     rfl::Description<"Number of spaces before trailing comments (0-256)", uint32_t>
         spacesBeforeTrailingComment = 2;
+
+    rfl::Description<
+        "Line endings of formatted output: preserve keeps each line's ending from the input "
+        "and mixed input stays mixed; a line break the formatter adds takes the ending of the "
+        "input line it splits, else the input's first line ending, else LF. native uses the "
+        "host's line ending (CRLF on Windows, LF elsewhere), lf and crlf force that ending",
+        LineEnding>
+        lineEnding = LineEnding::preserve;
 
     rfl::Description<
         "Maximum syntax tree depth and parser recursion budget (must be positive). "
