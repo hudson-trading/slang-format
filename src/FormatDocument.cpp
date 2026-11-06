@@ -390,6 +390,9 @@ struct RenderRun {
     }
 
     void newline(int count, size_t indent) {
+        // A hard line of N breaks leaves N - 1 empty lines; cap them when requested.
+        if (auto maxEmpty = config.maxEmptyLines.get())
+            count = static_cast<int>(std::min<size_t>(static_cast<size_t>(count), *maxEmpty + 1));
         while ((!cursor.atLineStart ? 0 : cursor.consecutiveLineBreaks) <
                static_cast<size_t>(count)) {
             endLine();

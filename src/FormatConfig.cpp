@@ -30,6 +30,9 @@ void validateConfig(const Config& config) {
     check("indentWidth", config.indentWidth.get(), 64);
     check("columnLimit", config.columnLimit.get(), 1000000);
     check("spacesBeforeTrailingComment", config.spacesBeforeTrailingComment.get(), 256);
+    if (auto maxEmptyLines = config.maxEmptyLines.get();
+        maxEmptyLines && (*maxEmptyLines < 1 || *maxEmptyLines > 1000000))
+        throw std::invalid_argument("maxEmptyLines must be between 1 and 1000000");
     if (config.maxSyntaxDepth.get() == 0)
         throw std::invalid_argument("maxSyntaxDepth must be positive");
 }
@@ -120,7 +123,8 @@ std::optional<Config> parseConfig(std::string_view json, std::string& error) {
         return valid;
     };
     if (!fits(root, "indentWidth", true) || !fits(root, "columnLimit", true) ||
-        !fits(root, "spacesBeforeTrailingComment", true) || !fits(root, "maxSyntaxDepth", true))
+        !fits(root, "spacesBeforeTrailingComment", true) || !fits(root, "maxSyntaxDepth", true) ||
+        !fits(root, "maxEmptyLines", true))
         return std::nullopt;
     if (auto alignment = yyjson_obj_get(root, "alignment");
         alignment &&

@@ -115,3 +115,22 @@ TEST_CASE("unknown config keys report actionable errors without parser advice") 
     CHECK(format::parseConfig("{}", error));
     CHECK(error.empty());
 }
+
+TEST_CASE("empty line limit is optional and range checked") {
+    std::string error;
+    auto config = format::parseConfig("{}", error);
+    REQUIRE(config);
+    CHECK_FALSE(config->maxEmptyLines.value());
+    for (auto json :
+         {R"({"maxEmptyLines":null})", R"({"maxEmptyLines":1})", R"({"maxEmptyLines":1000000})"}) {
+        INFO(json);
+        CHECK(format::parseConfig(json, error));
+    }
+    for (auto json : {R"({"maxEmptyLines":0})", R"({"maxEmptyLines":-1})",
+                      R"({"maxEmptyLines":1000001})",
+                      R"({"maxEmptyLines":4294967296})", R"({"maxEmptyLines":1.5})"}) {
+        INFO(json);
+        CHECK_FALSE(format::parseConfig(json, error));
+        CHECK_FALSE(error.empty());
+    }
+}

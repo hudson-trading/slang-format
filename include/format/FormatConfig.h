@@ -60,6 +60,13 @@ struct Config {
         spacesBeforeTrailingComment = 2;
 
     rfl::Description<
+        "Maximum number of consecutive empty lines to keep (1-1000000); longer runs are "
+        "reduced to this many. Comments and slang-format: off regions are unchanged. "
+        "null keeps every empty line",
+        std::optional<uint32_t>>
+        maxEmptyLines = std::nullopt;
+
+    rfl::Description<
         "Maximum syntax tree depth and parser recursion budget (must be positive). "
         "Files exceeding the limit are skipped unchanged, even with --force. "
         "Raising this limit increases stack usage and can cause stack overflow",
