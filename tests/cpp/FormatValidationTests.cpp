@@ -1396,3 +1396,83 @@ TEST_CASE("unsafe directive and container recovery preserves source") {
         }
     }
 }
+
+TEST_CASE("directiveIndent column0 puts conditional directives at column 0") {
+    constexpr std::string_view source = R"(module top (
+    input logic a,
+`ifdef B
+    input logic b,
+`endif
+    output logic c
+);
+`ifdef X
+`ifdef Y
+logic y;
+`endif
+logic x;
+`else
+logic z;
+`endif
+initial begin
+`ifdef SIM
+$display("sim");
+`endif
+end
+endmodule
+)";
+
+    format::Config config;
+    auto result = format::format("directive_indent.sv", source, config);
+    REQUIRE(result.isUsable());
+    CHECK(result.formatted == R"(module top (
+    input logic a,
+`ifdef B
+    input logic b,
+`endif
+    output logic c
+);
+    `ifdef X
+        `ifdef Y
+            logic y;
+        `endif
+        logic x;
+    `else
+        logic z;
+    `endif
+    initial begin
+        `ifdef SIM
+            $display("sim");
+        `endif
+    end
+endmodule
+)");
+
+    config.directiveIndent = format::DirectiveIndent::column0;
+    result = format::format("directive_indent.sv", source, config);
+    REQUIRE(result.isUsable());
+    CHECK(result.formatted == R"(module top (
+    input logic a,
+`ifdef B
+    input logic b,
+`endif
+    output logic c
+);
+`ifdef X
+`ifdef Y
+    logic y;
+`endif
+    logic x;
+`else
+    logic z;
+`endif
+    initial begin
+`ifdef SIM
+        $display("sim");
+`endif
+    end
+endmodule
+)");
+    auto again = format::format("directive_indent.sv", result.formatted, config);
+    REQUIRE(again.isUsable());
+    CHECK(again.formatted == result.formatted);
+}
