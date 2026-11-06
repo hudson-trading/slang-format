@@ -417,6 +417,58 @@ endmodule
 )");
 }
 
+TEST_CASE("maxInlineInstanceConnections controls when instance connections go vertical") {
+    constexpr std::string_view source =
+        "module top; child u_a(.a(x), .b(y)); child u_b(.a(x)); child u_c(); endmodule\n";
+
+    format::Config config;
+    auto result = format::format("inline_connections.sv", source, config);
+    REQUIRE(result.isUsable());
+    CHECK(result.formatted == R"(module top;
+    child
+      u_a (.a(x), .b(y));
+    child
+      u_b (.a(x));
+    child
+      u_c ();
+endmodule
+)");
+
+    config.maxInlineInstanceConnections = 1;
+    result = format::format("inline_connections.sv", source, config);
+    REQUIRE(result.isUsable());
+    CHECK(result.formatted == R"(module top;
+    child
+      u_a (
+        .a (x),
+        .b (y)
+    );
+    child
+      u_b (.a(x));
+    child
+      u_c ();
+endmodule
+)");
+
+    config.maxInlineInstanceConnections = 0;
+    result = format::format("inline_connections.sv", source, config);
+    REQUIRE(result.isUsable());
+    CHECK(result.formatted == R"(module top;
+    child
+      u_a (
+        .a (x),
+        .b (y)
+    );
+    child
+      u_b (
+        .a(x)
+    );
+    child
+      u_c ();
+endmodule
+)");
+}
+
 TEST_CASE("format retains parser errors unrelated to compilation-unit context") {
     format::Config config;
     auto result = format::format(
