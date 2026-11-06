@@ -1396,3 +1396,80 @@ TEST_CASE("unsafe directive and container recovery preserves source") {
         }
     }
 }
+
+TEST_CASE("line endings are preserved per line by default") {
+    struct Case {
+        std::string_view input;
+        std::string_view expected;
+    };
+    // Each output line keeps the ending of the input line it comes from: mixed input
+    // stays mixed, a joined line takes the ending of its last input line, a split line
+    // takes the ending of the input line it was split from, and a missing final line
+    // break uses the first line ending.
+    for (auto [input, expected] : {
+             Case{"module c;\r\n  /* a\r\n     b */\r\n`ifdef X\r\n  logic a;\r\n`endif\r\n"
+                  "endmodule\r\n",
+                  "module c;\r\n    /* a\r\n     b */\r\n    `ifdef X\r\n        logic a;\r\n"
+                  "    `endif\r\nendmodule\r\n"},
+             Case{"module c;\r\n  logic a;\n\n\r\n  logic b;\r\nendmodule\n",
+                  "module c;\r\n    logic a;\n\n\r\n    logic b;\r\nendmodule\n"},
+             Case{"module c;\n  assign x = a +\r\n    b;\nendmodule\r\n",
+                  "module c;\n    assign x = a + b;\nendmodule\r\n"},
+             Case{"module c; logic a; logic b;\r\nendmodule\n",
+                  "module c;\r\n    logic a;\r\n    logic b;\r\nendmodule\n"},
+             Case{"module c;\r\nendmodule", "module c;\r\nendmodule\r\n"},
+             Case{"module c; endmodule", "module c;\nendmodule\n"},
+         }) {
+        for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+            INFO(input);
+            auto result = format::format("eol.sv", input, {}, stage);
+            for (const auto& diagnostic : result.diagnostics)
+                UNSCOPED_INFO(diagnostic.message);
+            CHECK(result.diagnostics.empty());
+            CHECK(result.formatted == expected);
+            auto again = format::format("eol.sv", result.formatted, {}, stage);
+            CHECK(again.diagnostics.empty());
+            CHECK(again.formatted == result.formatted);
+        }
+    }
+}
+
+TEST_CASE("native, lf, and crlf line endings apply to every line") {
+    std::string_view mixed = "module c;\r\n  /* a\r\n     b */\n`ifdef X\r\n  logic a;\n"
+                             "`endif\r\nendmodule\n";
+    std::string_view lf = "module c;\n    /* a\n     b */\n    `ifdef X\n        logic a;\n"
+                          "    `endif\nendmodule\n";
+    std::string crlf;
+    for (char c : lf) {
+        if (c == '\n')
+            crlf.push_back('\r');
+        crlf.push_back(c);
+    }
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        format::Config config;
+        config.lineEnding = format::LineEnding::lf;
+        auto result = format::format("mixed.sv", mixed, config, stage);
+        CHECK(result.diagnostics.empty());
+        CHECK(result.formatted == lf);
+        config.lineEnding = format::LineEnding::crlf;
+        result = format::format("mixed.sv", mixed, config, stage);
+        CHECK(result.diagnostics.empty());
+        CHECK(result.formatted == crlf);
+        CHECK(format::format("mixed.sv", result.formatted, config, stage).formatted == crlf);
+        config.lineEnding = format::LineEnding::native;
+        result = format::format("mixed.sv", mixed, config, stage);
+        CHECK(result.diagnostics.empty());
+#ifdef _WIN32
+        CHECK(result.formatted == crlf);
+#else
+        CHECK(result.formatted == lf);
+#endif
+    }
+}
+
+TEST_CASE("line ending conversion leaves preserved sources unchanged") {
+    format::Config config;
+    config.lineEnding = format::LineEnding::crlf;
+    std::string_view generated = "// @generated\nmodule   c; endmodule\n";
+    CHECK(format::format("generated.sv", generated, config).formatted == generated);
+}

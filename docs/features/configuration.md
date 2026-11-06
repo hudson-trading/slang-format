@@ -50,6 +50,14 @@ Column limit for line wrapping (0 = no limit, maximum 1000000)
 
 Number of spaces before trailing comments (0-256)
 
+### `lineEnding`
+
+**Type:** `string`
+
+**Default:** `"preserve"`
+
+Line endings of formatted output: preserve keeps each line's ending from the input and mixed input stays mixed; a line break the formatter adds takes the ending of the input line it splits, else the input's first line ending, else LF. native uses the host's line ending (CRLF on Windows, LF elsewhere), lf and crlf force that ending
+
 ### `maxSyntaxDepth`
 
 **Type:** `integer`

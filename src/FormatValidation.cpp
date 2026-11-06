@@ -137,7 +137,8 @@ static FormatResult formatImpl(
     std::string_view filename,
     std::string_view input,
     const format::Config& config,
-    FormatStage stage
+    FormatStage stage,
+    bool& rendered
 ) {
 
     FormatResult result = {};
@@ -281,15 +282,16 @@ static FormatResult formatImpl(
 
     // Run Formatter and validate CST
     try {
-        auto rendered = runPipeline(root, config, stage, sm, result.diagnostics);
-        result.formatted = std::move(rendered.text);
+        auto pipeline = runPipeline(root, config, stage, sm, result.diagnostics);
+        result.formatted = std::move(pipeline.text);
+        rendered = true;
 
         // The layout pass is an independently meaningful output, even when
         // the caller requested alignment. Validate the boundary itself so an
         // alignment reparse cannot hide a layout-stage token/trivia bug.
         if (stage == FormatStage::Aligned) {
             auto layoutTree = SyntaxTree::fromFileInMemory(
-                rendered.layoutText, sm, fmt::format("{} (layout)", filename), "", optionsBag
+                pipeline.layoutText, sm, fmt::format("{} (layout)", filename), "", optionsBag
             );
             if (!layoutTree) {
                 result.diagnostics.push_back(
@@ -359,6 +361,72 @@ static FormatResult formatImpl(
     return result;
 }
 
+namespace {
+
+#ifdef _WIN32
+constexpr bool nativeCrlf = true;
+#else
+constexpr bool nativeCrlf = false;
+#endif
+
+bool isLayoutSpace(char c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' || c == '\v';
+}
+
+/// Gives every LF of the formatter's output the ending of the input line it came from.
+/// Formatting changes only whitespace, so the non-whitespace characters of input and
+/// output correspond one to one. The j-th line break between two such characters in the
+/// output takes the ending of the j-th line break between them in the input; when the
+/// formatter adds breaks there, the extra ones take the last such ending, or, without
+/// any, the ending of the input line holding the preceding character. A break that has
+/// no input counterpart at all uses the input's first line ending.
+std::string preserveLineEndings(std::string_view input, std::string_view output) {
+    std::vector<bool> crlf;            // per input line break: ends with CRLF
+    std::vector<size_t> breaksBefore;  // per input non-space character
+    std::string characters;
+    for (size_t i = 0; i < input.size(); i++) {
+        if (input[i] == '\n')
+            crlf.push_back(i > 0 && input[i - 1] == '\r');
+        else if (!isLayoutSpace(input[i])) {
+            breaksBefore.push_back(crlf.size());
+            characters.push_back(input[i]);
+        }
+    }
+    bool fallback = !crlf.empty() && crlf.front();
+    std::string result;
+    result.reserve(output.size() + output.size() / 32);
+    size_t seen = 0;       // non-space output characters so far
+    size_t gapBreaks = 0;  // output line breaks since the last such character
+    bool matched = true;
+    for (char c : output) {
+        if (c == '\n') {
+            bool useCrlf = fallback;
+            if (matched) {
+                size_t first = seen ? breaksBefore[seen - 1] : 0;
+                size_t last = seen < breaksBefore.size() ? breaksBefore[seen] : crlf.size();
+                if (first + gapBreaks < last)
+                    useCrlf = crlf[first + gapBreaks];
+                else if (last > first)
+                    useCrlf = crlf[last - 1];
+                else if (first < crlf.size())
+                    useCrlf = crlf[first];
+            }
+            if (useCrlf)
+                result.push_back('\r');
+            gapBreaks++;
+        }
+        else if (!isLayoutSpace(c)) {
+            matched = matched && seen < characters.size() && characters[seen] == c;
+            seen++;
+            gapBreaks = 0;
+        }
+        result.push_back(c);
+    }
+    return result;
+}
+
+} // namespace
+
 FormatResult format(
     std::string_view filename,
     std::string_view input,
@@ -366,8 +434,23 @@ FormatResult format(
     FormatStage stage
 ) {
     FormatResult result;
+    // The formatter renders LF. It formats the input with CRLF reduced to LF, so
+    // CR bytes do not survive inside comments or directives and the reparse and
+    // idempotency checks see the same text for either line ending; the requested
+    // endings are applied to the result.
+    std::string normalized;
+    std::string_view source = input;
+    if (input.find('\r') != std::string_view::npos) {
+        normalized.reserve(input.size());
+        for (size_t i = 0; i < input.size(); i++) {
+            if (input[i] != '\r' || i + 1 >= input.size() || input[i + 1] != '\n')
+                normalized.push_back(input[i]);
+        }
+        source = normalized;
+    }
+    bool rendered = false;
     try {
-        result = formatImpl(filename, input, config, stage);
+        result = formatImpl(filename, source, config, stage, rendered);
     }
     catch (const FormatDepthLimitError& e) {
         result.formatted = input;
@@ -376,6 +459,24 @@ FormatResult format(
     catch (const std::exception& e) {
         result.formatted = input;
         result.diagnostics.push_back({FormatDiagnosticKind::InternalError, e.what(), std::nullopt});
+    }
+    // Output kept unchanged (generated, templated, depth limit, internal error) stays the input.
+    if (!rendered) {
+        result.formatted = input;
+    }
+    else if (auto lineEnding = config.lineEnding.get();
+             lineEnding == LineEnding::crlf || (lineEnding == LineEnding::native && nativeCrlf)) {
+        std::string converted;
+        converted.reserve(result.formatted.size() + result.formatted.size() / 32);
+        for (char c : result.formatted) {
+            if (c == '\n')
+                converted.push_back('\r');
+            converted.push_back(c);
+        }
+        result.formatted = std::move(converted);
+    }
+    else if (config.lineEnding.get() == LineEnding::preserve && !normalized.empty()) {
+        result.formatted = preserveLineEndings(input, result.formatted);
     }
     return result;
 }

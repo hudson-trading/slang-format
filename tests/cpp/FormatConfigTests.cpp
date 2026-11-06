@@ -115,3 +115,26 @@ TEST_CASE("unknown config keys report actionable errors without parser advice") 
     CHECK(format::parseConfig("{}", error));
     CHECK(error.empty());
 }
+
+TEST_CASE("line ending configuration accepts preserve, native, lf, and crlf") {
+    std::string error;
+    auto config = format::parseConfig("{}", error);
+    REQUIRE(config);
+    CHECK(config->lineEnding.value() == format::LineEnding::preserve);
+    for (auto [json, expected] :
+         {std::pair{R"({"lineEnding":"preserve"})", format::LineEnding::preserve},
+          std::pair{R"({"lineEnding":"native"})", format::LineEnding::native},
+          std::pair{R"({"lineEnding":"lf"})", format::LineEnding::lf},
+          std::pair{R"({"lineEnding":"crlf"})", format::LineEnding::crlf}}) {
+        INFO(json);
+        config = format::parseConfig(json, error);
+        REQUIRE(config);
+        CHECK(config->lineEnding.value() == expected);
+    }
+    for (auto json :
+         {R"({"lineEnding":"cr"})", R"({"lineEnding":"CRLF"})", R"({"lineEnding":1})"}) {
+        INFO(json);
+        CHECK_FALSE(format::parseConfig(json, error));
+        CHECK_FALSE(error.empty());
+    }
+}
