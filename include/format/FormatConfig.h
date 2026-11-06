@@ -60,6 +60,12 @@ struct Config {
         spacesBeforeTrailingComment = 2;
 
     rfl::Description<
+        "Maximum number of port connections an instance keeps on one line; above it, "
+        "connections go one per line (0 = always one per line, maximum 1000000)",
+        uint32_t>
+        maxInlineInstanceConnections = 2;
+
+    rfl::Description<
         "Maximum syntax tree depth and parser recursion budget (must be positive). "
         "Files exceeding the limit are skipped unchanged, even with --force. "
         "Raising this limit increases stack usage and can cause stack overflow",

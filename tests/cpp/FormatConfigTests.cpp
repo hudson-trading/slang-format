@@ -55,14 +55,18 @@ TEST_CASE("numeric configuration cannot wrap or request excessive padding") {
           R"({"alignment":{"statementGapLines":18446744073709551615}})",
           R"({"alignment":{"listGapLines":18446744073709551615}})", R"({"indentWidth":-1})",
           R"({"columnLimit":1.5})", R"({"maxSyntaxDepth":0})", R"({"maxSyntaxDepth":-1})",
-          R"({"maxSyntaxDepth":4294967296})", R"({"maxSyntaxDepth":1.5})"}) {
+          R"({"maxSyntaxDepth":4294967296})", R"({"maxSyntaxDepth":1.5})",
+          R"({"maxInlineInstanceConnections":-1})",
+          R"({"maxInlineInstanceConnections":1000001})",
+          R"({"maxInlineInstanceConnections":4294967296})"}) {
         INFO(json);
         CHECK_FALSE(format::parseConfig(json, error));
         CHECK_FALSE(error.empty());
     }
     CHECK(
         format::parseConfig(
-            R"({"indentWidth":0,"columnLimit":0,"spacesBeforeTrailingComment":0})", error
+            R"({"indentWidth":0,"columnLimit":0,"spacesBeforeTrailingComment":0,"maxInlineInstanceConnections":0})",
+            error
         )
     );
     CHECK(

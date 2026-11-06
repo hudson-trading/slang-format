@@ -50,6 +50,14 @@ Column limit for line wrapping (0 = no limit, maximum 1000000)
 
 Number of spaces before trailing comments (0-256)
 
+### `maxInlineInstanceConnections`
+
+**Type:** `integer`
+
+**Default:** `2`
+
+Maximum number of port connections an instance keeps on one line; above it, connections go one per line (0 = always one per line, maximum 1000000)
+
 ### `maxSyntaxDepth`
 
 **Type:** `integer`

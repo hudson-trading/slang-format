@@ -2575,7 +2575,7 @@ private:
                             }
                         }
                         connectionsVertical = connectionsVertical ||
-                                              count > constants::maxInlineInstanceConnections ||
+                                              count > config.maxInlineInstanceConnections.get() ||
                                               childHasForcingComment(instanceChild) ||
                                               childContainsMacro(instanceChild) ||
                                               childHasEscapedIdentifier(instanceChild);
@@ -2588,7 +2588,7 @@ private:
         bool hierarchyWide = config.columnLimit.get() && hierarchyInstanceCount == 1 &&
                              hasParameters && typeWidth >= 10;
         bool connectionShapeVertical =
-            maxConnectionCount > constants::maxInlineInstanceConnections ||
+            maxConnectionCount > config.maxInlineInstanceConnections.get() ||
             (hierarchyWide && maxConnectionCount > 1) ||
             (parameterCount > 1 && maxConnectionCount > 1 && !allConnectionsShorthand);
         connectionsVertical = connectionsVertical || connectionShapeVertical;

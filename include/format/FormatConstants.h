@@ -13,10 +13,6 @@
 
 namespace format::constants {
 
-/// Maximum number of instance connections to keep on a single line.
-/// Above this threshold, connections go vertical.
-constexpr size_t maxInlineInstanceConnections = 2;
-
 /// Maximum width (chars) of a case-item label list before the clause is
 /// forced onto its own line. Even if the full `LABELS: clause` fits in
 /// the column limit, a long-label case is hard to read with the body
