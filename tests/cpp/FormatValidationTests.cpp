@@ -3,6 +3,7 @@
 
 #include "format/FormatValidation.h"
 #include "format/NormalizedFormat.h"
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <exception>
 
@@ -1393,6 +1394,87 @@ TEST_CASE("unsafe directive and container recovery preserves source") {
             auto result = format::format("recovery.sv", source, {}, stage);
             CHECK(result.isUsable());
             CHECK(result.formatted == source);
+        }
+    }
+}
+
+TEST_CASE("maxEmptyLines caps empty line runs everywhere and stays idempotent") {
+    std::string_view source = R"(module top (
+    input logic clk,
+
+
+
+    // comment after a run
+    input logic rst
+);
+
+
+
+    logic a;
+
+
+
+    `ifdef FOO
+
+
+
+    logic c;
+
+
+
+    `endif
+
+
+
+    always_comb begin
+        a = 1'b0;
+
+
+
+        a = 1'b1;
+    end
+
+
+
+    child u_child (
+        .clk(clk),
+
+
+
+        .rst(rst)
+    );
+
+
+
+endmodule
+)";
+    auto longestRun = [](std::string_view text) {
+        size_t longest = 0;
+        size_t run = 0;
+        for (size_t i = 1; i < text.size(); i++) {
+            if (text[i] == '\n' && text[i - 1] == '\n')
+                longest = std::max(longest, ++run);
+            else if (text[i] == '\n')
+                run = 0;
+        }
+        return longest;
+    };
+    for (auto stage : {format::FormatStage::Layout, format::FormatStage::Aligned}) {
+        format::Config config;
+        auto unlimited = format::format("empty_lines.sv", source, config, stage);
+        REQUIRE(unlimited.diagnostics.empty());
+        CHECK(longestRun(unlimited.formatted) == 3);
+        for (uint32_t limit : {1u, 2u, 3u}) {
+            INFO(limit);
+            config.maxEmptyLines = limit;
+            auto result = format::format("empty_lines.sv", source, config, stage);
+            for (const auto& diagnostic : result.diagnostics)
+                UNSCOPED_INFO(diagnostic.message);
+            REQUIRE(result.diagnostics.empty());
+            CHECK(longestRun(result.formatted) == limit);
+            auto again = format::format("empty_lines.sv", result.formatted, config, stage);
+            CHECK(again.diagnostics.empty());
+            CHECK(again.formatted == result.formatted);
         }
     }
 }

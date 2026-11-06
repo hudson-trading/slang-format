@@ -50,6 +50,12 @@ Column limit for line wrapping (0 = no limit, maximum 1000000)
 
 Number of spaces before trailing comments (0-256)
 
+### `maxEmptyLines`
+
+**Type:** `integer | null`
+
+Maximum number of consecutive empty lines to keep (1-1000000); longer runs are reduced to this many. Comments and slang-format: off regions are unchanged. null keeps every empty line
+
 ### `maxSyntaxDepth`
 
 **Type:** `integer`

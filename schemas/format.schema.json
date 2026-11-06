@@ -42,6 +42,17 @@
           "type": "integer",
           "description": "Number of spaces before trailing comments (0-256)"
         },
+        "maxEmptyLines": {
+          "description": "Maximum number of consecutive empty lines to keep (1-1000000); longer runs are reduced to this many. Comments and slang-format: off regions are unchanged. null keeps every empty line",
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "maxSyntaxDepth": {
           "type": "integer",
           "description": "Maximum syntax tree depth and parser recursion budget (must be positive). Files exceeding the limit are skipped unchanged, even with --force. Raising this limit increases stack usage and can cause stack overflow"
